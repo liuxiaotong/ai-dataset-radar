@@ -1,8 +1,13 @@
-"""Papers with Code benchmarks scraper."""
+"""Papers with Code benchmarks scraper.
 
-import requests
+API Documentation: https://paperswithcode.com/api/v1/docs/
+"""
+
+import time
+import random
 from datetime import datetime
 from typing import Optional
+import requests
 
 
 class PapersWithCodeScraper:
@@ -12,6 +17,90 @@ class PapersWithCodeScraper:
 
     def __init__(self, limit: int = 50):
         self.limit = limit
+        self.session = requests.Session()
+        self.session.headers.update({
+            "Accept": "application/json",
+            "User-Agent": "AI-Dataset-Radar/3.0 (https://github.com/liuxiaotong/ai-dataset-radar)",
+        })
+        self._last_request_time = 0
+        self._base_delay = 1.0
+
+    def _rate_limit_wait(self) -> None:
+        """Wait to respect rate limits."""
+        elapsed = time.time() - self._last_request_time
+        if elapsed < self._base_delay:
+            time.sleep(self._base_delay - elapsed + random.uniform(0.1, 0.3))
+        self._last_request_time = time.time()
+
+    def _request_with_retry(
+        self,
+        url: str,
+        params: dict,
+        max_retries: int = 3,
+    ) -> Optional[dict]:
+        """Make a request with retry logic.
+
+        Args:
+            url: Request URL.
+            params: Query parameters.
+            max_retries: Maximum retry attempts.
+
+        Returns:
+            JSON response data or None on failure.
+        """
+        for attempt in range(max_retries + 1):
+            self._rate_limit_wait()
+
+            try:
+                response = self.session.get(url, params=params, timeout=30)
+
+                # Check content type
+                content_type = response.headers.get("Content-Type", "")
+                if "application/json" not in content_type:
+                    if attempt < max_retries:
+                        print(f"  Non-JSON response, retrying... (attempt {attempt + 1})")
+                        time.sleep(2 ** attempt)
+                        continue
+                    print(f"  Papers with Code API returned non-JSON: {content_type[:50]}")
+                    return None
+
+                if response.status_code == 200:
+                    return response.json()
+
+                elif response.status_code == 429:
+                    wait_time = (2 ** attempt) * 3 + random.uniform(1, 2)
+                    if attempt < max_retries:
+                        print(f"  Rate limited, waiting {wait_time:.1f}s...")
+                        time.sleep(wait_time)
+                        continue
+                    return None
+
+                elif response.status_code >= 500:
+                    if attempt < max_retries:
+                        time.sleep(2 ** attempt)
+                        continue
+
+                response.raise_for_status()
+
+            except requests.exceptions.Timeout:
+                if attempt < max_retries:
+                    time.sleep(2 ** attempt)
+                    continue
+                print("  Request timeout")
+                return None
+
+            except requests.RequestException as e:
+                if attempt < max_retries:
+                    time.sleep(2 ** attempt)
+                    continue
+                print(f"  Request error: {e}")
+                return None
+
+            except ValueError as e:
+                print(f"  JSON parse error: {e}")
+                return None
+
+        return None
 
     def fetch(self) -> list[dict]:
         """Fetch latest datasets from Papers with Code.
@@ -35,27 +124,8 @@ class PapersWithCodeScraper:
             "page": 1,
         }
 
-        headers = {
-            "Accept": "application/json",
-            "User-Agent": "AI-Dataset-Radar/1.0",
-        }
-
-        try:
-            response = requests.get(url, params=params, headers=headers, timeout=30)
-            response.raise_for_status()
-
-            # Check if response is JSON
-            content_type = response.headers.get("Content-Type", "")
-            if "application/json" not in content_type:
-                print(f"Papers with Code API returned non-JSON response: {content_type}")
-                return []
-
-            data = response.json()
-        except requests.RequestException as e:
-            print(f"Error fetching Papers with Code datasets: {e}")
-            return []
-        except ValueError as e:
-            print(f"Error parsing Papers with Code response: {e}")
+        data = self._request_with_retry(url, params)
+        if not data:
             return []
 
         results = []
@@ -103,3 +173,60 @@ class PapersWithCodeScraper:
         except Exception as e:
             print(f"Error parsing dataset {ds.get('name', 'unknown')}: {e}")
             return None
+
+    def search_datasets(self, query: str, limit: int = 20) -> list[dict]:
+        """Search for datasets by name.
+
+        Args:
+            query: Search query.
+            limit: Maximum results.
+
+        Returns:
+            List of matching datasets.
+        """
+        url = f"{self.BASE_URL}/datasets/"
+        params = {
+            "q": query,
+            "items_per_page": limit,
+        }
+
+        data = self._request_with_retry(url, params)
+        if not data:
+            return []
+
+        results = []
+        for ds in data.get("results", []):
+            result = self._parse_dataset(ds)
+            if result:
+                results.append(result)
+
+        return results
+
+    def get_dataset_papers(self, dataset_id: str, limit: int = 20) -> list[dict]:
+        """Get papers using a specific dataset.
+
+        Args:
+            dataset_id: Dataset ID from Papers with Code.
+            limit: Maximum papers to return.
+
+        Returns:
+            List of paper dictionaries.
+        """
+        url = f"{self.BASE_URL}/datasets/{dataset_id}/papers/"
+        params = {"items_per_page": limit}
+
+        data = self._request_with_retry(url, params)
+        if not data:
+            return []
+
+        papers = []
+        for item in data.get("results", []):
+            papers.append({
+                "id": item.get("id"),
+                "title": item.get("title", ""),
+                "url": item.get("url", ""),
+                "arxiv_id": item.get("arxiv_id"),
+                "abstract": item.get("abstract", ""),
+            })
+
+        return papers
