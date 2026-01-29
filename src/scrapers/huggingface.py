@@ -1,14 +1,17 @@
-"""Hugging Face datasets scraper."""
+"""Hugging Face datasets and models scraper."""
 
+import re
 import requests
 from datetime import datetime
 from typing import Optional
 
 
 class HuggingFaceScraper:
-    """Scraper for Hugging Face Hub datasets."""
+    """Scraper for Hugging Face Hub datasets and models."""
 
-    BASE_URL = "https://huggingface.co/api/datasets"
+    DATASETS_URL = "https://huggingface.co/api/datasets"
+    MODELS_URL = "https://huggingface.co/api/models"
+    BASE_URL = "https://huggingface.co/api/datasets"  # Keep for backward compatibility
 
     def __init__(self, limit: int = 50):
         self.limit = limit
@@ -72,4 +75,180 @@ class HuggingFaceScraper:
             }
         except Exception as e:
             print(f"Error parsing dataset {ds.get('id', 'unknown')}: {e}")
+            return None
+
+    def fetch_trending_models(
+        self,
+        limit: int = 100,
+        min_downloads: int = 1000,
+    ) -> list[dict]:
+        """Fetch trending models from Hugging Face Hub.
+
+        Args:
+            limit: Maximum number of models to fetch.
+            min_downloads: Minimum download count filter.
+
+        Returns:
+            List of model information dictionaries.
+        """
+        params = {
+            "limit": limit,
+            "sort": "downloads",
+            "direction": -1,  # Descending
+            "full": "true",
+        }
+
+        try:
+            response = requests.get(self.MODELS_URL, params=params, timeout=30)
+            response.raise_for_status()
+            models = response.json()
+        except requests.RequestException as e:
+            print(f"Error fetching Hugging Face models: {e}")
+            return []
+
+        results = []
+        for model in models:
+            parsed = self._parse_model(model)
+            if parsed and parsed.get("downloads", 0) >= min_downloads:
+                results.append(parsed)
+
+        return results
+
+    def _parse_model(self, model: dict) -> Optional[dict]:
+        """Parse a model entry from the API response.
+
+        Args:
+            model: Raw model dictionary from API.
+
+        Returns:
+            Parsed model info or None if parsing fails.
+        """
+        try:
+            created_at = model.get("createdAt", "")
+            if created_at:
+                created_at = datetime.fromisoformat(created_at.replace("Z", "+00:00"))
+            else:
+                created_at = None
+
+            return {
+                "source": "huggingface",
+                "id": model.get("id", ""),
+                "name": model.get("id", "").split("/")[-1],
+                "author": model.get("author", ""),
+                "downloads": model.get("downloads", 0),
+                "likes": model.get("likes", 0),
+                "pipeline_tag": model.get("pipeline_tag", ""),
+                "tags": model.get("tags", []),
+                "created_at": created_at.isoformat() if created_at else None,
+                "url": f"https://huggingface.co/{model.get('id', '')}",
+            }
+        except Exception as e:
+            print(f"Error parsing model {model.get('id', 'unknown')}: {e}")
+            return None
+
+    def fetch_model_card(self, model_id: str) -> Optional[dict]:
+        """Fetch detailed model card information.
+
+        Args:
+            model_id: The model ID (e.g., 'meta-llama/Llama-2-7b').
+
+        Returns:
+            Model card data including README content, or None if failed.
+        """
+        url = f"{self.MODELS_URL}/{model_id}"
+
+        try:
+            response = requests.get(url, timeout=30)
+            response.raise_for_status()
+            model_data = response.json()
+        except requests.RequestException as e:
+            print(f"Error fetching model card for {model_id}: {e}")
+            return None
+
+        # Also try to fetch the README content
+        readme_url = f"https://huggingface.co/{model_id}/raw/main/README.md"
+        readme_content = ""
+        try:
+            readme_response = requests.get(readme_url, timeout=15)
+            if readme_response.status_code == 200:
+                readme_content = readme_response.text
+        except requests.RequestException:
+            pass  # README is optional
+
+        parsed = self._parse_model(model_data)
+        if parsed:
+            parsed["readme"] = readme_content
+            parsed["card_data"] = model_data.get("cardData", {})
+
+        return parsed
+
+    def extract_datasets_from_model(self, model_data: dict) -> list[str]:
+        """Extract dataset references from a model's metadata and README.
+
+        Args:
+            model_data: Model data including card_data and readme.
+
+        Returns:
+            List of dataset IDs referenced by the model.
+        """
+        datasets = set()
+
+        # 1. Extract from cardData.datasets field
+        card_data = model_data.get("card_data", {})
+        if isinstance(card_data, dict):
+            card_datasets = card_data.get("datasets", [])
+            if isinstance(card_datasets, list):
+                for ds in card_datasets:
+                    if isinstance(ds, str):
+                        datasets.add(ds)
+
+        # 2. Extract from tags (some models have dataset-tagged)
+        tags = model_data.get("tags", [])
+        for tag in tags:
+            if isinstance(tag, str) and tag.startswith("dataset:"):
+                dataset_id = tag.replace("dataset:", "")
+                datasets.add(dataset_id)
+
+        # 3. Extract from README content
+        readme = model_data.get("readme", "")
+        if readme:
+            # Pattern: huggingface.co/datasets/XXX
+            hf_pattern = r"huggingface\.co/datasets/([a-zA-Z0-9_-]+/[a-zA-Z0-9_-]+|[a-zA-Z0-9_-]+)"
+            for match in re.finditer(hf_pattern, readme):
+                datasets.add(match.group(1))
+
+            # Pattern: datasets/XXX in markdown links
+            link_pattern = r"\[.*?\]\(https?://huggingface\.co/datasets/([^)\s]+)\)"
+            for match in re.finditer(link_pattern, readme):
+                datasets.add(match.group(1))
+
+            # Pattern: Trained on XXX dataset (common phrasing)
+            trained_pattern = r"[Tt]rained\s+on\s+(?:the\s+)?([A-Za-z0-9_-]+(?:/[A-Za-z0-9_-]+)?)\s+dataset"
+            for match in re.finditer(trained_pattern, readme):
+                candidate = match.group(1)
+                # Filter out common false positives
+                if candidate.lower() not in ["a", "an", "the", "this", "our"]:
+                    datasets.add(candidate)
+
+        return list(datasets)
+
+    def fetch_dataset_info(self, dataset_id: str) -> Optional[dict]:
+        """Fetch information about a specific dataset.
+
+        Args:
+            dataset_id: The dataset ID (e.g., 'squad' or 'huggingface/squad').
+
+        Returns:
+            Dataset info or None if not found.
+        """
+        url = f"{self.DATASETS_URL}/{dataset_id}"
+
+        try:
+            response = requests.get(url, timeout=15)
+            if response.status_code == 404:
+                return None
+            response.raise_for_status()
+            return self._parse_dataset(response.json())
+        except requests.RequestException as e:
+            print(f"Error fetching dataset {dataset_id}: {e}")
             return None

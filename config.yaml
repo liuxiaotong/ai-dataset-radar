@@ -1,5 +1,9 @@
 # AI Dataset Radar Configuration
 
+# Database configuration
+database:
+  path: data/radar.db
+
 # Data sources configuration
 sources:
   huggingface:
@@ -17,6 +21,23 @@ sources:
       - cs.CL  # Computation and Language
       - cs.CV  # Computer Vision
       - cs.LG  # Machine Learning
+
+# Model tracking configuration
+models:
+  enabled: true
+  limit: 100  # Number of models to fetch
+  min_downloads: 1000  # Only track models with sufficient popularity
+
+# Analysis configuration
+analysis:
+  trend_days: [7, 30]  # Calculate trends for these periods
+  min_growth_alert: 0.5  # Alert when growth exceeds 50%
+
+# LLM configuration (for future use)
+llm:
+  enabled: false  # Enable in Phase 2
+  provider: anthropic
+  model: claude-3-haiku-20240307
 
 # Filtering options
 filters:

@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
-"""Main entry point for AI Dataset Radar."""
+"""Main entry point for AI Dataset Radar v2."""
 
+import argparse
 import json
 import os
 import sys
@@ -12,6 +13,8 @@ import yaml
 from scrapers import HuggingFaceScraper, PapersWithCodeScraper, ArxivScraper
 from filters import filter_datasets
 from notifiers import create_notifiers
+from db import get_database
+from analyzers import ModelDatasetAnalyzer, TrendAnalyzer
 
 
 def load_config(config_path: str = "config.yaml") -> dict:
@@ -165,34 +168,164 @@ def send_notifications(data: dict, config: dict) -> None:
             print(f"Error in {notifier.__class__.__name__}: {e}")
 
 
+def run_model_dataset_analysis(config: dict) -> dict:
+    """Run model-dataset relationship analysis.
+
+    Args:
+        config: Configuration dictionary.
+
+    Returns:
+        Analysis results.
+    """
+    models_cfg = config.get("models", {})
+    if not models_cfg.get("enabled", True):
+        print("Model analysis disabled in config")
+        return {}
+
+    db = get_database(config)
+    analyzer = ModelDatasetAnalyzer(db, config)
+
+    print("\n" + "=" * 60)
+    print("  Model-Dataset Relationship Analysis")
+    print("=" * 60 + "\n")
+
+    results = analyzer.analyze()
+
+    # Print report
+    report = analyzer.generate_report(results)
+    print(report)
+
+    return results
+
+
+def run_trend_analysis(data: dict, config: dict) -> dict:
+    """Run trend analysis on fetched datasets.
+
+    Args:
+        data: Dictionary with fetched data.
+        config: Configuration dictionary.
+
+    Returns:
+        Trend analysis results.
+    """
+    db = get_database(config)
+    analyzer = TrendAnalyzer(db, config)
+
+    print("\n" + "=" * 60)
+    print("  Dataset Trend Analysis")
+    print("=" * 60 + "\n")
+
+    # Combine all datasets for trend analysis
+    all_datasets = data.get("huggingface", [])
+
+    results = analyzer.analyze(all_datasets)
+
+    # Print report
+    report = analyzer.generate_report(results)
+    print(report)
+
+    return results
+
+
+def parse_args() -> argparse.Namespace:
+    """Parse command line arguments."""
+    parser = argparse.ArgumentParser(
+        description="AI Dataset Radar v2 - Data Recipe Intelligence System"
+    )
+    parser.add_argument(
+        "--config",
+        type=str,
+        default="config.yaml",
+        help="Path to configuration file",
+    )
+    parser.add_argument(
+        "--no-fetch",
+        action="store_true",
+        help="Skip fetching data from sources",
+    )
+    parser.add_argument(
+        "--no-models",
+        action="store_true",
+        help="Skip model-dataset analysis",
+    )
+    parser.add_argument(
+        "--no-trends",
+        action="store_true",
+        help="Skip trend analysis",
+    )
+    parser.add_argument(
+        "--no-notify",
+        action="store_true",
+        help="Skip sending notifications",
+    )
+    parser.add_argument(
+        "--quick",
+        action="store_true",
+        help="Quick mode: fetch data only, skip analysis",
+    )
+
+    return parser.parse_args()
+
+
 def main():
     """Main entry point."""
+    args = parse_args()
+
     print("=" * 60)
-    print("  AI Dataset Radar")
+    print("  AI Dataset Radar v2")
+    print("  Data Recipe Intelligence System")
     print("=" * 60)
     print()
 
     # Load configuration
-    config = load_config()
+    config = load_config(args.config)
+
+    # Initialize database
+    db = get_database(config)
+    print(f"Database: {config.get('database', {}).get('path', 'data/radar.db')}")
+    print()
 
     # Fetch data from all sources
-    print("Fetching data from sources...")
-    data = fetch_all_data(config)
-    print()
+    if not args.no_fetch:
+        print("Fetching data from sources...")
+        data = fetch_all_data(config)
+        print()
 
-    # Apply filters
-    print("Applying filters...")
-    filtered_data = apply_filters(data, config)
-    print()
+        # Apply filters
+        print("Applying filters...")
+        filtered_data = apply_filters(data, config)
+        print()
 
-    # Save data to JSON
-    print("Saving data...")
-    save_data(filtered_data, config)
-    print()
+        # Save data to JSON
+        print("Saving data...")
+        save_data(filtered_data, config)
+        print()
+    else:
+        print("Skipping data fetch (--no-fetch)")
+        filtered_data = {"huggingface": [], "paperswithcode": [], "arxiv": []}
+        print()
+
+    # Quick mode - skip analysis
+    if args.quick:
+        print("Quick mode - skipping analysis")
+        if not args.no_notify:
+            print("Sending notifications...")
+            send_notifications(filtered_data, config)
+        print("\nDone!")
+        return 0
+
+    # Run trend analysis (record daily stats)
+    if not args.no_trends and filtered_data.get("huggingface"):
+        trend_results = run_trend_analysis(filtered_data, config)
+
+    # Run model-dataset analysis
+    if not args.no_models:
+        model_results = run_model_dataset_analysis(config)
 
     # Send notifications
-    print("Sending notifications...")
-    send_notifications(filtered_data, config)
+    if not args.no_notify:
+        print("\nSending notifications...")
+        send_notifications(filtered_data, config)
 
     print("\nDone!")
     return 0
