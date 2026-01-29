@@ -103,11 +103,62 @@ class RadarDatabase:
             )
         """)
 
+        # Valuable datasets table (v3)
+        cursor.execute("""
+            CREATE TABLE IF NOT EXISTS valuable_datasets (
+                id TEXT PRIMARY KEY,
+                name TEXT NOT NULL,
+                source TEXT,
+                url TEXT,
+                value_score INTEGER DEFAULT 0,
+                sota_model_count INTEGER DEFAULT 0,
+                citation_count INTEGER DEFAULT 0,
+                citation_growth_rate REAL DEFAULT 0,
+                model_usage_count INTEGER DEFAULT 0,
+                institution TEXT,
+                is_top_institution BOOLEAN DEFAULT 0,
+                paper_url TEXT,
+                code_url TEXT,
+                domain TEXT,
+                first_seen TEXT NOT NULL,
+                last_updated TEXT NOT NULL
+            )
+        """)
+
+        # SOTA model-dataset relationships (v3)
+        cursor.execute("""
+            CREATE TABLE IF NOT EXISTS sota_model_datasets (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                model_name TEXT NOT NULL,
+                dataset_id TEXT NOT NULL,
+                usage_type TEXT DEFAULT 'evaluation',
+                area TEXT,
+                metric_name TEXT,
+                metric_value REAL,
+                paper_url TEXT,
+                discovered_at TEXT NOT NULL,
+                UNIQUE(model_name, dataset_id)
+            )
+        """)
+
+        # Citation tracking table (v3)
+        cursor.execute("""
+            CREATE TABLE IF NOT EXISTS citation_history (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                paper_id TEXT NOT NULL,
+                date TEXT NOT NULL,
+                citation_count INTEGER DEFAULT 0,
+                UNIQUE(paper_id, date)
+            )
+        """)
+
         # Create indices for better query performance
         cursor.execute("CREATE INDEX IF NOT EXISTS idx_daily_stats_date ON daily_stats(date)")
         cursor.execute("CREATE INDEX IF NOT EXISTS idx_daily_stats_dataset ON daily_stats(dataset_id)")
         cursor.execute("CREATE INDEX IF NOT EXISTS idx_trends_date ON trends(date)")
         cursor.execute("CREATE INDEX IF NOT EXISTS idx_models_downloads ON models(downloads DESC)")
+        cursor.execute("CREATE INDEX IF NOT EXISTS idx_valuable_datasets_score ON valuable_datasets(value_score DESC)")
+        cursor.execute("CREATE INDEX IF NOT EXISTS idx_sota_model_datasets_dataset ON sota_model_datasets(dataset_id)")
 
         conn.commit()
         conn.close()
@@ -559,6 +610,246 @@ class RadarDatabase:
             return None if new_downloads == 0 else float("inf")
 
         return (new_downloads - old_downloads) / old_downloads
+
+    # Valuable dataset operations (v3)
+    def upsert_valuable_dataset(
+        self,
+        dataset_id: str,
+        name: str,
+        value_score: int = 0,
+        sota_model_count: int = 0,
+        citation_count: int = 0,
+        citation_growth_rate: float = 0,
+        model_usage_count: int = 0,
+        institution: Optional[str] = None,
+        is_top_institution: bool = False,
+        paper_url: Optional[str] = None,
+        code_url: Optional[str] = None,
+        domain: Optional[str] = None,
+        source: Optional[str] = None,
+        url: Optional[str] = None,
+    ) -> None:
+        """Insert or update a valuable dataset record."""
+        conn = self._get_connection()
+        cursor = conn.cursor()
+        now = datetime.now().isoformat()
+
+        cursor.execute(
+            """
+            INSERT INTO valuable_datasets (
+                id, name, source, url, value_score, sota_model_count,
+                citation_count, citation_growth_rate, model_usage_count,
+                institution, is_top_institution, paper_url, code_url,
+                domain, first_seen, last_updated
+            )
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            ON CONFLICT(id) DO UPDATE SET
+                name = excluded.name,
+                value_score = excluded.value_score,
+                sota_model_count = excluded.sota_model_count,
+                citation_count = excluded.citation_count,
+                citation_growth_rate = excluded.citation_growth_rate,
+                model_usage_count = excluded.model_usage_count,
+                institution = excluded.institution,
+                is_top_institution = excluded.is_top_institution,
+                paper_url = excluded.paper_url,
+                code_url = excluded.code_url,
+                domain = excluded.domain,
+                last_updated = excluded.last_updated
+            """,
+            (
+                dataset_id, name, source, url, value_score, sota_model_count,
+                citation_count, citation_growth_rate, model_usage_count,
+                institution, is_top_institution, paper_url, code_url,
+                domain, now, now,
+            ),
+        )
+        conn.commit()
+        conn.close()
+
+    def get_valuable_datasets(
+        self,
+        min_score: int = 0,
+        domain: Optional[str] = None,
+        top_institution_only: bool = False,
+        limit: int = 50,
+    ) -> list[dict]:
+        """Get valuable datasets filtered by criteria.
+
+        Args:
+            min_score: Minimum value score threshold.
+            domain: Filter by domain (e.g., "robotics").
+            top_institution_only: Only return datasets from top institutions.
+            limit: Maximum results.
+
+        Returns:
+            List of valuable dataset records.
+        """
+        conn = self._get_connection()
+        cursor = conn.cursor()
+
+        query = "SELECT * FROM valuable_datasets WHERE value_score >= ?"
+        params = [min_score]
+
+        if domain:
+            query += " AND domain = ?"
+            params.append(domain)
+
+        if top_institution_only:
+            query += " AND is_top_institution = 1"
+
+        query += " ORDER BY value_score DESC LIMIT ?"
+        params.append(limit)
+
+        cursor.execute(query, params)
+        rows = cursor.fetchall()
+        conn.close()
+        return [dict(row) for row in rows]
+
+    def get_top_valuable_datasets(self, limit: int = 20) -> list[dict]:
+        """Get top valuable datasets by score."""
+        return self.get_valuable_datasets(min_score=0, limit=limit)
+
+    # SOTA model-dataset operations (v3)
+    def add_sota_model_dataset(
+        self,
+        model_name: str,
+        dataset_id: str,
+        usage_type: str = "evaluation",
+        area: Optional[str] = None,
+        metric_name: Optional[str] = None,
+        metric_value: Optional[float] = None,
+        paper_url: Optional[str] = None,
+    ) -> None:
+        """Record a SOTA model's use of a dataset."""
+        conn = self._get_connection()
+        cursor = conn.cursor()
+        now = datetime.now().isoformat()
+
+        cursor.execute(
+            """
+            INSERT INTO sota_model_datasets (
+                model_name, dataset_id, usage_type, area,
+                metric_name, metric_value, paper_url, discovered_at
+            )
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+            ON CONFLICT(model_name, dataset_id) DO UPDATE SET
+                usage_type = excluded.usage_type,
+                metric_name = excluded.metric_name,
+                metric_value = excluded.metric_value
+            """,
+            (model_name, dataset_id, usage_type, area, metric_name, metric_value, paper_url, now),
+        )
+        conn.commit()
+        conn.close()
+
+    def get_sota_models_for_dataset(self, dataset_id: str) -> list[dict]:
+        """Get all SOTA models that use a dataset."""
+        conn = self._get_connection()
+        cursor = conn.cursor()
+        cursor.execute(
+            """
+            SELECT * FROM sota_model_datasets
+            WHERE dataset_id = ?
+            ORDER BY metric_value DESC NULLS LAST
+            """,
+            (dataset_id,),
+        )
+        rows = cursor.fetchall()
+        conn.close()
+        return [dict(row) for row in rows]
+
+    def get_datasets_by_sota_count(self, limit: int = 20) -> list[dict]:
+        """Get datasets ranked by number of SOTA models using them."""
+        conn = self._get_connection()
+        cursor = conn.cursor()
+        cursor.execute(
+            """
+            SELECT dataset_id, COUNT(*) as sota_count,
+                   GROUP_CONCAT(DISTINCT area) as areas
+            FROM sota_model_datasets
+            GROUP BY dataset_id
+            ORDER BY sota_count DESC
+            LIMIT ?
+            """,
+            (limit,),
+        )
+        rows = cursor.fetchall()
+        conn.close()
+        return [dict(row) for row in rows]
+
+    # Citation history operations (v3)
+    def record_citation(
+        self,
+        paper_id: str,
+        citation_count: int,
+        date: Optional[str] = None,
+    ) -> None:
+        """Record citation count for a paper."""
+        conn = self._get_connection()
+        cursor = conn.cursor()
+        if date is None:
+            date = datetime.now().strftime("%Y-%m-%d")
+
+        cursor.execute(
+            """
+            INSERT INTO citation_history (paper_id, date, citation_count)
+            VALUES (?, ?, ?)
+            ON CONFLICT(paper_id, date) DO UPDATE SET
+                citation_count = excluded.citation_count
+            """,
+            (paper_id, date, citation_count),
+        )
+        conn.commit()
+        conn.close()
+
+    def get_citation_history(self, paper_id: str, days: int = 30) -> list[dict]:
+        """Get citation history for a paper."""
+        conn = self._get_connection()
+        cursor = conn.cursor()
+        cutoff = (datetime.now() - timedelta(days=days)).strftime("%Y-%m-%d")
+
+        cursor.execute(
+            """
+            SELECT * FROM citation_history
+            WHERE paper_id = ? AND date >= ?
+            ORDER BY date ASC
+            """,
+            (paper_id, cutoff),
+        )
+        rows = cursor.fetchall()
+        conn.close()
+        return [dict(row) for row in rows]
+
+    def get_fast_growing_papers(
+        self,
+        min_growth_per_month: int = 10,
+        limit: int = 20,
+    ) -> list[dict]:
+        """Get papers with rapid citation growth."""
+        conn = self._get_connection()
+        cursor = conn.cursor()
+        today = datetime.now().strftime("%Y-%m-%d")
+        month_ago = (datetime.now() - timedelta(days=30)).strftime("%Y-%m-%d")
+
+        cursor.execute(
+            """
+            SELECT new.paper_id,
+                   new.citation_count as current_citations,
+                   COALESCE(old.citation_count, 0) as old_citations,
+                   (new.citation_count - COALESCE(old.citation_count, 0)) as growth
+            FROM citation_history new
+            LEFT JOIN citation_history old ON new.paper_id = old.paper_id AND old.date = ?
+            WHERE new.date = ?
+              AND (new.citation_count - COALESCE(old.citation_count, 0)) >= ?
+            ORDER BY growth DESC
+            LIMIT ?
+            """,
+            (month_ago, today, min_growth_per_month, limit),
+        )
+        rows = cursor.fetchall()
+        conn.close()
+        return [dict(row) for row in rows]
 
     def close(self) -> None:
         """Close all database connections (no-op for SQLite with per-call connections)."""
