@@ -57,6 +57,126 @@ filters:
   keywords: []  # Filter by keywords (empty = no filter)
   days: 7  # Only include items from the last N days
 
+# Domain focus areas for business intelligence filtering
+focus_areas:
+  robotics:
+    enabled: true
+    keywords:
+      - robotics
+      - manipulation
+      - embodied
+      - rlbench
+      - lerobot
+      - dexterous
+      - humanoid
+      - gripper
+      - robot arm
+      - pick and place
+      - grasping
+      - locomotion
+    hf_tags:
+      - task_categories:robotics
+
+  rlhf:
+    enabled: true
+    keywords:
+      - preference
+      - human feedback
+      - RLHF
+      - DPO
+      - reward model
+      - alignment
+      - instruction tuning
+      - reinforcement learning from human feedback
+    hf_tags:
+      - task_categories:reinforcement-learning
+
+  multimodal:
+    enabled: true
+    keywords:
+      - vision-language
+      - VLM
+      - multimodal
+      - image-text
+      - visual question answering
+      - image captioning
+      - video understanding
+      - CLIP
+      - LLaVA
+    hf_tags:
+      - task_categories:visual-question-answering
+      - task_categories:image-to-text
+
+  code:
+    enabled: false
+    keywords:
+      - code generation
+      - programming
+      - code completion
+      - software engineering
+      - code review
+    hf_tags:
+      - task_categories:text-generation
+
+# Organization tracking for competitive intelligence
+tracked_orgs:
+  bytedance:
+    - 字节
+    - ByteDance
+    - doubao
+    - 豆包
+    - TikTok
+  alibaba:
+    - 阿里
+    - Alibaba
+    - Qwen
+    - 通义
+    - DAMO
+  tencent:
+    - 腾讯
+    - Tencent
+    - Hunyuan
+    - 优图
+  baidu:
+    - 百度
+    - Baidu
+    - ERNIE
+    - 文心
+  huawei:
+    - 华为
+    - Huawei
+    - 盘古
+  openai:
+    - OpenAI
+  google:
+    - Google
+    - DeepMind
+  meta:
+    - Meta
+    - FAIR
+
+# Opportunity detection settings
+opportunities:
+  # Signals indicating annotation needs in papers
+  annotation_signals:
+    - human annotation
+    - manually labeled
+    - crowdsourced
+    - we collected
+    - data collection
+    - benchmark
+    - human evaluation
+    - human preference
+    - RLHF
+    - evaluation dataset
+    - training data
+    - annotation guideline
+
+  # Data factory detection
+  data_factory:
+    min_datasets: 3  # Minimum datasets published
+    days: 7  # Within this many days
+
 # Notification settings
 notifications:
   console:
@@ -64,8 +184,12 @@ notifications:
     color: true  # Use colored output
 
   markdown:
-    enabled: true
-    output_dir: data  # Directory to save markdown reports
+    enabled: false  # Legacy format, disabled by default
+    output_dir: data
+
+  business_intel:
+    enabled: true  # New business intelligence report format
+    output_dir: data
 
   email:
     enabled: false

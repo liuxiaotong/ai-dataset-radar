@@ -17,10 +17,10 @@ from scrapers import (
     GitHubScraper,
     HFPapersScraper,
 )
-from filters import filter_datasets
-from notifiers import create_notifiers, expand_env_vars
+from filters import filter_datasets, DomainFilter, OrganizationFilter
+from notifiers import create_notifiers, expand_env_vars, BusinessIntelNotifier
 from db import get_database
-from analyzers import ModelDatasetAnalyzer, TrendAnalyzer
+from analyzers import ModelDatasetAnalyzer, TrendAnalyzer, OpportunityAnalyzer
 
 
 def load_config(config_path: str = "config.yaml") -> dict:
@@ -187,19 +187,37 @@ def save_data(data: dict, config: dict) -> str:
     return filepath
 
 
-def send_notifications(data: dict, config: dict) -> None:
+def send_notifications(
+    data: dict,
+    config: dict,
+    trend_results: dict = None,
+    opportunity_results: dict = None,
+    domain_data: dict = None,
+) -> None:
     """Send notifications via all enabled channels.
 
     Args:
         data: Dictionary with data from each source.
         config: Configuration dictionary.
+        trend_results: Results from trend analysis.
+        opportunity_results: Results from opportunity analysis.
+        domain_data: Results from domain classification.
     """
     notifications_cfg = config.get("notifications", {})
-    notifiers = create_notifiers(notifications_cfg)
+    notifiers = create_notifiers(notifications_cfg, full_config=config)
 
     for notifier in notifiers:
         try:
-            notifier.notify(data)
+            # BusinessIntelNotifier needs extra data
+            if isinstance(notifier, BusinessIntelNotifier):
+                notifier.notify(
+                    data,
+                    trend_results=trend_results,
+                    opportunity_results=opportunity_results,
+                    domain_data=domain_data,
+                )
+            else:
+                notifier.notify(data)
         except Exception as e:
             print(f"Error in {notifier.__class__.__name__}: {e}")
 
@@ -234,12 +252,13 @@ def run_model_dataset_analysis(config: dict) -> dict:
     return results
 
 
-def run_trend_analysis(data: dict, config: dict) -> dict:
+def run_trend_analysis(data: dict, config: dict, min_growth: float = None) -> dict:
     """Run trend analysis on fetched datasets.
 
     Args:
         data: Dictionary with fetched data.
         config: Configuration dictionary.
+        min_growth: Optional minimum growth rate override.
 
     Returns:
         Trend analysis results.
@@ -263,10 +282,89 @@ def run_trend_analysis(data: dict, config: dict) -> dict:
     return results
 
 
+def run_opportunity_analysis(data: dict, config: dict) -> dict:
+    """Run opportunity analysis to detect business signals.
+
+    Args:
+        data: Dictionary with fetched data.
+        config: Configuration dictionary.
+
+    Returns:
+        Opportunity analysis results.
+    """
+    db = get_database(config)
+    analyzer = OpportunityAnalyzer(db, config)
+
+    print("\n" + "=" * 60)
+    print("  Business Opportunity Analysis")
+    print("=" * 60 + "\n")
+
+    # Combine datasets
+    datasets = data.get("huggingface", [])
+
+    # Combine papers from all sources
+    papers = []
+    papers.extend(data.get("arxiv", []))
+    papers.extend(data.get("hf_papers", []))
+
+    results = analyzer.analyze(datasets, papers)
+
+    # Print report
+    report = analyzer.generate_report(results)
+    print(report)
+
+    return results
+
+
+def run_domain_classification(data: dict, config: dict, focus: str = None) -> dict:
+    """Classify all items by domain/focus area.
+
+    Args:
+        data: Dictionary with fetched data.
+        config: Configuration dictionary.
+        focus: Optional specific domain to focus on.
+
+    Returns:
+        Domain classification results.
+    """
+    focus_areas = config.get("focus_areas", {})
+    if not focus_areas:
+        return {}
+
+    domain_filter = DomainFilter(focus_areas)
+
+    print("\n" + "=" * 60)
+    print("  Domain Classification")
+    print("=" * 60 + "\n")
+
+    # Classify all items
+    all_items = []
+    all_items.extend(data.get("huggingface", []))
+    all_items.extend(data.get("arxiv", []))
+    all_items.extend(data.get("hf_papers", []))
+    all_items.extend(data.get("github", []))
+
+    domain_data = domain_filter.classify_all(all_items)
+
+    # Print summary
+    for domain, items in domain_data.items():
+        if domain != "uncategorized" and items:
+            print(f"  {domain}: {len(items)} items")
+
+    uncategorized = len(domain_data.get("uncategorized", []))
+    print(f"  uncategorized: {uncategorized} items")
+
+    # If focus specified, filter data
+    if focus and focus in domain_data:
+        print(f"\n  Focus mode: showing only '{focus}' domain")
+
+    return domain_data
+
+
 def parse_args() -> argparse.Namespace:
     """Parse command line arguments."""
     parser = argparse.ArgumentParser(
-        description="AI Dataset Radar v2 - Data Recipe Intelligence System"
+        description="AI Dataset Radar v2 - Business Intelligence System"
     )
     parser.add_argument(
         "--config",
@@ -300,6 +398,35 @@ def parse_args() -> argparse.Namespace:
         help="Quick mode: fetch data only, skip analysis",
     )
 
+    # Business intelligence arguments
+    parser.add_argument(
+        "--focus",
+        type=str,
+        choices=["robotics", "rlhf", "multimodal", "code"],
+        help="Filter by specific domain/focus area",
+    )
+    parser.add_argument(
+        "--growth-only",
+        action="store_true",
+        help="Only show items with positive growth",
+    )
+    parser.add_argument(
+        "--min-growth",
+        type=float,
+        default=None,
+        help="Minimum growth rate to include (e.g., 0.5 for 50%%)",
+    )
+    parser.add_argument(
+        "--opportunities",
+        action="store_true",
+        help="Focus on business opportunities (annotation signals, data factories)",
+    )
+    parser.add_argument(
+        "--no-opportunities",
+        action="store_true",
+        help="Skip opportunity analysis",
+    )
+
     return parser.parse_args()
 
 
@@ -309,12 +436,18 @@ def main():
 
     print("=" * 60)
     print("  AI Dataset Radar v2")
-    print("  Data Recipe Intelligence System")
+    print("  Business Intelligence System")
     print("=" * 60)
     print()
 
     # Load configuration
     config = load_config(args.config)
+
+    # Override config with CLI arguments
+    if args.min_growth is not None:
+        if "analysis" not in config:
+            config["analysis"] = {}
+        config["analysis"]["min_growth_alert"] = args.min_growth
 
     # Initialize database
     db = get_database(config)
@@ -356,18 +489,65 @@ def main():
         print("\nDone!")
         return 0
 
+    # Initialize results for notifiers
+    trend_results = None
+    opportunity_results = None
+    domain_data = None
+
+    # Run domain classification
+    if config.get("focus_areas"):
+        domain_data = run_domain_classification(filtered_data, config, focus=args.focus)
+
+        # Enrich items with domain info for trend analysis
+        if domain_data:
+            domain_filter = DomainFilter(config.get("focus_areas", {}))
+            for source_data in filtered_data.values():
+                if isinstance(source_data, list):
+                    domain_filter.enrich_items(source_data)
+
     # Run trend analysis (record daily stats)
     if not args.no_trends and filtered_data.get("huggingface"):
-        trend_results = run_trend_analysis(filtered_data, config)
+        trend_results = run_trend_analysis(
+            filtered_data, config, min_growth=args.min_growth
+        )
+
+    # Run opportunity analysis
+    if not args.no_opportunities and not args.quick:
+        opportunity_results = run_opportunity_analysis(filtered_data, config)
 
     # Run model-dataset analysis
     if not args.no_models:
         model_results = run_model_dataset_analysis(config)
 
+    # Filter by domain if --focus specified
+    if args.focus and domain_data:
+        focus_items = domain_data.get(args.focus, [])
+        print(f"\n--focus={args.focus}: {len(focus_items)} items in this domain")
+
+    # Filter by growth if --growth-only specified
+    if args.growth_only and trend_results:
+        rising = trend_results.get("top_growing_7d", [])
+        print(f"\n--growth-only: {len(rising)} items with positive growth")
+
+    # Opportunities-only mode
+    if args.opportunities:
+        print("\n--opportunities mode: focusing on business signals")
+        if opportunity_results:
+            opp_count = opportunity_results.get("summary", {}).get("annotation_opportunity_count", 0)
+            factory_count = opportunity_results.get("summary", {}).get("data_factory_count", 0)
+            print(f"  Annotation opportunities: {opp_count}")
+            print(f"  Data factories detected: {factory_count}")
+
     # Send notifications
     if not args.no_notify:
         print("\nSending notifications...")
-        send_notifications(filtered_data, config)
+        send_notifications(
+            filtered_data,
+            config,
+            trend_results=trend_results,
+            opportunity_results=opportunity_results,
+            domain_data=domain_data,
+        )
 
     print("\nDone!")
     return 0

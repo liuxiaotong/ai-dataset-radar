@@ -417,7 +417,7 @@ class RadarDatabase:
             limit: Maximum results to return.
 
         Returns:
-            List of datasets with their trend data.
+            List of datasets with their trend data and current downloads.
         """
         conn = self._get_connection()
         cursor = conn.cursor()
@@ -427,14 +427,103 @@ class RadarDatabase:
 
         cursor.execute(
             f"""
-            SELECT d.*, t.{growth_column} as growth, t.date as trend_date
+            SELECT d.*, t.{growth_column} as growth, t.date as trend_date,
+                   ds.downloads as current_downloads, ds.likes as current_likes
             FROM datasets d
             JOIN trends t ON d.id = t.dataset_id
+            LEFT JOIN daily_stats ds ON d.id = ds.dataset_id AND ds.date = ?
             WHERE t.date = ? AND t.{growth_column} >= ?
             ORDER BY t.{growth_column} DESC
             LIMIT ?
             """,
-            (today, min_growth, limit),
+            (today, today, min_growth, limit),
+        )
+        rows = cursor.fetchall()
+        conn.close()
+        return [dict(row) for row in rows]
+
+    def get_breakthrough_datasets(
+        self,
+        threshold: int = 1000,
+        days: int = 7,
+        limit: int = 20,
+    ) -> list[dict]:
+        """Get datasets that broke through from near-zero to significant downloads.
+
+        Identifies datasets that went from <100 downloads to 1000+ downloads.
+
+        Args:
+            threshold: Download count to consider as "breakthrough" (default: 1000).
+            days: Lookback period for detecting breakthroughs.
+            limit: Maximum results to return.
+
+        Returns:
+            List of breakthrough datasets with growth details.
+        """
+        conn = self._get_connection()
+        cursor = conn.cursor()
+        today = datetime.now().strftime("%Y-%m-%d")
+        cutoff = (datetime.now() - timedelta(days=days)).strftime("%Y-%m-%d")
+
+        cursor.execute(
+            """
+            SELECT d.*,
+                   old_stats.downloads as old_downloads,
+                   new_stats.downloads as current_downloads,
+                   (new_stats.downloads - COALESCE(old_stats.downloads, 0)) as download_increase
+            FROM datasets d
+            JOIN daily_stats new_stats ON d.id = new_stats.dataset_id AND new_stats.date = ?
+            LEFT JOIN daily_stats old_stats ON d.id = old_stats.dataset_id AND old_stats.date = ?
+            WHERE new_stats.downloads >= ?
+              AND COALESCE(old_stats.downloads, 0) < 100
+            ORDER BY download_increase DESC
+            LIMIT ?
+            """,
+            (today, cutoff, threshold, limit),
+        )
+        rows = cursor.fetchall()
+        conn.close()
+        return [dict(row) for row in rows]
+
+    def get_top_growing_datasets(
+        self,
+        days: int = 7,
+        limit: int = 20,
+        min_downloads: int = 0,
+    ) -> list[dict]:
+        """Get datasets sorted by absolute download increase.
+
+        Args:
+            days: Period for growth calculation.
+            limit: Maximum results.
+            min_downloads: Minimum current downloads to include.
+
+        Returns:
+            List of datasets sorted by download increase.
+        """
+        conn = self._get_connection()
+        cursor = conn.cursor()
+        today = datetime.now().strftime("%Y-%m-%d")
+
+        growth_column = "downloads_7d_growth" if days == 7 else "downloads_30d_growth"
+
+        cursor.execute(
+            f"""
+            SELECT d.*, t.{growth_column} as growth, t.date as trend_date,
+                   ds.downloads as current_downloads, ds.likes as current_likes,
+                   CASE
+                       WHEN t.{growth_column} = 'inf' THEN ds.downloads
+                       ELSE CAST(ds.downloads * t.{growth_column} / (1 + t.{growth_column}) AS INTEGER)
+                   END as download_increase
+            FROM datasets d
+            JOIN trends t ON d.id = t.dataset_id
+            JOIN daily_stats ds ON d.id = ds.dataset_id AND ds.date = ?
+            WHERE t.date = ? AND ds.downloads >= ?
+                  AND t.{growth_column} IS NOT NULL AND t.{growth_column} > 0
+            ORDER BY t.{growth_column} DESC
+            LIMIT ?
+            """,
+            (today, today, min_downloads, limit),
         )
         rows = cursor.fetchall()
         conn.close()

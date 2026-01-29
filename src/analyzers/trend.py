@@ -150,6 +150,50 @@ class TrendAnalyzer:
             limit=limit,
         )
 
+    def get_breakthrough_datasets(
+        self,
+        threshold: int = 1000,
+        days: int = 7,
+        limit: int = 10,
+    ) -> list[dict]:
+        """Get datasets that broke through from near-zero to significant downloads.
+
+        Args:
+            threshold: Download count to consider as "breakthrough".
+            days: Lookback period.
+            limit: Maximum results.
+
+        Returns:
+            List of breakthrough datasets.
+        """
+        return self.db.get_breakthrough_datasets(
+            threshold=threshold,
+            days=days,
+            limit=limit,
+        )
+
+    def get_top_growing_datasets(
+        self,
+        days: int = 7,
+        limit: int = 10,
+        min_downloads: int = 0,
+    ) -> list[dict]:
+        """Get datasets sorted by growth rate with download info.
+
+        Args:
+            days: Period for growth calculation.
+            limit: Maximum results.
+            min_downloads: Minimum current downloads to include.
+
+        Returns:
+            List of datasets sorted by growth rate.
+        """
+        return self.db.get_top_growing_datasets(
+            days=days,
+            limit=limit,
+            min_downloads=min_downloads,
+        )
+
     def get_dataset_trend(self, dataset_id: str, source: str = "huggingface") -> Optional[dict]:
         """Get trend data for a specific dataset.
 
@@ -183,7 +227,7 @@ class TrendAnalyzer:
             datasets: List of datasets to analyze (should have latest stats).
 
         Returns:
-            Analysis results including rising datasets.
+            Analysis results including rising and breakthrough datasets.
         """
         # Step 1: Record daily stats
         print("Recording daily statistics...")
@@ -199,14 +243,25 @@ class TrendAnalyzer:
         print("Identifying rising datasets...")
         rising_7d = self.get_rising_datasets(days=7)
         rising_30d = self.get_rising_datasets(days=30)
-
         print(f"  Found {len(rising_7d)} rising (7-day), {len(rising_30d)} rising (30-day)")
+
+        # Step 4: Get top growing datasets (sorted by growth rate with downloads)
+        print("Finding top growing datasets...")
+        top_growing_7d = self.get_top_growing_datasets(days=7, limit=10)
+        print(f"  Found {len(top_growing_7d)} top growing datasets")
+
+        # Step 5: Identify breakthrough datasets
+        print("Detecting breakthrough datasets...")
+        breakthroughs = self.get_breakthrough_datasets(threshold=1000, days=7)
+        print(f"  Found {len(breakthroughs)} breakthrough datasets")
 
         return {
             "recorded_count": recorded,
             "trend_summary": trend_summary,
             "rising_7d": rising_7d,
             "rising_30d": rising_30d,
+            "top_growing_7d": top_growing_7d,
+            "breakthroughs": breakthroughs,
         }
 
     def generate_report(self, analysis_results: dict) -> str:
@@ -230,18 +285,51 @@ class TrendAnalyzer:
         lines.append(f"Datasets with positive growth: {summary.get('datasets_with_growth', 0)}")
         lines.append("")
 
+        # Top growing datasets (7-day) - sorted by growth rate with downloads
+        top_growing = analysis_results.get("top_growing_7d", [])
+        if top_growing:
+            lines.append("-" * 60)
+            lines.append("  Top Growing Datasets (7-day)")
+            lines.append("-" * 60)
+
+            for i, ds in enumerate(top_growing[:10], 1):
+                growth = ds.get("growth", 0)
+                growth_pct = f"{growth * 100:.1f}%" if growth != float("inf") else "New"
+                downloads = ds.get("current_downloads", 0)
+                lines.append(f"\n  {i}. {ds.get('name', ds.get('dataset_id', 'Unknown'))}")
+                lines.append(f"     Growth: {growth_pct} | Downloads: {downloads:,}")
+                lines.append(f"     URL: {ds.get('url', 'N/A')}")
+
+        # Breakthrough datasets
+        breakthroughs = analysis_results.get("breakthroughs", [])
+        if breakthroughs:
+            lines.append("")
+            lines.append("-" * 60)
+            lines.append("  Breakthrough Datasets (0 -> 1000+ downloads)")
+            lines.append("-" * 60)
+
+            for ds in breakthroughs[:5]:
+                old = ds.get("old_downloads", 0) or 0
+                current = ds.get("current_downloads", 0)
+                increase = ds.get("download_increase", current - old)
+                lines.append(f"\n  {ds.get('name', ds.get('dataset_id', 'Unknown'))}")
+                lines.append(f"     {old:,} -> {current:,} (+{increase:,})")
+                lines.append(f"     URL: {ds.get('url', 'N/A')}")
+
         # Rising datasets (7-day)
         rising_7d = analysis_results.get("rising_7d", [])
         if rising_7d:
+            lines.append("")
             lines.append("-" * 60)
-            lines.append("  Rising Datasets (7-day growth)")
+            lines.append("  Rising Datasets (7-day growth >= 50%)")
             lines.append("-" * 60)
 
             for ds in rising_7d[:10]:
                 growth = ds.get("growth", 0)
                 growth_pct = f"{growth * 100:.1f}%" if growth != float("inf") else "New"
+                downloads = ds.get("current_downloads", 0) or 0
                 lines.append(f"\n  {ds.get('name', ds.get('dataset_id', 'Unknown'))}")
-                lines.append(f"    Growth: {growth_pct}")
+                lines.append(f"    Growth: {growth_pct} | Downloads: {downloads:,}")
                 lines.append(f"    URL: {ds.get('url', 'N/A')}")
 
         # Rising datasets (30-day)
@@ -249,17 +337,18 @@ class TrendAnalyzer:
         if rising_30d:
             lines.append("")
             lines.append("-" * 60)
-            lines.append("  Rising Datasets (30-day growth)")
+            lines.append("  Rising Datasets (30-day growth >= 50%)")
             lines.append("-" * 60)
 
             for ds in rising_30d[:10]:
                 growth = ds.get("growth", 0)
                 growth_pct = f"{growth * 100:.1f}%" if growth != float("inf") else "New"
+                downloads = ds.get("current_downloads", 0) or 0
                 lines.append(f"\n  {ds.get('name', ds.get('dataset_id', 'Unknown'))}")
-                lines.append(f"    Growth: {growth_pct}")
+                lines.append(f"    Growth: {growth_pct} | Downloads: {downloads:,}")
                 lines.append(f"    URL: {ds.get('url', 'N/A')}")
 
-        if not rising_7d and not rising_30d:
+        if not rising_7d and not rising_30d and not top_growing:
             lines.append("")
             lines.append("No rising datasets found yet.")
             lines.append("(Need multiple days of data to calculate trends)")

@@ -121,7 +121,7 @@ class ConsoleNotifier:
 
 
 class MarkdownNotifier:
-    """Generate Markdown reports."""
+    """Generate Markdown reports (legacy format)."""
 
     def __init__(self, output_dir: str = "data"):
         self.output_dir = output_dir
@@ -279,6 +279,234 @@ class MarkdownNotifier:
         return "\n".join(lines)
 
 
+class BusinessIntelNotifier:
+    """Generate business intelligence markdown reports."""
+
+    def __init__(self, output_dir: str = "data", config: Optional[dict] = None):
+        self.output_dir = output_dir
+        self.config = config or {}
+
+    def notify(
+        self,
+        data: dict,
+        trend_results: Optional[dict] = None,
+        opportunity_results: Optional[dict] = None,
+        domain_data: Optional[dict] = None,
+    ) -> str:
+        """Generate and save a business intelligence report.
+
+        Args:
+            data: Dictionary containing datasets from each source.
+            trend_results: Results from TrendAnalyzer.analyze().
+            opportunity_results: Results from OpportunityAnalyzer.analyze().
+            domain_data: Results from DomainFilter.classify_all().
+
+        Returns:
+            Path to the generated report file.
+        """
+        os.makedirs(self.output_dir, exist_ok=True)
+
+        date_str = datetime.now().strftime("%Y-%m-%d")
+        filename = f"intel_report_{date_str}.md"
+        filepath = os.path.join(self.output_dir, filename)
+
+        content = self._generate_report(
+            data, trend_results, opportunity_results, domain_data
+        )
+
+        with open(filepath, "w", encoding="utf-8") as f:
+            f.write(content)
+
+        print(f"Business intelligence report saved to: {filepath}")
+        return filepath
+
+    def _generate_report(
+        self,
+        data: dict,
+        trend_results: Optional[dict],
+        opportunity_results: Optional[dict],
+        domain_data: Optional[dict],
+    ) -> str:
+        """Generate the business intelligence report content."""
+        lines = []
+        date_str = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+
+        lines.append("# AI Dataset Radar 商业情报周报")
+        lines.append(f"*Generated: {date_str}*\n")
+
+        # Section 1: Top Growing Datasets
+        lines.append("## 🔥 增长最快的数据集 (Top 10)\n")
+        if trend_results and trend_results.get("top_growing_7d"):
+            lines.append("| 排名 | 数据集 | 7天增长率 | 当前下载 | 领域标签 |")
+            lines.append("|------|--------|-----------|----------|----------|")
+            for i, ds in enumerate(trend_results["top_growing_7d"][:10], 1):
+                name = ds.get("name", ds.get("dataset_id", "Unknown"))
+                name_link = f"[{name}]({ds.get('url', '#')})"
+                growth = ds.get("growth", 0)
+                growth_str = f"{growth * 100:.1f}%" if growth != float("inf") else "New"
+                downloads = ds.get("current_downloads", 0) or 0
+                domains = ds.get("domains", [])
+                domain_str = ", ".join(domains[:2]) if domains else "-"
+                lines.append(f"| {i} | {name_link} | {growth_str} | {downloads:,} | {domain_str} |")
+        else:
+            lines.append("*需要多天数据才能计算增长趋势*")
+        lines.append("")
+
+        # Breakthrough datasets
+        if trend_results and trend_results.get("breakthroughs"):
+            lines.append("### 🚀 破圈数据集 (0 → 1000+ 下载)\n")
+            lines.append("| 数据集 | 起始下载 | 当前下载 | 增量 |")
+            lines.append("|--------|----------|----------|------|")
+            for ds in trend_results["breakthroughs"][:5]:
+                name = ds.get("name", ds.get("dataset_id", "Unknown"))
+                name_link = f"[{name}]({ds.get('url', '#')})"
+                old = ds.get("old_downloads", 0) or 0
+                current = ds.get("current_downloads", 0)
+                increase = ds.get("download_increase", current - old)
+                lines.append(f"| {name_link} | {old:,} | {current:,} | +{increase:,} |")
+            lines.append("")
+
+        # Section 2: Data Factories
+        lines.append("## 🏭 数据工厂动态\n")
+        if opportunity_results and opportunity_results.get("data_factories"):
+            lines.append("| 作者/机构 | 本周发布数量 | 数据集列表 | 可能归属 |")
+            lines.append("|-----------|--------------|------------|----------|")
+            for factory in opportunity_results["data_factories"][:10]:
+                author = factory["author"]
+                count = factory["dataset_count"]
+                datasets = [ds.get("name", ds.get("id", "?"))[:20] for ds in factory["datasets"][:3]]
+                datasets_str = ", ".join(datasets)
+                if len(factory["datasets"]) > 3:
+                    datasets_str += f" +{len(factory['datasets']) - 3}..."
+                org = factory.get("possible_org", "-") or "-"
+                lines.append(f"| {author} | {count} | {datasets_str} | {org} |")
+        else:
+            lines.append("*本周未检测到数据工厂活动*")
+        lines.append("")
+
+        # Section 3: Domain Focus - Robotics
+        lines.append("## 🤖 具身智能专区\n")
+        robotics_data = domain_data.get("robotics", []) if domain_data else []
+
+        # Filter to robotics datasets
+        robotics_datasets = [
+            ds for ds in robotics_data
+            if ds.get("source") == "huggingface"
+        ]
+        robotics_papers = [
+            p for p in robotics_data
+            if p.get("source") in ("arxiv", "hf_papers")
+        ] if robotics_data else []
+
+        if robotics_datasets:
+            lines.append("### 新增机器人数据集\n")
+            lines.append("| 数据集 | 任务类型 | 数据规模 | 增长趋势 |")
+            lines.append("|--------|----------|----------|----------|")
+            for ds in robotics_datasets[:10]:
+                name = ds.get("name", "N/A")
+                name_link = f"[{name}]({ds.get('url', '#')})"
+                tags = ds.get("tags", [])[:2]
+                task = ", ".join(tags) if tags else "-"
+                downloads = ds.get("downloads", 0)
+                size = f"{downloads:,} downloads"
+                growth = ds.get("growth", None)
+                growth_str = f"{growth * 100:.1f}%" if growth else "-"
+                lines.append(f"| {name_link} | {task} | {size} | {growth_str} |")
+        else:
+            lines.append("### 新增机器人数据集\n")
+            lines.append("*本周无新增*")
+        lines.append("")
+
+        # Section 4: Papers with Annotation Signals
+        lines.append("## 📄 有标注需求的论文\n")
+        if opportunity_results and opportunity_results.get("annotation_opportunities"):
+            lines.append("| 论文 | 检测到的信号 | 机构 | arXiv链接 |")
+            lines.append("|------|--------------|------|-----------|")
+            for opp in opportunity_results["annotation_opportunities"][:15]:
+                title = opp["title"][:50] + "..." if len(opp["title"]) > 50 else opp["title"]
+                title = title.replace("|", "\\|")
+                signals = ", ".join(opp["signals"][:3])
+                if len(opp["signals"]) > 3:
+                    signals += "..."
+                org = opp.get("detected_org", "-") or "-"
+                arxiv_id = opp.get("arxiv_id", "")
+                arxiv_link = f"[{arxiv_id}](https://arxiv.org/abs/{arxiv_id})" if arxiv_id else "-"
+                lines.append(f"| {title} | {signals} | {org} | {arxiv_link} |")
+        else:
+            lines.append("*本周未检测到有标注需求的论文*")
+        lines.append("")
+
+        # Section 5: Organization Activity
+        lines.append("## 🏢 大厂动态\n")
+        if opportunity_results and opportunity_results.get("org_activity"):
+            org_activity = opportunity_results["org_activity"]
+            # Sort by activity
+            sorted_orgs = sorted(
+                [(org, org_data) for org, org_data in org_activity.items() if org_data["total_items"] > 0],
+                key=lambda x: x[1]["total_items"],
+                reverse=True
+            )
+
+            for org, org_data in sorted_orgs[:6]:
+                lines.append(f"### {org.upper()}\n")
+                if org_data["datasets"]:
+                    lines.append("**相关数据集:**")
+                    for ds in org_data["datasets"][:3]:
+                        name = ds.get("name", ds.get("id", "Unknown"))
+                        url = ds.get("url", "#")
+                        lines.append(f"- [{name}]({url})")
+                if org_data["papers"]:
+                    lines.append("\n**相关论文:**")
+                    for p in org_data["papers"][:3]:
+                        title = p.get("title", "Unknown")[:60]
+                        url = p.get("url", p.get("arxiv_url", "#"))
+                        lines.append(f"- [{title}]({url})")
+                lines.append("")
+
+            if not sorted_orgs:
+                lines.append("*本周未检测到大厂相关活动*")
+        else:
+            lines.append("*本周未检测到大厂相关活动*")
+        lines.append("")
+
+        # Section 6: Statistics Summary
+        lines.append("## 📊 统计摘要\n")
+
+        hf_count = len(data.get("huggingface", []))
+        arxiv_count = len(data.get("arxiv", []))
+        github_data = data.get("github", [])
+        github_dataset_count = len([r for r in github_data if r.get("is_dataset")])
+        hf_papers = data.get("hf_papers", [])
+        hf_papers_dataset_count = len([p for p in hf_papers if p.get("is_dataset_paper")])
+
+        # Calculate domain distribution (only count HF datasets for percentage)
+        robotics_hf_count = 0
+        if domain_data:
+            for item in domain_data.get("robotics", []):
+                if item.get("source") == "huggingface":
+                    robotics_hf_count += 1
+
+        lines.append(f"- **本周新增数据集:** {hf_count} 个")
+        lines.append(f"- **GitHub 数据集仓库:** {github_dataset_count} 个")
+        lines.append(f"- **数据集相关论文:** {hf_papers_dataset_count} 篇")
+
+        if robotics_hf_count > 0 and hf_count > 0:
+            robotics_pct = robotics_hf_count / hf_count * 100
+            lines.append(f"- **机器人领域占比:** {robotics_pct:.1f}%")
+
+        if opportunity_results:
+            opp_count = opportunity_results.get("summary", {}).get("annotation_opportunity_count", 0)
+            factory_count = opportunity_results.get("summary", {}).get("data_factory_count", 0)
+            lines.append(f"- **检测到潜在商机:** {opp_count} 个")
+            lines.append(f"- **数据工厂:** {factory_count} 个")
+
+        lines.append("")
+        lines.append("---")
+        lines.append("*Report generated by AI Dataset Radar v2 - Business Intelligence System*")
+
+        return "\n".join(lines)
+
+
 class EmailNotifier:
     """Send email notifications via SMTP."""
 
@@ -396,11 +624,12 @@ def expand_env_vars(value: str) -> str:
     return re.sub(pattern, replace, value)
 
 
-def create_notifiers(config: dict) -> list:
+def create_notifiers(config: dict, full_config: Optional[dict] = None) -> list:
     """Create notifier instances based on configuration.
 
     Args:
         config: Notification configuration dictionary.
+        full_config: Full application configuration (for BusinessIntelNotifier).
 
     Returns:
         List of enabled notifier instances.
@@ -412,10 +641,18 @@ def create_notifiers(config: dict) -> list:
     if console_cfg.get("enabled", True):
         notifiers.append(ConsoleNotifier(use_color=console_cfg.get("color", True)))
 
-    # Markdown notifier
+    # Markdown notifier (legacy format)
     md_cfg = config.get("markdown", {})
     if md_cfg.get("enabled", True):
         notifiers.append(MarkdownNotifier(output_dir=md_cfg.get("output_dir", "data")))
+
+    # Business intelligence notifier (new format)
+    intel_cfg = config.get("business_intel", {})
+    if intel_cfg.get("enabled", True):
+        notifiers.append(BusinessIntelNotifier(
+            output_dir=intel_cfg.get("output_dir", "data"),
+            config=full_config,
+        ))
 
     # Email notifier
     email_cfg = config.get("email", {})
