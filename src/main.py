@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Main entry point for AI Dataset Radar v2."""
+"""Main entry point for AI Dataset Radar v3 - High-Value Dataset Discovery System."""
 
 import argparse
 import json
@@ -16,11 +16,21 @@ from scrapers import (
     ArxivScraper,
     GitHubScraper,
     HFPapersScraper,
+    SemanticScholarScraper,
+    PwCSOTAScraper,
 )
 from filters import filter_datasets, DomainFilter, OrganizationFilter
 from notifiers import create_notifiers, expand_env_vars, BusinessIntelNotifier
 from db import get_database
-from analyzers import ModelDatasetAnalyzer, TrendAnalyzer, OpportunityAnalyzer
+from analyzers import (
+    ModelDatasetAnalyzer,
+    TrendAnalyzer,
+    OpportunityAnalyzer,
+    ModelCardAnalyzer,
+    ValueScorer,
+    ValueAggregator,
+)
+from report import generate_value_report
 
 
 def load_config(config_path: str = "config.yaml") -> dict:
@@ -361,10 +371,94 @@ def run_domain_classification(data: dict, config: dict, focus: str = None) -> di
     return domain_data
 
 
+def run_value_analysis(data: dict, config: dict) -> dict:
+    """Run v3 value scoring analysis.
+
+    Args:
+        data: Dictionary with fetched data.
+        config: Configuration dictionary.
+
+    Returns:
+        Value analysis results.
+    """
+    print("\n" + "=" * 60)
+    print("  High-Value Dataset Analysis (v3)")
+    print("=" * 60 + "\n")
+
+    aggregator = ValueAggregator()
+    results = {}
+
+    # Semantic Scholar - citation tracking
+    ss_cfg = config.get("sources", {}).get("semantic_scholar", {})
+    if ss_cfg.get("enabled", True):
+        print("Fetching Semantic Scholar citations...")
+        scraper = SemanticScholarScraper(
+            limit=ss_cfg.get("limit", 100),
+            months_back=ss_cfg.get("months_back", 6),
+            min_citations=ss_cfg.get("min_citations", 20),
+            min_monthly_growth=ss_cfg.get("min_monthly_growth", 10),
+        )
+        citation_papers = scraper.fetch_dataset_papers()
+        print(f"  Found {len(citation_papers)} high-impact dataset papers")
+        aggregator.add_semantic_scholar_data(citation_papers)
+        results["citation_data"] = citation_papers
+
+    # Model card analysis
+    mc_cfg = config.get("value_analysis", {}).get("model_cards", {})
+    if mc_cfg.get("enabled", True):
+        print("Analyzing model cards...")
+        analyzer = ModelCardAnalyzer(
+            min_model_downloads=mc_cfg.get("min_downloads", 1000),
+            model_limit=mc_cfg.get("limit", 500),
+            min_dataset_usage=mc_cfg.get("min_usage", 3),
+        )
+        model_card_results = analyzer.analyze()
+        print(f"  Analyzed {model_card_results.get('models_analyzed', 0)} models")
+        print(f"  Found {len(model_card_results.get('valuable_datasets', []))} datasets with 3+ uses")
+        aggregator.add_model_card_data(model_card_results)
+        results["model_card_results"] = model_card_results
+
+    # SOTA analysis
+    sota_cfg = config.get("value_analysis", {}).get("sota", {})
+    if sota_cfg.get("enabled", True):
+        print("Analyzing SOTA associations...")
+        scraper = PwCSOTAScraper(
+            areas=sota_cfg.get("areas"),
+            top_n=sota_cfg.get("top_n", 10),
+        )
+        sota_results = scraper.analyze_sota_datasets()
+        print(f"  Found {sota_results.get('unique_datasets', 0)} datasets with SOTA associations")
+        aggregator.add_sota_data(sota_results)
+        results["sota_results"] = sota_results
+
+    # Add HuggingFace data
+    if data.get("huggingface"):
+        aggregator.add_huggingface_data(data["huggingface"])
+
+    # Get scored datasets
+    min_score = config.get("value_analysis", {}).get("min_score", 0)
+    scored_datasets = aggregator.get_scored_datasets(min_score)
+    results["scored_datasets"] = scored_datasets
+
+    # Print summary
+    print("\nValue Analysis Summary:")
+    high_value = len([d for d in scored_datasets if d.get("total_score", 0) >= 60])
+    medium_value = len([d for d in scored_datasets if 40 <= d.get("total_score", 0) < 60])
+    print(f"  High-value datasets (≥60): {high_value}")
+    print(f"  Medium-value datasets (40-59): {medium_value}")
+    print(f"  Total analyzed: {len(scored_datasets)}")
+
+    # Generate and print report
+    report = aggregator.generate_report(min_score=40)
+    print("\n" + report)
+
+    return results
+
+
 def parse_args() -> argparse.Namespace:
     """Parse command line arguments."""
     parser = argparse.ArgumentParser(
-        description="AI Dataset Radar v2 - Business Intelligence System"
+        description="AI Dataset Radar v3 - High-Value Dataset Discovery System"
     )
     parser.add_argument(
         "--config",
@@ -398,7 +492,7 @@ def parse_args() -> argparse.Namespace:
         help="Quick mode: fetch data only, skip analysis",
     )
 
-    # Business intelligence arguments
+    # Business intelligence arguments (v2)
     parser.add_argument(
         "--focus",
         type=str,
@@ -427,6 +521,35 @@ def parse_args() -> argparse.Namespace:
         help="Skip opportunity analysis",
     )
 
+    # Value analysis arguments (v3)
+    parser.add_argument(
+        "--min-score",
+        type=int,
+        default=None,
+        help="Minimum value score to include (0-100)",
+    )
+    parser.add_argument(
+        "--domain",
+        type=str,
+        choices=["robotics", "nlp", "vision", "code", "rlhf"],
+        help="Filter valuable datasets by domain",
+    )
+    parser.add_argument(
+        "--top-institutions",
+        action="store_true",
+        help="Only show datasets from top institutions",
+    )
+    parser.add_argument(
+        "--value-analysis",
+        action="store_true",
+        help="Run v3 value analysis (citation tracking, model cards, SOTA)",
+    )
+    parser.add_argument(
+        "--no-value-analysis",
+        action="store_true",
+        help="Skip v3 value analysis",
+    )
+
     return parser.parse_args()
 
 
@@ -435,8 +558,8 @@ def main():
     args = parse_args()
 
     print("=" * 60)
-    print("  AI Dataset Radar v2")
-    print("  Business Intelligence System")
+    print("  AI Dataset Radar v3")
+    print("  High-Value Dataset Discovery System")
     print("=" * 60)
     print()
 
@@ -518,6 +641,34 @@ def main():
     # Run model-dataset analysis
     if not args.no_models:
         model_results = run_model_dataset_analysis(config)
+
+    # Run v3 value analysis
+    value_results = None
+    if args.value_analysis and not args.no_value_analysis:
+        value_results = run_value_analysis(filtered_data, config)
+
+        # Generate value report
+        if value_results.get("scored_datasets"):
+            report_path = generate_value_report(
+                value_results["scored_datasets"],
+                output_dir=config.get("output", {}).get("json_dir", "data"),
+                sota_results=value_results.get("sota_results"),
+                citation_data=value_results.get("citation_data"),
+                model_card_results=value_results.get("model_card_results"),
+            )
+            print(f"\nValue report saved to: {report_path}")
+
+        # Apply min-score filter
+        if args.min_score is not None:
+            scored = value_results.get("scored_datasets", [])
+            filtered_scored = [d for d in scored if d.get("total_score", 0) >= args.min_score]
+            print(f"\n--min-score={args.min_score}: {len(filtered_scored)} datasets meet threshold")
+
+        # Apply top-institutions filter
+        if args.top_institutions:
+            scored = value_results.get("scored_datasets", [])
+            top_inst = [d for d in scored if d.get("is_top_institution")]
+            print(f"\n--top-institutions: {len(top_inst)} datasets from top institutions")
 
     # Filter by domain if --focus specified
     if args.focus and domain_data:

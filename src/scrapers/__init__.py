@@ -5,6 +5,8 @@ from .paperswithcode import PapersWithCodeScraper
 from .arxiv import ArxivScraper
 from .github import GitHubScraper
 from .hf_papers import HFPapersScraper
+from .semantic_scholar import SemanticScholarScraper
+from .pwc_sota import PwCSOTAScraper
 
 __all__ = [
     "HuggingFaceScraper",
@@ -12,4 +14,6 @@ __all__ = [
     "ArxivScraper",
     "GitHubScraper",
     "HFPapersScraper",
+    "SemanticScholarScraper",
+    "PwCSOTAScraper",
 ]

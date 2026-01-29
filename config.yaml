@@ -34,6 +34,15 @@ sources:
     limit: 50  # Number of papers to fetch
     days: 7  # Look back period
 
+  # Semantic Scholar for citation tracking (v3)
+  semantic_scholar:
+    enabled: true
+    limit: 100  # Number of papers to fetch
+    months_back: 6  # Look back period
+    min_citations: 20  # Minimum citations filter
+    min_monthly_growth: 10  # Minimum monthly citation growth
+    api_key: ${SEMANTIC_SCHOLAR_API_KEY}  # Optional: for higher rate limits
+
 # Model tracking configuration
 models:
   enabled: true
@@ -44,6 +53,37 @@ models:
 analysis:
   trend_days: [7, 30]  # Calculate trends for these periods
   min_growth_alert: 0.5  # Alert when growth exceeds 50%
+
+# Value analysis configuration (v3)
+value_analysis:
+  min_score: 0  # Minimum score to include in analysis
+
+  # Model card analysis
+  model_cards:
+    enabled: true
+    min_downloads: 1000  # Minimum model downloads to analyze
+    limit: 500  # Max models to analyze
+    min_usage: 3  # Dataset must be used by 3+ models
+
+  # SOTA tracking
+  sota:
+    enabled: true
+    top_n: 10  # Top N SOTA results per task
+    areas:  # Priority areas
+      - robotics
+      - code-generation
+      - question-answering
+      - text-generation
+      - image-classification
+
+  # Value scoring weights
+  scoring:
+    sota_usage: 30
+    citation_growth: 20
+    model_usage: 20
+    top_institution: 15
+    paper_and_code: 10
+    large_scale: 5
 
 # LLM configuration (for future use)
 llm:
