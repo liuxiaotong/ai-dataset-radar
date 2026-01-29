@@ -56,21 +56,91 @@ The system employs a weighted multi-factor scoring model (0-100):
 | arXiv | 7-14 天 | 预印本发表 | 正常 |
 | Papers with Code | - | SOTA 基准 | 已迁移至 HuggingFace |
 
+## Signal Types | 信号类型
+
+Understanding the different signals helps prioritize data annotation investments:
+
+不同信号的商业价值解读：
+
+| Signal | Source | Timing | Business Implication |
+|--------|--------|--------|---------------------|
+| Citation Velocity | Semantic Scholar | Leading (6-12 months ahead) | Academic research trending → future industry demand |
+| Model Adoption | HuggingFace | Current | Industry actively using → immediate demand |
+| SOTA Association | Papers with Code | Current | Top models depend on it → premium pricing possible |
+
+| 信号 | 来源 | 时效性 | 商业含义 |
+|------|------|--------|----------|
+| 引用增速 | Semantic Scholar | 领先指标（6-12个月） | 学术界正在研究 → 未来会有标注需求 |
+| 模型采用 | HuggingFace | 当前指标 | 工业界正在使用 → 当前有标注需求 |
+| SOTA 关联 | Papers with Code | 当前指标 | 顶级模型依赖 → 可收取溢价 |
+
+**Example | 示例:**
+```
+Dataset: RoboManip-2026
+Citation velocity: 35/month (high)
+Model adoption: 2 models (low)
+
+Interpretation: Hot in academia, not yet in industry
+→ Opportunity: Build similar dataset before industry catches up
+
+解读：学术热点，工业界尚未跟进
+→ 机会：抢先构建类似数据集
+```
+
 ## API Keys | API 密钥
 
-**Semantic Scholar** (Strongly Recommended):
-- Without API key: 100 requests / 5 minutes (easily exhausted)
-- With API key: 1 request / second (sufficient for daily analysis)
-- Get your key: https://www.semanticscholar.org/product/api
+### Why Semantic Scholar API? | 为什么需要 Semantic Scholar API？
 
-**Semantic Scholar** (强烈推荐):
-- 无 API Key: 每 5 分钟 100 次请求（容易耗尽）
-- 有 API Key: 每秒 1 次请求（满足日常分析需求）
-- 申请地址: https://www.semanticscholar.org/product/api
+Citation data provides **leading indicators** of dataset value:
+
+引用数据提供数据集价值的**领先指标**：
+
+```
+Citation Velocity = Total Citations ÷ Months Since Publication
+引用增速 = 总引用数 ÷ 发表月数
+
+Dataset A: 6 months old, 120 citations → 20/month (high potential)
+Dataset B: 12 months old, 60 citations → 5/month (stable)
+
+数据集 A：发表 6 个月，120 次引用 → 月增速 20（高潜力）
+数据集 B：发表 12 个月，60 次引用 → 月增速 5（稳定）
+```
+
+Without this API, the system can only see **lagging indicators** (what's already popular), not **emerging trends**.
+
+没有此 API，系统只能看到**滞后指标**（已经流行的），无法发现**新兴趋势**。
+
+### Do I Need It? | 是否必须申请？
+
+| Use Case | Required? |
+|----------|-----------|
+| Weekly monitoring | No, free tier sufficient |
+| Daily high-frequency analysis | Yes |
+| Discovering emerging trends | Yes |
+| Tracking existing popular datasets | No |
+
+| 使用场景 | 是否需要？ |
+|----------|-----------|
+| 每周监控 | 不需要，免费额度够用 |
+| 每日高频分析 | 需要 |
+| 发现新兴趋势 | 需要 |
+| 追踪已有热门数据集 | 不需要 |
+
+### Configuration | 配置方式
 
 ```bash
+# Get your key at | 申请地址:
+# https://www.semanticscholar.org/product/api
+
 export SEMANTIC_SCHOLAR_API_KEY=your_key_here
 ```
+
+**Rate Limits | 速率限制:**
+- Without key: 100 requests / 5 minutes (easily exhausted)
+- With key: 1 request / second (sufficient for production)
+
+- 无 Key: 每 5 分钟 100 次（容易耗尽）
+- 有 Key: 每秒 1 次（满足生产需求）
 
 ## Installation | 安装
 
