@@ -205,3 +205,21 @@ cython_debug/
 marimo/_static/
 marimo/_lsp/
 __marimo__/
+
+# ===================
+# Project-specific
+# ===================
+
+# Runtime data (generated files)
+data/*.json
+data/*.md
+data/*.db
+data/pdfs/
+data/reports/
+
+# Keep data directory structure
+!data/.gitkeep
+
+# OS files
+.DS_Store
+Thumbs.db
