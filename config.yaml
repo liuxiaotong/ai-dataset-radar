@@ -11,7 +11,7 @@ sources:
     limit: 50  # Number of datasets to fetch
 
   paperswithcode:
-    enabled: true
+    enabled: false  # API migrated to Hugging Face (2026)
     limit: 50  # Number of benchmarks to fetch
 
   arxiv:
@@ -35,13 +35,15 @@ sources:
     days: 7  # Look back period
 
   # Semantic Scholar for citation tracking (v3)
+  # Get API key at: https://www.semanticscholar.org/product/api (recommended)
+  # Without API key: 100 requests / 5 min; With API key: 1 request / sec
   semantic_scholar:
     enabled: true
     limit: 100  # Number of papers to fetch
     months_back: 6  # Look back period
     min_citations: 20  # Minimum citations filter
     min_monthly_growth: 10  # Minimum monthly citation growth
-    api_key: ${SEMANTIC_SCHOLAR_API_KEY}  # Optional: for higher rate limits
+    api_key: ${SEMANTIC_SCHOLAR_API_KEY}  # Strongly recommended for production use
 
 # Model tracking configuration
 models:
@@ -65,9 +67,9 @@ value_analysis:
     limit: 500  # Max models to analyze
     min_usage: 3  # Dataset must be used by 3+ models
 
-  # SOTA tracking
+  # SOTA tracking (requires Papers with Code API)
   sota:
-    enabled: true
+    enabled: false  # API migrated to Hugging Face (2026)
     top_n: 10  # Top N SOTA results per task
     areas:  # Priority areas
       - robotics

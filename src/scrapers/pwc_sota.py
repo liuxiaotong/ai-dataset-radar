@@ -7,6 +7,7 @@ API Documentation: https://paperswithcode.com/api/v1/docs/
 """
 
 import time
+import random
 from datetime import datetime
 from typing import Optional
 import requests
@@ -41,7 +42,88 @@ class PwCSOTAScraper:
         self.areas = areas or self.PRIORITY_AREAS
         self.top_n = top_n
         self.session = requests.Session()
-        self.session.headers["User-Agent"] = "AI-Dataset-Radar/3.0"
+        self.session.headers.update({
+            "Accept": "application/json",
+            "User-Agent": "AI-Dataset-Radar/3.0 (https://github.com/liuxiaotong/ai-dataset-radar)",
+        })
+        self._last_request_time = 0
+        self._base_delay = 1.5
+
+    def _rate_limit_wait(self) -> None:
+        """Wait to respect rate limits."""
+        elapsed = time.time() - self._last_request_time
+        if elapsed < self._base_delay:
+            time.sleep(self._base_delay - elapsed + random.uniform(0.1, 0.5))
+        self._last_request_time = time.time()
+
+    def _request_with_retry(
+        self,
+        url: str,
+        params: dict,
+        max_retries: int = 3,
+    ) -> Optional[dict]:
+        """Make a request with retry logic.
+
+        Args:
+            url: Request URL.
+            params: Query parameters.
+            max_retries: Maximum retry attempts.
+
+        Returns:
+            JSON response data or None on failure.
+        """
+        for attempt in range(max_retries + 1):
+            self._rate_limit_wait()
+
+            try:
+                response = self.session.get(url, params=params, timeout=30)
+
+                # Check content type
+                content_type = response.headers.get("Content-Type", "")
+                if "application/json" not in content_type:
+                    if attempt < max_retries:
+                        time.sleep(2 ** attempt)
+                        continue
+                    return None
+
+                if response.status_code == 200:
+                    return response.json()
+
+                elif response.status_code == 429:
+                    wait_time = (2 ** attempt) * 3 + random.uniform(1, 2)
+                    if attempt < max_retries:
+                        print(f"  Rate limited, waiting {wait_time:.1f}s...")
+                        time.sleep(wait_time)
+                        continue
+                    return None
+
+                elif response.status_code == 404:
+                    # Resource not found - don't retry
+                    return None
+
+                elif response.status_code >= 500:
+                    if attempt < max_retries:
+                        time.sleep(2 ** attempt)
+                        continue
+
+                response.raise_for_status()
+
+            except requests.exceptions.Timeout:
+                if attempt < max_retries:
+                    time.sleep(2 ** attempt)
+                    continue
+                return None
+
+            except requests.RequestException as e:
+                if attempt < max_retries:
+                    time.sleep(2 ** attempt)
+                    continue
+                return None
+
+            except ValueError:
+                return None
+
+        return None
 
     def fetch(self) -> list[dict]:
         """Fetch SOTA results and associated datasets.
@@ -51,11 +133,10 @@ class PwCSOTAScraper:
         """
         all_results = []
 
-        for area in self.areas:
-            print(f"  Fetching SOTA for area: {area}")
+        for i, area in enumerate(self.areas):
+            print(f"  Fetching SOTA for: {area} ({i+1}/{len(self.areas)})")
             area_results = self._fetch_area_sota(area)
             all_results.extend(area_results)
-            time.sleep(0.5)  # Rate limiting
 
         return all_results
 
@@ -100,18 +181,18 @@ class PwCSOTAScraper:
                 # Match SOTA results to this dataset
                 for sota in sota_results:
                     if sota.get("dataset") == ds.get("name"):
-                        ds_info["sota_models"].append({
-                            "model_name": sota.get("model_name"),
-                            "paper_title": sota.get("paper_title"),
-                            "paper_url": sota.get("paper_url"),
-                            "metric_value": sota.get("metric_value"),
-                            "metric_name": sota.get("metric_name"),
-                        })
+                        ds_info["sota_models"].append(
+                            {
+                                "model_name": sota.get("model_name"),
+                                "paper_title": sota.get("paper_title"),
+                                "paper_url": sota.get("paper_url"),
+                                "metric_value": sota.get("metric_value"),
+                                "metric_name": sota.get("metric_name"),
+                            }
+                        )
 
                 if ds_info["sota_models"]:
                     results.append(ds_info)
-
-            time.sleep(0.3)
 
         return results
 
@@ -127,17 +208,14 @@ class PwCSOTAScraper:
         url = f"{self.BASE_URL}/tasks/"
         params = {
             "area": area,
-            "page_size": 20,
+            "items_per_page": 20,
         }
 
-        try:
-            response = self.session.get(url, params=params, timeout=30)
-            response.raise_for_status()
-            data = response.json()
-            return data.get("results", [])
-        except requests.RequestException as e:
-            print(f"Error fetching tasks for {area}: {e}")
+        data = self._request_with_retry(url, params)
+        if not data:
             return []
+
+        return data.get("results", [])
 
     def _get_task_datasets(self, task_id: str) -> list[dict]:
         """Get datasets associated with a task.
@@ -149,16 +227,13 @@ class PwCSOTAScraper:
             List of dataset dictionaries.
         """
         url = f"{self.BASE_URL}/tasks/{task_id}/datasets/"
-        params = {"page_size": 20}
+        params = {"items_per_page": 20}
 
-        try:
-            response = self.session.get(url, params=params, timeout=30)
-            response.raise_for_status()
-            data = response.json()
-            return data.get("results", [])
-        except requests.RequestException as e:
-            print(f"Error fetching datasets for task {task_id}: {e}")
+        data = self._request_with_retry(url, params)
+        if not data:
             return []
+
+        return data.get("results", [])
 
     def _get_task_sota(self, task_id: str) -> list[dict]:
         """Get SOTA results for a task.
@@ -172,29 +247,35 @@ class PwCSOTAScraper:
         url = f"{self.BASE_URL}/evaluations/"
         params = {
             "task": task_id,
-            "page_size": self.top_n,
+            "items_per_page": self.top_n,
             "ordering": "-metric_value",
         }
 
-        try:
-            response = self.session.get(url, params=params, timeout=30)
-            response.raise_for_status()
-            data = response.json()
-
-            results = []
-            for item in data.get("results", []):
-                results.append({
-                    "model_name": item.get("model_name", ""),
-                    "paper_title": item.get("paper", {}).get("title", ""),
-                    "paper_url": item.get("paper", {}).get("url", ""),
-                    "dataset": item.get("dataset", {}).get("name", ""),
-                    "metric_name": item.get("metric", {}).get("name", ""),
-                    "metric_value": item.get("metric_value"),
-                })
-            return results
-        except requests.RequestException as e:
-            print(f"Error fetching SOTA for task {task_id}: {e}")
+        data = self._request_with_retry(url, params)
+        if not data:
             return []
+
+        results = []
+        for item in data.get("results", []):
+            results.append(
+                {
+                    "model_name": item.get("model_name", ""),
+                    "paper_title": item.get("paper", {}).get("title", "")
+                    if item.get("paper")
+                    else "",
+                    "paper_url": item.get("paper", {}).get("url", "")
+                    if item.get("paper")
+                    else "",
+                    "dataset": item.get("dataset", {}).get("name", "")
+                    if item.get("dataset")
+                    else "",
+                    "metric_name": item.get("metric", {}).get("name", "")
+                    if item.get("metric")
+                    else "",
+                    "metric_value": item.get("metric_value"),
+                }
+            )
+        return results
 
     def get_dataset_benchmarks(self, dataset_name: str) -> list[dict]:
         """Get all benchmarks/tasks that use a dataset.
@@ -207,30 +288,28 @@ class PwCSOTAScraper:
         """
         url = f"{self.BASE_URL}/datasets/"
         params = {
-            "name": dataset_name,
-            "page_size": 10,
+            "q": dataset_name,
+            "items_per_page": 10,
         }
 
-        try:
-            response = self.session.get(url, params=params, timeout=30)
-            response.raise_for_status()
-            data = response.json()
+        data = self._request_with_retry(url, params)
+        if not data:
+            return []
 
-            results = []
-            for ds in data.get("results", []):
-                if dataset_name.lower() in ds.get("name", "").lower():
-                    results.append({
+        results = []
+        for ds in data.get("results", []):
+            if dataset_name.lower() in ds.get("name", "").lower():
+                results.append(
+                    {
                         "id": ds.get("id"),
                         "name": ds.get("name"),
                         "full_name": ds.get("full_name"),
                         "url": ds.get("url"),
-                        "paper_count": ds.get("paper_count", 0),
+                        "paper_count": ds.get("num_papers", 0),
                         "description": ds.get("description", ""),
-                    })
-            return results
-        except requests.RequestException as e:
-            print(f"Error searching datasets: {e}")
-            return []
+                    }
+                )
+        return results
 
     def get_dataset_papers(self, dataset_id: str, limit: int = 20) -> list[dict]:
         """Get papers that use a specific dataset.
@@ -243,27 +322,25 @@ class PwCSOTAScraper:
             List of paper dictionaries.
         """
         url = f"{self.BASE_URL}/datasets/{dataset_id}/papers/"
-        params = {"page_size": limit}
+        params = {"items_per_page": limit}
 
-        try:
-            response = self.session.get(url, params=params, timeout=30)
-            response.raise_for_status()
-            data = response.json()
+        data = self._request_with_retry(url, params)
+        if not data:
+            return []
 
-            papers = []
-            for item in data.get("results", []):
-                papers.append({
+        papers = []
+        for item in data.get("results", []):
+            papers.append(
+                {
                     "id": item.get("id"),
                     "title": item.get("title"),
                     "url": item.get("url"),
                     "arxiv_id": item.get("arxiv_id"),
                     "proceeding": item.get("proceeding"),
                     "date": item.get("date"),
-                })
-            return papers
-        except requests.RequestException as e:
-            print(f"Error fetching papers for dataset {dataset_id}: {e}")
-            return []
+                }
+            )
+        return papers
 
     def analyze_sota_datasets(self) -> dict:
         """Run full SOTA dataset analysis.
@@ -344,8 +421,7 @@ class PwCSOTAScraper:
         for i, ds in enumerate(results["ranked_datasets"][:20], 1):
             areas_str = ", ".join(ds["areas"][:3])
             lines.append(
-                f"{i:2}. {ds['name']:<30} "
-                f"({ds['sota_model_count']} SOTA models)"
+                f"{i:2}. {ds['name']:<30} " f"({ds['sota_model_count']} SOTA models)"
             )
             lines.append(f"      Areas: {areas_str}")
             if ds["sota_models"]:

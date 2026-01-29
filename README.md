@@ -38,23 +38,39 @@ The system employs a weighted multi-factor scoring model (0-100):
 
 ## Data Sources | 数据来源
 
-| Source | Latency | Content |
-|--------|---------|---------|
-| Semantic Scholar API | Real-time | Citation metrics and growth rates |
-| HuggingFace Model Cards | 1-3 days | Model-dataset relationships |
-| Papers with Code | 1-7 days | SOTA benchmarks and evaluations |
-| GitHub Trending | 1-3 days | Emerging dataset repositories |
-| HuggingFace Daily Papers | 3-7 days | Curated research papers |
-| arXiv | 7-14 days | Preprint publications |
+| Source | Latency | Content | Status |
+|--------|---------|---------|--------|
+| Semantic Scholar API | Real-time | Citation metrics and growth rates | API key recommended |
+| HuggingFace Model Cards | 1-3 days | Model-dataset relationships | Active |
+| GitHub Trending | 1-3 days | Emerging dataset repositories | Active |
+| HuggingFace Daily Papers | 3-7 days | Curated research papers | Active |
+| arXiv | 7-14 days | Preprint publications | Active |
+| Papers with Code | - | SOTA benchmarks | Migrated to HuggingFace |
 
-| 来源 | 延迟 | 内容 |
-|------|------|------|
-| Semantic Scholar API | 实时 | 引用指标和增长率 |
-| HuggingFace 模型卡 | 1-3 天 | 模型-数据集关系 |
-| Papers with Code | 1-7 天 | SOTA 基准和评测 |
-| GitHub Trending | 1-3 天 | 新兴数据集仓库 |
-| HuggingFace Daily Papers | 3-7 天 | 精选研究论文 |
-| arXiv | 7-14 天 | 预印本发表 |
+| 来源 | 延迟 | 内容 | 状态 |
+|------|------|------|------|
+| Semantic Scholar API | 实时 | 引用指标和增长率 | 建议配置 API Key |
+| HuggingFace 模型卡 | 1-3 天 | 模型-数据集关系 | 正常 |
+| GitHub Trending | 1-3 天 | 新兴数据集仓库 | 正常 |
+| HuggingFace Daily Papers | 3-7 天 | 精选研究论文 | 正常 |
+| arXiv | 7-14 天 | 预印本发表 | 正常 |
+| Papers with Code | - | SOTA 基准 | 已迁移至 HuggingFace |
+
+## API Keys | API 密钥
+
+**Semantic Scholar** (Strongly Recommended):
+- Without API key: 100 requests / 5 minutes (easily exhausted)
+- With API key: 1 request / second (sufficient for daily analysis)
+- Get your key: https://www.semanticscholar.org/product/api
+
+**Semantic Scholar** (强烈推荐):
+- 无 API Key: 每 5 分钟 100 次请求（容易耗尽）
+- 有 API Key: 每秒 1 次请求（满足日常分析需求）
+- 申请地址: https://www.semanticscholar.org/product/api
+
+```bash
+export SEMANTIC_SCHOLAR_API_KEY=your_key_here
+```
 
 ## Installation | 安装
 
