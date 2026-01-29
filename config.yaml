@@ -22,6 +22,18 @@ sources:
       - cs.CV  # Computer Vision
       - cs.LG  # Machine Learning
 
+  # Early signal sources (Phase 1.5)
+  github:
+    enabled: true
+    limit: 30  # Number of repos to fetch
+    days: 7  # Look back period
+    token: ${GITHUB_TOKEN}  # Optional: for higher rate limits
+
+  hf_papers:
+    enabled: true
+    limit: 50  # Number of papers to fetch
+    days: 7  # Look back period
+
 # Model tracking configuration
 models:
   enabled: true

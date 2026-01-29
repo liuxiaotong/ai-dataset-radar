@@ -86,8 +86,36 @@ class ConsoleNotifier:
             print(f"    URL: {paper.get('url', 'N/A')}")
             print()
 
+        # GitHub repos (early signal)
+        github_data = data.get("github", [])
+        dataset_repos = [r for r in github_data if r.get("is_dataset")]
+        if github_data:
+            print(f"\n{self._color('GitHub Repos', 'cyan')} ({len(dataset_repos)} dataset-related / {len(github_data)} total)")
+            print("-" * 40)
+            for repo in dataset_repos[:10]:
+                print(f"  {self._color(repo.get('full_name', 'N/A'), 'green')}")
+                desc = repo.get("description", "")
+                if desc:
+                    desc = desc[:80] + "..." if len(desc) > 80 else desc
+                    print(f"    {desc}")
+                print(f"    Stars: {repo.get('stars', 0):,} | Language: {repo.get('language', 'N/A')}")
+                print(f"    URL: {repo.get('url', 'N/A')}")
+                print()
+
+        # HuggingFace Papers (early signal)
+        hf_papers_data = data.get("hf_papers", [])
+        dataset_papers = [p for p in hf_papers_data if p.get("is_dataset_paper")]
+        if hf_papers_data:
+            print(f"\n{self._color('HF Daily Papers', 'blue')} ({len(dataset_papers)} dataset-related / {len(hf_papers_data)} total)")
+            print("-" * 40)
+            for paper in dataset_papers[:10]:
+                print(f"  {self._color(paper.get('title', 'N/A'), 'green')}")
+                print(f"    Upvotes: {paper.get('upvotes', 0)} | arXiv: {paper.get('arxiv_id', 'N/A')}")
+                print(f"    URL: {paper.get('url', 'N/A')}")
+                print()
+
         print("=" * 60)
-        total = len(hf_data) + len(pwc_data) + len(arxiv_data)
+        total = len(hf_data) + len(pwc_data) + len(arxiv_data) + len(github_data) + len(hf_papers_data)
         print(f"Total: {total} items found")
         print("=" * 60 + "\n")
 
@@ -131,13 +159,21 @@ class MarkdownNotifier:
         hf_count = len(data.get("huggingface", []))
         pwc_count = len(data.get("paperswithcode", []))
         arxiv_count = len(data.get("arxiv", []))
-        total = hf_count + pwc_count + arxiv_count
+        github_data = data.get("github", [])
+        github_count = len(github_data)
+        github_dataset_count = len([r for r in github_data if r.get("is_dataset")])
+        hf_papers_data = data.get("hf_papers", [])
+        hf_papers_count = len(hf_papers_data)
+        hf_papers_dataset_count = len([p for p in hf_papers_data if p.get("is_dataset_paper")])
+        total = hf_count + pwc_count + arxiv_count + github_count + hf_papers_count
 
         lines.append("## Summary\n")
         lines.append(f"- **Total items found:** {total}")
         lines.append(f"- **Hugging Face datasets:** {hf_count}")
         lines.append(f"- **Papers with Code datasets:** {pwc_count}")
         lines.append(f"- **arXiv papers:** {arxiv_count}")
+        lines.append(f"- **GitHub repos:** {github_count} ({github_dataset_count} dataset-related)")
+        lines.append(f"- **HF Daily Papers:** {hf_papers_count} ({hf_papers_dataset_count} dataset-related)")
         lines.append("")
 
         # Hugging Face
@@ -197,7 +233,46 @@ class MarkdownNotifier:
                 lines.append("")
         else:
             lines.append("*No papers found*")
+        lines.append("")
 
+        # GitHub repos (early signal)
+        lines.append("## GitHub Repos (Early Signal)\n")
+        github_data = data.get("github", [])
+        dataset_repos = [r for r in github_data if r.get("is_dataset")]
+        if dataset_repos:
+            lines.append("| Repository | Description | Stars | Language |")
+            lines.append("|------------|-------------|-------|----------|")
+            for repo in dataset_repos:
+                name = f"[{repo.get('full_name', 'N/A')}]({repo.get('url', '#')})"
+                desc = repo.get("description", "")
+                desc = desc[:60] + "..." if len(desc) > 60 else desc
+                desc = desc.replace("|", "\\|").replace("\n", " ")
+                stars = f"{repo.get('stars', 0):,}"
+                lang = repo.get("language", "N/A")
+                lines.append(f"| {name} | {desc} | {stars} | {lang} |")
+        else:
+            lines.append("*No dataset-related repos found*")
+        lines.append("")
+
+        # HuggingFace Papers (early signal)
+        lines.append("## HF Daily Papers (Early Signal)\n")
+        hf_papers_data = data.get("hf_papers", [])
+        dataset_papers = [p for p in hf_papers_data if p.get("is_dataset_paper")]
+        if dataset_papers:
+            lines.append("| Title | Upvotes | arXiv |")
+            lines.append("|-------|---------|-------|")
+            for paper in dataset_papers:
+                title = paper.get("title", "N/A")
+                title = title[:60] + "..." if len(title) > 60 else title
+                title = title.replace("|", "\\|")
+                title_link = f"[{title}]({paper.get('url', '#')})"
+                upvotes = paper.get("upvotes", 0)
+                arxiv = paper.get("arxiv_id", "N/A")
+                lines.append(f"| {title_link} | {upvotes} | {arxiv} |")
+        else:
+            lines.append("*No dataset-related papers found*")
+
+        lines.append("")
         lines.append("---")
         lines.append("*Report generated by [AI Dataset Radar](https://github.com/your-username/ai-dataset-radar)*")
 

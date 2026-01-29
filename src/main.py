@@ -10,9 +10,15 @@ from pathlib import Path
 
 import yaml
 
-from scrapers import HuggingFaceScraper, PapersWithCodeScraper, ArxivScraper
+from scrapers import (
+    HuggingFaceScraper,
+    PapersWithCodeScraper,
+    ArxivScraper,
+    GitHubScraper,
+    HFPapersScraper,
+)
 from filters import filter_datasets
-from notifiers import create_notifiers
+from notifiers import create_notifiers, expand_env_vars
 from db import get_database
 from analyzers import ModelDatasetAnalyzer, TrendAnalyzer
 
@@ -81,6 +87,34 @@ def fetch_all_data(config: dict) -> dict:
         data["arxiv"] = scraper.fetch()
         print(f"  Found {len(data['arxiv'])} papers")
 
+    # GitHub (early signal)
+    github_cfg = sources_cfg.get("github", {})
+    if github_cfg.get("enabled", True):
+        print("Fetching GitHub trending repos...")
+        token = github_cfg.get("token", "")
+        if token.startswith("${"):
+            token = expand_env_vars(token)
+        scraper = GitHubScraper(
+            limit=github_cfg.get("limit", 30),
+            days=github_cfg.get("days", 7),
+            token=token if token else None,
+        )
+        data["github"] = scraper.fetch()
+        dataset_repos = [r for r in data["github"] if r.get("is_dataset")]
+        print(f"  Found {len(data['github'])} repos ({len(dataset_repos)} dataset-related)")
+
+    # HuggingFace Papers (early signal)
+    hf_papers_cfg = sources_cfg.get("hf_papers", {})
+    if hf_papers_cfg.get("enabled", True):
+        print("Fetching HuggingFace daily papers...")
+        scraper = HFPapersScraper(
+            limit=hf_papers_cfg.get("limit", 50),
+            days=hf_papers_cfg.get("days", 7),
+        )
+        data["hf_papers"] = scraper.fetch()
+        dataset_papers = [p for p in data["hf_papers"] if p.get("is_dataset_paper")]
+        print(f"  Found {len(data['hf_papers'])} papers ({len(dataset_papers)} dataset-related)")
+
     return data
 
 
@@ -141,6 +175,8 @@ def save_data(data: dict, config: dict) -> str:
             "huggingface_count": len(data.get("huggingface", [])),
             "paperswithcode_count": len(data.get("paperswithcode", [])),
             "arxiv_count": len(data.get("arxiv", [])),
+            "github_count": len(data.get("github", [])),
+            "hf_papers_count": len(data.get("hf_papers", [])),
         },
     }
 
@@ -302,7 +338,13 @@ def main():
         print()
     else:
         print("Skipping data fetch (--no-fetch)")
-        filtered_data = {"huggingface": [], "paperswithcode": [], "arxiv": []}
+        filtered_data = {
+            "huggingface": [],
+            "paperswithcode": [],
+            "arxiv": [],
+            "github": [],
+            "hf_papers": [],
+        }
         print()
 
     # Quick mode - skip analysis
