@@ -5,25 +5,25 @@ Daily tracker for new AI datasets and benchmarks. Never miss important releases 
 ## ✨ Features
 
 - **Multi-source Tracking**: Monitors Hugging Face Datasets, Papers with Code benchmarks, and arXiv dataset papers
-- - **Smart Filtering**: Filters by downloads, stars, domain keywords, and trending velocity
-  - - **Daily Updates**: Automated via GitHub Actions, runs every day at 8:00 AM UTC
-    - - **Flexible Notifications**: Email digest, Webhook, or RSS feed
-     
-      - ## 📊 Data Sources
-     
-      - | Source | What it tracks | Update frequency |
-      - |--------|---------------|------------------|
-      - | 🤗 Hugging Face | New datasets | Daily |
-      - | 📈 Papers with Code | New benchmarks & SOTA | Daily |
-      - | 📄 arXiv | Dataset papers (cs.CL, cs.CV, cs.LG) | Daily |
-     
-      - ## 🚀 Quick Start
-     
-      - ### 1. Fork this repo
-     
-      - ### 2. Configure your filters
-     
-      - Edit `config.yaml`:
+- **Smart Filtering**: Filters by downloads, stars, domain keywords, and trending velocity
+- **Daily Updates**: Automated via GitHub Actions, runs every day at 8:00 AM UTC
+- **Flexible Notifications**: Email digest, Webhook, or RSS feed
+
+## 📊 Data Sources
+
+| Source | What it tracks | Update frequency |
+|--------|---------------|------------------|
+| 🤗 Hugging Face | New datasets | Daily |
+| 📈 Papers with Code | New benchmarks & SOTA | Daily |
+| 📄 arXiv | Dataset papers (cs.CL, cs.CV, cs.LG) | Daily |
+
+## 🚀 Quick Start
+
+### 1. Fork this repo
+
+### 2. Configure your filters
+
+Edit `config.yaml`:
      
       - ```yaml
         filters:
