@@ -1,0 +1,53 @@
+# AI Dataset Radar Configuration
+
+# Data sources configuration
+sources:
+  huggingface:
+    enabled: true
+    limit: 50  # Number of datasets to fetch
+
+  paperswithcode:
+    enabled: true
+    limit: 50  # Number of benchmarks to fetch
+
+  arxiv:
+    enabled: true
+    limit: 50  # Number of papers to fetch
+    categories:
+      - cs.CL  # Computation and Language
+      - cs.CV  # Computer Vision
+      - cs.LG  # Machine Learning
+
+# Filtering options
+filters:
+  min_downloads: 0  # Minimum download count (for Hugging Face)
+  keywords: []  # Filter by keywords (empty = no filter)
+  days: 7  # Only include items from the last N days
+
+# Notification settings
+notifications:
+  console:
+    enabled: true
+    color: true  # Use colored output
+
+  markdown:
+    enabled: true
+    output_dir: data  # Directory to save markdown reports
+
+  email:
+    enabled: false
+    smtp_server: ${SMTP_SERVER}
+    smtp_port: 587
+    username: ${SMTP_USERNAME}
+    password: ${SMTP_PASSWORD}
+    from_addr: ${EMAIL_FROM}
+    to_addrs:
+      - ${EMAIL_TO}
+
+  webhook:
+    enabled: false
+    url: ${WEBHOOK_URL}
+
+# Output settings
+output:
+  json_dir: data  # Directory to save JSON data

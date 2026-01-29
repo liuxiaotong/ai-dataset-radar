@@ -1,0 +1,105 @@
+"""arXiv papers scraper for dataset-related papers."""
+
+import feedparser
+import urllib.parse
+from datetime import datetime
+from typing import Optional
+
+
+class ArxivScraper:
+    """Scraper for arXiv papers related to datasets and benchmarks."""
+
+    BASE_URL = "http://export.arxiv.org/api/query"
+
+    def __init__(self, limit: int = 50, categories: Optional[list[str]] = None):
+        self.limit = limit
+        self.categories = categories or ["cs.CL", "cs.CV", "cs.LG"]
+
+    def fetch(self) -> list[dict]:
+        """Fetch latest dataset-related papers from arXiv.
+
+        Returns:
+            List of paper information dictionaries.
+        """
+        # Build search query
+        # Search for papers containing "dataset" or "benchmark" in title or abstract
+        cat_query = " OR ".join([f"cat:{cat}" for cat in self.categories])
+        search_terms = '(ti:"dataset" OR ti:"benchmark" OR abs:"dataset" OR abs:"benchmark")'
+        query = f"({cat_query}) AND {search_terms}"
+
+        params = {
+            "search_query": query,
+            "start": 0,
+            "max_results": self.limit,
+            "sortBy": "submittedDate",
+            "sortOrder": "descending",
+        }
+
+        url = f"{self.BASE_URL}?{urllib.parse.urlencode(params)}"
+
+        try:
+            feed = feedparser.parse(url)
+        except Exception as e:
+            print(f"Error fetching arXiv papers: {e}")
+            return []
+
+        if feed.bozo and feed.bozo_exception:
+            print(f"Warning: Feed parsing issue: {feed.bozo_exception}")
+
+        results = []
+        for entry in feed.entries:
+            result = self._parse_entry(entry)
+            if result:
+                results.append(result)
+
+        return results
+
+    def _parse_entry(self, entry: dict) -> Optional[dict]:
+        """Parse an entry from the arXiv feed.
+
+        Args:
+            entry: Raw entry from feedparser.
+
+        Returns:
+            Parsed paper info or None if parsing fails.
+        """
+        try:
+            # Extract arXiv ID from the entry ID URL
+            arxiv_id = entry.id.split("/abs/")[-1]
+
+            # Parse publication date
+            published = entry.get("published", "")
+            if published:
+                try:
+                    pub_date = datetime.strptime(published, "%Y-%m-%dT%H:%M:%SZ")
+                    published = pub_date.isoformat()
+                except ValueError:
+                    pass
+
+            # Extract categories
+            categories = [tag.term for tag in entry.get("tags", [])]
+
+            # Extract authors
+            authors = [author.name for author in entry.get("authors", [])]
+
+            # Get PDF link
+            pdf_link = None
+            for link in entry.get("links", []):
+                if link.get("type") == "application/pdf":
+                    pdf_link = link.get("href")
+                    break
+
+            return {
+                "source": "arxiv",
+                "id": arxiv_id,
+                "title": entry.get("title", "").replace("\n", " ").strip(),
+                "authors": authors,
+                "summary": entry.get("summary", "").replace("\n", " ").strip(),
+                "categories": categories,
+                "created_at": published,
+                "url": entry.get("link", ""),
+                "pdf_url": pdf_link,
+            }
+        except Exception as e:
+            print(f"Error parsing arXiv entry: {e}")
+            return None
