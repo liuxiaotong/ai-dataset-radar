@@ -40,13 +40,20 @@ class GitHubTracker:
         github_config = config.get("github", {})
 
         # Get token from config or environment
-        self.token = github_config.get("token") or os.environ.get("GITHUB_TOKEN")
+        # Handle ${VAR} syntax in config that wasn't expanded
+        token = github_config.get("token", "")
+        if token and token.startswith("${") and token.endswith("}"):
+            # Extract variable name and get from environment
+            var_name = token[2:-1]
+            token = os.environ.get(var_name, "")
+        self.token = token or os.environ.get("GITHUB_TOKEN", "")
 
         self.headers = {
             "Accept": "application/vnd.github.v3+json",
             "User-Agent": "AI-Dataset-Radar/1.0"
         }
-        if self.token:
+        # Only add Authorization header if we have a valid token
+        if self.token and not self.token.startswith("${"):
             self.headers["Authorization"] = f"token {self.token}"
 
         # Get org lists from config
