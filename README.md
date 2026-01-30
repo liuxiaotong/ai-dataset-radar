@@ -202,7 +202,7 @@ To address noise from spam accounts and low-quality uploads, the system implemen
 ### 5.2 Setup Procedure
 
 ```bash
-git clone https://github.com/liukai/ai-dataset-radar.git
+git clone https://github.com/liuxiaotong/ai-dataset-radar.git
 cd ai-dataset-radar
 
 python -m venv venv
@@ -315,7 +315,7 @@ MIT License
   title        = {{AI Dataset Radar}: A Competitive Intelligence System for AI Training Data Discovery},
   year         = {2026},
   publisher    = {GitHub},
-  url          = {https://github.com/liukai/ai-dataset-radar},
+  url          = {https://github.com/liuxiaotong/ai-dataset-radar},
   note         = {Contact: mrliukai@gmail.com}
 }
 ```
@@ -526,7 +526,7 @@ ai-dataset-radar/
 ### 5.2 安装步骤
 
 ```bash
-git clone https://github.com/liukai/ai-dataset-radar.git
+git clone https://github.com/liuxiaotong/ai-dataset-radar.git
 cd ai-dataset-radar
 
 python -m venv venv
@@ -639,7 +639,7 @@ MIT License
   title        = {{AI Dataset Radar}: A Competitive Intelligence System for AI Training Data Discovery},
   year         = {2026},
   publisher    = {GitHub},
-  url          = {https://github.com/liukai/ai-dataset-radar},
+  url          = {https://github.com/liuxiaotong/ai-dataset-radar},
   note         = {Contact: mrliukai@gmail.com}
 }
 ```
