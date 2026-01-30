@@ -10,7 +10,7 @@ import pytest
 # Add src to path
 sys.path.insert(0, str(Path(__file__).parent.parent / "src"))
 
-from filters import DomainFilter, OrganizationFilter
+from filters import DomainFilter, OrganizationFilter, PostTrainingFilter
 from analyzers.opportunities import OpportunityAnalyzer
 
 
@@ -362,6 +362,142 @@ class TestOpportunityAnalyzer:
         assert "Business Opportunity Analysis" in report
         assert "test-author" in report
         assert "Test Paper" in report
+
+
+class TestPostTrainingFilter:
+    """Tests for PostTrainingFilter class."""
+
+    @pytest.fixture
+    def pt_filter(self):
+        """Create a PostTrainingFilter instance."""
+        return PostTrainingFilter()
+
+    def test_classify_sft_dataset(self, pt_filter):
+        """Test SFT dataset classification."""
+        item = {
+            "name": "alpaca-instruct-52k",
+            "description": "A instruction tuning dataset based on ShareGPT conversations",
+            "tags": ["instruction", "chat"],
+        }
+        result = pt_filter.classify_item(item)
+        assert "sft" in result
+        assert result["sft"] > 0.5
+
+    def test_classify_preference_dataset(self, pt_filter):
+        """Test preference dataset classification."""
+        item = {
+            "name": "UltraFeedback-binarized",
+            "description": "Preference dataset for DPO training with chosen and rejected pairs",
+            "tags": ["preference", "rlhf"],
+        }
+        result = pt_filter.classify_item(item)
+        assert "preference" in result
+        assert result["preference"] > 0.5
+
+    def test_classify_agent_dataset(self, pt_filter):
+        """Test agent dataset classification."""
+        item = {
+            "name": "WebArena-trajectories",
+            "description": "Web navigation trajectory data for agent training with function calling",
+            "tags": ["agent", "tool-use"],
+        }
+        result = pt_filter.classify_item(item)
+        assert "agent" in result
+        assert result["agent"] > 0.5
+
+    def test_classify_evaluation_dataset(self, pt_filter):
+        """Test evaluation dataset classification."""
+        item = {
+            "name": "MMLU-pro-test",
+            "description": "Benchmark dataset for evaluation with GPQA questions",
+            "tags": ["benchmark", "evaluation"],
+        }
+        result = pt_filter.classify_item(item)
+        assert "evaluation" in result
+        assert result["evaluation"] > 0.5
+
+    def test_classify_no_match(self, pt_filter):
+        """Test item that doesn't match any category."""
+        item = {
+            "name": "generic-image-dataset",
+            "description": "Random images from the internet",
+            "tags": ["images"],
+        }
+        result = pt_filter.classify_item(item)
+        assert result == {}
+
+    def test_get_primary_category(self, pt_filter):
+        """Test getting primary category."""
+        item = {
+            "name": "dpo-preference-data",
+            "description": "DPO training with human feedback and reward model",
+        }
+        primary = pt_filter.get_primary_category(item)
+        assert primary is not None
+        assert primary[0] == "preference"
+        assert primary[1] > 0
+
+    def test_get_primary_category_no_match(self, pt_filter):
+        """Test primary category when no match."""
+        item = {"name": "generic", "description": "nothing special"}
+        primary = pt_filter.get_primary_category(item)
+        assert primary is None
+
+    def test_filter_by_category(self, pt_filter):
+        """Test filtering by category."""
+        items = [
+            {"name": "sft-data", "description": "instruction tuning dataset"},
+            {"name": "generic", "description": "random data"},
+            {"name": "alpaca-instruct", "description": "ShareGPT conversations"},
+        ]
+        filtered = pt_filter.filter_by_category(items, "sft", min_confidence=0.1)
+        assert len(filtered) == 2
+
+    def test_filter_by_category_with_confidence(self, pt_filter):
+        """Test filtering by category with high confidence threshold."""
+        items = [
+            {"name": "dpo-data", "description": "DPO preference with chosen rejected"},
+            {"name": "maybe-pref", "description": "some preference signals"},
+        ]
+        filtered = pt_filter.filter_by_category(items, "preference", min_confidence=0.5)
+        # Only strong matches should pass
+        assert len(filtered) >= 1
+        assert all(item["pt_confidence"] >= 0.5 for item in filtered)
+
+    def test_enrich_items(self, pt_filter):
+        """Test enriching items with PT classifications."""
+        items = [
+            {"name": "instruction-data", "description": "instruction tuning"},
+        ]
+        enriched = pt_filter.enrich_items(items)
+        assert "pt_categories" in enriched[0]
+        assert "pt_primary" in enriched[0]
+
+    def test_summarize(self, pt_filter):
+        """Test summarizing post-training dataset distribution."""
+        items = [
+            {"name": "sft", "description": "instruction tuning"},
+            {"name": "pref", "description": "DPO preference chosen rejected"},
+            {"name": "agent", "description": "function calling tool use"},
+            {"name": "eval", "description": "MMLU benchmark evaluation"},
+            {"name": "generic", "description": "nothing special"},
+        ]
+        summary = pt_filter.summarize(items)
+        assert summary["sft"]["count"] >= 1
+        assert summary["preference"]["count"] >= 1
+        assert summary["agent"]["count"] >= 1
+        assert summary["evaluation"]["count"] >= 1
+        assert summary["uncategorized"]["count"] >= 1
+
+    def test_multiple_categories(self, pt_filter):
+        """Test item matching multiple categories."""
+        item = {
+            "name": "agent-preference-benchmark",
+            "description": "Agent trajectory data with preference annotation for tool use evaluation benchmark",
+        }
+        result = pt_filter.classify_item(item)
+        # Should match multiple categories
+        assert len(result) >= 2
 
 
 class TestIntegration:
