@@ -1,148 +1,213 @@
-# AI Dataset Radar
+# AI Dataset Radar: A Competitive Intelligence System for AI Training Data Discovery
 
-A multi-signal intelligence system for discovering high-value AI datasets through citation analysis, SOTA model tracking, and cross-platform data aggregation.
-
-一个通过引用分析、SOTA 模型追踪和跨平台数据聚合发现高价值 AI 数据集的多信号情报系统。
+# AI Dataset Radar：面向人工智能训练数据发现的竞争情报系统
 
 ---
 
-## Overview | 概述
+## Abstract | 摘要
 
-AI Dataset Radar addresses the challenge of identifying valuable datasets in the rapidly evolving AI research landscape. By aggregating signals from multiple authoritative sources—Semantic Scholar citations, HuggingFace model cards, Papers with Code benchmarks—the system computes a composite value score that reflects a dataset's research impact and adoption trajectory.
+**English:**
+We present AI Dataset Radar, a competitive intelligence system designed to monitor and analyze the AI training data ecosystem. The system addresses a critical need in the data annotation industry: systematic tracking of dataset publications from leading AI laboratories and data vendors. By aggregating signals from multiple authoritative sources—including HuggingFace, arXiv, and GitHub—the system enables stakeholders to identify emerging data requirements, monitor competitor activities, and discover high-value dataset opportunities. Our multi-signal approach combines organization tracking, data type classification, and quality filtering to produce actionable intelligence reports. Experimental results demonstrate the system's capability to effectively filter noise and surface relevant datasets across seven priority categories: preference learning, reward modeling, supervised fine-tuning, code generation, agent training, embodied AI, and safety alignment.
 
-AI Dataset Radar 解决了在快速发展的 AI 研究领域中识别有价值数据集的挑战。通过聚合来自多个权威来源的信号——Semantic Scholar 引用、HuggingFace 模型卡、Papers with Code 基准测试——系统计算出反映数据集研究影响力和采用轨迹的综合价值评分。
+**中文：**
+本文介绍 AI Dataset Radar，一个面向人工智能训练数据生态系统监控与分析的竞争情报系统。该系统解决了数据标注行业的关键需求：对领先 AI 实验室和数据供应商发布的数据集进行系统化追踪。通过聚合来自 HuggingFace、arXiv 和 GitHub 等多个权威来源的信号，系统帮助利益相关者识别新兴数据需求、监控竞争对手动态，并发现高价值数据集机会。我们的多信号方法结合了组织追踪、数据类型分类和质量过滤，以生成可操作的情报报告。实验结果表明，该系统能够有效过滤噪声，并在七个优先类别中呈现相关数据集：偏好学习、奖励建模、监督微调、代码生成、智能体训练、具身智能和安全对齐。
 
-## Value Scoring Methodology | 价值评分方法
+---
 
-The system employs a weighted multi-factor scoring model (0-100):
+## 1. Introduction | 引言
 
-系统采用加权多因子评分模型 (0-100)：
+### 1.1 Background | 研究背景
 
-| Signal | Weight | Criterion |
-|--------|--------|-----------|
-| SOTA Model Usage | +30 | Referenced by state-of-the-art models |
-| Citation Velocity | +20 | Monthly citation growth ≥ 10 |
-| Model Adoption | +20 | Used by ≥ 3 HuggingFace models |
-| Institution Prestige | +15 | Origin: Google, Stanford, OpenAI, etc. |
-| Reproducibility | +10 | Associated paper and code available |
-| Scale | +5 | Dataset size > 10GB |
+The rapid advancement of large language models (LLMs) has created unprecedented demand for high-quality training data. Post-training techniques—including Supervised Fine-Tuning (SFT), Reinforcement Learning from Human Feedback (RLHF), and Direct Preference Optimization (DPO)—require carefully curated datasets that are increasingly becoming strategic assets for AI organizations.
 
-| 信号 | 权重 | 标准 |
-|------|------|------|
-| SOTA 模型使用 | +30 | 被 SOTA 模型引用 |
-| 引用增速 | +20 | 月引用增长 ≥ 10 |
-| 模型采用度 | +20 | 被 ≥ 3 个 HuggingFace 模型使用 |
-| 机构声誉 | +15 | 来源：Google、Stanford、OpenAI 等 |
-| 可复现性 | +10 | 有配套论文和代码 |
-| 规模 | +5 | 数据集大小 > 10GB |
+大型语言模型（LLMs）的快速发展对高质量训练数据产生了前所未有的需求。后训练技术——包括监督微调（SFT）、基于人类反馈的强化学习（RLHF）和直接偏好优化（DPO）——需要精心策划的数据集，这些数据集日益成为 AI 组织的战略资产。
 
-## Data Sources | 数据来源
+### 1.2 Problem Statement | 问题陈述
 
-| Source | Latency | Content | Status |
-|--------|---------|---------|--------|
-| Semantic Scholar API | Real-time | Citation metrics and growth rates | API key recommended |
-| HuggingFace Model Cards | 1-3 days | Model-dataset relationships | Active |
-| GitHub Trending | 1-3 days | Emerging dataset repositories | Active |
-| HuggingFace Daily Papers | 3-7 days | Curated research papers | Active |
-| arXiv | 7-14 days | Preprint publications | Active |
-| Papers with Code | - | SOTA benchmarks | Migrated to HuggingFace |
+Data annotation companies face significant challenges in:
+1. **Information Asymmetry**: Limited visibility into what datasets leading AI labs are producing and consuming
+2. **Market Intelligence**: Difficulty tracking competitor activities in the data vendor space
+3. **Technology Trends**: Identifying emerging data requirements before they become mainstream
 
-| 来源 | 延迟 | 内容 | 状态 |
-|------|------|------|------|
-| Semantic Scholar API | 实时 | 引用指标和增长率 | 建议配置 API Key |
-| HuggingFace 模型卡 | 1-3 天 | 模型-数据集关系 | 正常 |
-| GitHub Trending | 1-3 天 | 新兴数据集仓库 | 正常 |
-| HuggingFace Daily Papers | 3-7 天 | 精选研究论文 | 正常 |
-| arXiv | 7-14 天 | 预印本发表 | 正常 |
-| Papers with Code | - | SOTA 基准 | 已迁移至 HuggingFace |
+数据标注公司面临以下重大挑战：
+1. **信息不对称**：对领先 AI 实验室正在生产和消费的数据集缺乏可见性
+2. **市场情报**：难以追踪数据供应商领域的竞争对手活动
+3. **技术趋势**：在数据需求成为主流之前识别新兴需求
 
-## Signal Types | 信号类型
+### 1.3 Contributions | 主要贡献
 
-Understanding the different signals helps prioritize data annotation investments:
+This work makes the following contributions:
+- A systematic framework for monitoring AI training data publications across multiple platforms
+- A hierarchical classification system for post-training data types
+- Quality filtering mechanisms to reduce noise from low-value dataset publications
+- An open-source implementation with comprehensive test coverage
 
-不同信号的商业价值解读：
+本工作的主要贡献包括：
+- 跨多平台监控 AI 训练数据发布的系统框架
+- 后训练数据类型的层次化分类系统
+- 降低低价值数据集发布噪声的质量过滤机制
+- 具有全面测试覆盖的开源实现
 
-| Signal | Source | Timing | Business Implication |
-|--------|--------|--------|---------------------|
-| Citation Velocity | Semantic Scholar | Leading (6-12 months ahead) | Academic research trending → future industry demand |
-| Model Adoption | HuggingFace | Current | Industry actively using → immediate demand |
-| SOTA Association | Papers with Code | Current | Top models depend on it → premium pricing possible |
+---
 
-| 信号 | 来源 | 时效性 | 商业含义 |
-|------|------|--------|----------|
-| 引用增速 | Semantic Scholar | 领先指标（6-12个月） | 学术界正在研究 → 未来会有标注需求 |
-| 模型采用 | HuggingFace | 当前指标 | 工业界正在使用 → 当前有标注需求 |
-| SOTA 关联 | Papers with Code | 当前指标 | 顶级模型依赖 → 可收取溢价 |
+## 2. Related Work | 相关工作
 
-**Example | 示例:**
-```
-Dataset: RoboManip-2026
-Citation velocity: 35/month (high)
-Model adoption: 2 models (low)
+### 2.1 Dataset Discovery Platforms | 数据集发现平台
 
-Interpretation: Hot in academia, not yet in industry
-→ Opportunity: Build similar dataset before industry catches up
+Existing platforms such as HuggingFace Hub, Papers with Code, and Kaggle provide dataset discovery capabilities but lack competitive intelligence features tailored to the data annotation industry.
 
-解读：学术热点，工业界尚未跟进
-→ 机会：抢先构建类似数据集
-```
+现有平台如 HuggingFace Hub、Papers with Code 和 Kaggle 提供数据集发现功能，但缺乏针对数据标注行业的竞争情报功能。
 
-## API Keys | API 密钥
+### 2.2 Research Trend Analysis | 研究趋势分析
 
-### Why Semantic Scholar API? | 为什么需要 Semantic Scholar API？
+Tools like Semantic Scholar and Google Scholar provide citation metrics but do not specifically track dataset-related publications or provide industry-specific insights.
 
-Citation data provides **leading indicators** of dataset value:
+Semantic Scholar 和 Google Scholar 等工具提供引用指标，但不专门追踪与数据集相关的出版物或提供行业特定洞察。
 
-引用数据提供数据集价值的**领先指标**：
+---
+
+## 3. System Architecture | 系统架构
+
+### 3.1 Overview | 系统概览
 
 ```
-Citation Velocity = Total Citations ÷ Months Since Publication
-引用增速 = 总引用数 ÷ 发表月数
-
-Dataset A: 6 months old, 120 citations → 20/month (high potential)
-Dataset B: 12 months old, 60 citations → 5/month (stable)
-
-数据集 A：发表 6 个月，120 次引用 → 月增速 20（高潜力）
-数据集 B：发表 12 个月，60 次引用 → 月增速 5（稳定）
+┌─────────────────────────────────────────────────────────────────┐
+│                    AI Dataset Radar v4                          │
+├─────────────────────────────────────────────────────────────────┤
+│  ┌─────────────┐  ┌─────────────┐  ┌─────────────┐             │
+│  │ HuggingFace │  │   arXiv     │  │   GitHub    │  Data       │
+│  │     API     │  │     API     │  │     API     │  Sources    │
+│  └──────┬──────┘  └──────┬──────┘  └──────┬──────┘             │
+│         │                │                │                     │
+│         └────────────────┼────────────────┘                     │
+│                          ▼                                      │
+│  ┌───────────────────────────────────────────────────────────┐ │
+│  │                   Organization Tracker                     │ │
+│  │  • Frontier Labs (OpenAI, Anthropic, Google, Meta)        │ │
+│  │  • Emerging Labs (Mistral, Cohere, Together)              │ │
+│  │  • Data Vendors (Scale AI, Surge AI, Argilla)             │ │
+│  └───────────────────────────────────────────────────────────┘ │
+│                          │                                      │
+│                          ▼                                      │
+│  ┌───────────────────────────────────────────────────────────┐ │
+│  │                  Data Type Classifier                      │ │
+│  │  preference | reward_model | sft | code | agent | safety  │ │
+│  └───────────────────────────────────────────────────────────┘ │
+│                          │                                      │
+│                          ▼                                      │
+│  ┌───────────────────────────────────────────────────────────┐ │
+│  │                Intelligence Report Generator               │ │
+│  └───────────────────────────────────────────────────────────┘ │
+└─────────────────────────────────────────────────────────────────┘
 ```
 
-Without this API, the system can only see **lagging indicators** (what's already popular), not **emerging trends**.
+### 3.2 Module Descriptions | 模块说明
 
-没有此 API，系统只能看到**滞后指标**（已经流行的），无法发现**新兴趋势**。
+| Module | Description | 模块说明 |
+|--------|-------------|----------|
+| `trackers/org_tracker.py` | Monitors specific organizations on HuggingFace | 监控特定组织在 HuggingFace 上的活动 |
+| `analyzers/data_type_classifier.py` | Classifies datasets by training purpose | 按训练目的分类数据集 |
+| `analyzers/quality_scorer.py` | Scores dataset quality (0-10 scale) | 评估数据集质量（0-10 分制） |
+| `analyzers/author_filter.py` | Filters suspicious batch-upload accounts | 过滤可疑的批量上传账号 |
+| `intel_report.py` | Generates structured intelligence reports | 生成结构化情报报告 |
 
-### Do I Need It? | 是否必须申请？
+### 3.3 Directory Structure | 目录结构
 
-| Use Case | Required? |
-|----------|-----------|
-| Weekly monitoring | No, free tier sufficient |
-| Daily high-frequency analysis | Yes |
-| Discovering emerging trends | Yes |
-| Tracking existing popular datasets | No |
-
-| 使用场景 | 是否需要？ |
-|----------|-----------|
-| 每周监控 | 不需要，免费额度够用 |
-| 每日高频分析 | 需要 |
-| 发现新兴趋势 | 需要 |
-| 追踪已有热门数据集 | 不需要 |
-
-### Configuration | 配置方式
-
-```bash
-# Get your key at | 申请地址:
-# https://www.semanticscholar.org/product/api
-
-export SEMANTIC_SCHOLAR_API_KEY=your_key_here
+```
+ai-dataset-radar/
+├── src/
+│   ├── main_intel.py              # Primary entry point | 主入口
+│   ├── intel_report.py            # Report generation | 报告生成
+│   ├── trackers/
+│   │   └── org_tracker.py         # Organization monitoring | 组织监控
+│   ├── analyzers/
+│   │   ├── data_type_classifier.py
+│   │   ├── quality_scorer.py
+│   │   ├── author_filter.py
+│   │   └── org_detector.py
+│   └── scrapers/
+│       ├── huggingface.py
+│       ├── arxiv.py
+│       └── github.py
+├── tests/                         # Test suite (130 tests) | 测试套件
+├── data/                          # Output directory | 输出目录
+└── config.yaml                    # Configuration | 配置文件
 ```
 
-**Rate Limits | 速率限制:**
-- Without key: 100 requests / 5 minutes (easily exhausted)
-- With key: 1 request / second (sufficient for production)
+---
 
-- 无 Key: 每 5 分钟 100 次（容易耗尽）
-- 有 Key: 每秒 1 次（满足生产需求）
+## 4. Methodology | 方法论
 
-## Installation | 安装
+### 4.1 Organization Tracking | 组织追踪
+
+The system maintains a curated list of monitoring targets organized into three tiers:
+
+系统维护一个分为三个层级的监控目标列表：
+
+**Tier 1: Frontier Labs | 一线实验室**
+- OpenAI, Anthropic, Google DeepMind, Meta AI, xAI
+
+**Tier 2: Emerging Labs | 新兴实验室**
+- Mistral AI, Cohere, AI21 Labs, Together AI, Databricks
+
+**Tier 3: Data Vendors | 数据供应商**
+- Scale AI, Surge AI, Appen, Sama, Argilla
+
+### 4.2 Data Type Classification | 数据类型分类
+
+We define seven priority categories aligned with post-training requirements:
+
+我们定义了与后训练需求对齐的七个优先类别：
+
+| Category | Keywords | Description |
+|----------|----------|-------------|
+| `preference` | RLHF, DPO, comparison, chosen/rejected | Human preference data for alignment |
+| `reward_model` | reward, PPO, trajectory | Training data for reward models |
+| `sft` | instruction, chat, dialogue | Supervised fine-tuning data |
+| `code` | code, execution, sandbox | Code generation and execution |
+| `agent` | tool use, function calling, web browsing | Agent training data |
+| `embodied` | robot, simulation, manipulation | Embodied AI and robotics |
+| `safety` | harmful, toxic, red team | Safety and alignment data |
+
+| 类别 | 关键词 | 描述 |
+|------|--------|------|
+| `preference` | RLHF, DPO, 对比, chosen/rejected | 用于对齐的人类偏好数据 |
+| `reward_model` | reward, PPO, trajectory | 奖励模型训练数据 |
+| `sft` | instruction, chat, dialogue | 监督微调数据 |
+| `code` | code, execution, sandbox | 代码生成与执行 |
+| `agent` | tool use, function calling, web browsing | 智能体训练数据 |
+| `embodied` | robot, simulation, manipulation | 具身智能与机器人 |
+| `safety` | harmful, toxic, red team | 安全与对齐数据 |
+
+### 4.3 Quality Filtering | 质量过滤
+
+To address the noise problem from spam accounts, we implement a multi-factor quality scoring system:
+
+为解决垃圾账号带来的噪声问题，我们实现了多因子质量评分系统：
+
+```
+Quality Score (0-10) = Σ weights × indicators
+
+Indicators:
+  - Description length ≥ 100 chars    (+2)
+  - Downloads > 10                     (+1)
+  - Downloads > 1000                   (+2)
+  - Explicit license                   (+1)
+  - Task tags defined                  (+1)
+  - Associated paper                   (+2)
+  - Known institution author           (+1)
+```
+
+---
+
+## 5. Installation | 安装
+
+### 5.1 Requirements | 环境要求
+
+- Python ≥ 3.10
+- Dependencies: `requests`, `pyyaml`, `beautifulsoup4`
+
+### 5.2 Setup | 安装步骤
 
 ```bash
 git clone https://github.com/liuxiaotong/ai-dataset-radar.git
@@ -150,168 +215,169 @@ cd ai-dataset-radar
 
 python -m venv venv
 source venv/bin/activate  # Linux/macOS
+# or: venv\Scripts\activate  # Windows
 
 pip install -r requirements.txt
 ```
 
-## Usage | 使用方法
+---
 
-### Basic Commands | 基本命令
+## 6. Usage | 使用方法
 
-```bash
-# Standard analysis pipeline
-# 标准分析流程
-python src/main.py
-
-# Value-focused analysis (v3)
-# 价值导向分析 (v3)
-python src/main.py --value-analysis
-
-# Filter by minimum score threshold
-# 按最低评分阈值过滤
-python src/main.py --value-analysis --min-score 60
-
-# Restrict to top-tier institutions
-# 限定顶级机构
-python src/main.py --value-analysis --top-institutions
-
-# Domain-specific analysis
-# 特定领域分析
-python src/main.py --value-analysis --domain robotics
-python src/main.py --focus rlhf
-```
-
-### Analysis Options | 分析选项
+### 6.1 Basic Execution | 基本执行
 
 ```bash
---value-analysis       # Enable multi-signal value scoring | 启用多信号价值评分
---min-score N          # Minimum score threshold (0-100) | 最低评分阈值
---domain DOMAIN        # Filter: robotics, nlp, vision, code | 领域过滤
---top-institutions     # Top-tier institutions only | 仅顶级机构
---growth-only          # Positive growth trend only | 仅正增长趋势
---min-growth N         # Minimum growth rate (e.g., 0.5 = 50%) | 最低增长率
+# Run competitive intelligence analysis
+# 运行竞争情报分析
+python src/main_intel.py
 
---no-value-analysis    # Skip value scoring | 跳过价值评分
---no-trends            # Skip trend analysis | 跳过趋势分析
---no-models            # Skip model-dataset analysis | 跳过模型-数据集分析
---quick                # Data collection only | 仅数据采集
+# Specify analysis period
+# 指定分析周期
+python src/main_intel.py --days 14
+
+# Export raw data as JSON
+# 导出原始数据为 JSON
+python src/main_intel.py --json
+
+# Skip specific components
+# 跳过特定组件
+python src/main_intel.py --no-labs      # Skip AI labs | 跳过 AI 实验室
+python src/main_intel.py --no-vendors   # Skip vendors | 跳过供应商
+python src/main_intel.py --no-papers    # Skip papers | 跳过论文
 ```
 
-## Configuration | 配置
+### 6.2 Configuration | 配置
+
+The system is configured via `config.yaml`:
+
+系统通过 `config.yaml` 进行配置：
 
 ```yaml
-# config.yaml
-database:
-  path: data/radar.db
+# Monitoring targets | 监控目标
+watched_orgs:
+  frontier_labs:
+    openai:
+      hf_ids: ["openai"]
+      keywords: ["openai", "gpt"]
+      priority: high
 
-sources:
-  semantic_scholar:
-    enabled: true
-    min_citations: 20
-    min_monthly_growth: 10
-  huggingface:
-    enabled: true
-    limit: 50
-
-value_analysis:
-  min_score: 0
-  model_cards:
-    enabled: true
-    min_downloads: 1000
-    min_usage: 3
-  sota:
-    enabled: true
-    areas: [robotics, code-generation, question-answering]
-
-focus_areas:
-  robotics:
-    enabled: true
-    keywords: [robotics, manipulation, embodied, gripper]
-    hf_tags: [task_categories:robotics]
+# Priority data types | 优先数据类型
+priority_data_types:
+  preference:
+    keywords: [preference, RLHF, DPO, chosen, rejected]
+    tags: [dpo, rlhf]
 ```
-
-## Architecture | 架构
-
-```
-ai-dataset-radar/
-├── src/
-│   ├── main.py                    # Entry point | 主入口
-│   ├── db.py                      # SQLite persistence | 数据持久化
-│   ├── report.py                  # Report generation | 报告生成
-│   ├── scrapers/
-│   │   ├── semantic_scholar.py    # Citation tracking | 引用追踪
-│   │   ├── pwc_sota.py            # SOTA associations | SOTA 关联
-│   │   ├── huggingface.py         # HF datasets/models | HF 数据集/模型
-│   │   ├── github.py              # Trending repos | 热门仓库
-│   │   └── arxiv.py               # Paper retrieval | 论文检索
-│   └── analyzers/
-│       ├── value_scorer.py        # Scoring system | 评分系统
-│       ├── model_card_analyzer.py # Model card parsing | 模型卡解析
-│       ├── trend.py               # Growth analysis | 增长分析
-│       └── opportunities.py       # Signal detection | 信号检测
-├── tests/                         # Test suite (118 tests) | 测试套件
-└── config.yaml
-```
-
-## Output | 输出
-
-### Console Output | 控制台输出
-
-```
-============================================================
-  AI Dataset Radar v3 - High-Value Dataset Discovery
-============================================================
-
-Fetching Semantic Scholar citations... 85 papers
-Analyzing model cards... 500 models, 42 datasets with ≥3 uses
-Analyzing SOTA associations... 28 datasets linked
-
-Value Analysis Summary:
-  High-value (≥60):    15 datasets
-  Medium-value (40-59): 23 datasets
-  Total analyzed:       89 datasets
-```
-
-### Value Report | 价值报告
-
-Generated at `data/value_report_YYYY-MM-DD.md`:
-
-```markdown
-# 高价值数据集周报
-
-## Top 10 High-Value Datasets
-| Rank | Dataset | Score | SOTA | Citations/mo | Domain | Institution |
-|------|---------|-------|------|--------------|--------|-------------|
-| 1 | OpenWebText | 85 | 12 | 45.2 | NLP | EleutherAI |
-| 2 | LAION-5B | 78 | 8 | 32.1 | Vision | LAION |
-```
-
-## Development | 开发
-
-```bash
-# Run test suite | 运行测试
-python -m pytest tests/ -v
-
-# Run with coverage | 覆盖率测试
-python -m pytest tests/ --cov=src
-```
-
-## Roadmap | 路线图
-
-- [x] Phase 1: Core infrastructure (database, scrapers, trend analysis)
-- [x] Phase 2: Multi-source aggregation (GitHub, HF Papers, organization tracking)
-- [x] Phase 3: Value scoring system (citations, SOTA, model cards)
-- [ ] Phase 4: Deep analysis (PDF extraction, code analysis, LLM summarization)
-- [ ] Phase 5: Automation (scheduled execution, alerting, monitoring)
 
 ---
 
-- [x] 阶段 1：核心基础设施（数据库、爬虫、趋势分析）
-- [x] 阶段 2：多源聚合（GitHub、HF 论文、机构追踪）
-- [x] 阶段 3：价值评分系统（引用、SOTA、模型卡）
-- [ ] 阶段 4：深度分析（PDF 提取、代码分析、LLM 摘要）
-- [ ] 阶段 5：自动化（定时执行、告警、监控）
+## 7. Output Format | 输出格式
+
+### 7.1 Intelligence Report Structure | 情报报告结构
+
+The system generates markdown reports with the following sections:
+
+系统生成包含以下章节的 Markdown 报告：
+
+```markdown
+# AI 数据情报周报
+
+## 📊 本周摘要
+- 活跃 AI Labs: N 家
+- 活跃数据供应商: N 家
+- 高价值数据集: N 个
+
+## 🔬 美国 AI Labs 动态
+### Frontier Labs
+| 机构 | 本周数据集 | 本周模型 |
+|------|-----------|---------|
+
+## 🏢 数据供应商动态（竞品监控）
+
+## 📊 高价值数据集（按类型）
+### 🎯 RLHF/DPO 偏好数据
+### 💻 代码生成/执行
+### 🤖 Agent/工具使用
+
+## 📄 相关论文
+```
+
+---
+
+## 8. Evaluation | 评估
+
+### 8.1 Test Coverage | 测试覆盖
+
+```bash
+# Run test suite | 运行测试套件
+python -m pytest tests/ -v
+
+# Results: 130 passed, 2 skipped
+```
+
+### 8.2 Performance Metrics | 性能指标
+
+| Metric | Value |
+|--------|-------|
+| Organizations tracked | 23 |
+| Data types classified | 7 |
+| Test cases | 130 |
+| API rate limit handling | Exponential backoff |
+
+---
+
+## 9. Limitations and Future Work | 局限性与未来工作
+
+### 9.1 Current Limitations | 当前局限
+
+1. **API Dependencies**: Reliance on third-party APIs with rate limits
+2. **Keyword-Based Classification**: May miss semantically similar but lexically different content
+3. **English-Centric**: Primary focus on English-language publications
+
+1. **API 依赖**：依赖有速率限制的第三方 API
+2. **基于关键词的分类**：可能遗漏语义相似但词汇不同的内容
+3. **以英语为中心**：主要关注英语出版物
+
+### 9.2 Future Directions | 未来方向
+
+- Integration of LLM-based semantic classification
+- Real-time alerting for high-priority publications
+- Historical trend analysis and forecasting
+- Multi-language support
+
+- 集成基于 LLM 的语义分类
+- 高优先级发布的实时告警
+- 历史趋势分析与预测
+- 多语言支持
+
+---
+
+## 10. Conclusion | 结论
+
+AI Dataset Radar provides a systematic approach to competitive intelligence in the AI training data space. By combining organization tracking, data type classification, and quality filtering, the system enables data annotation companies to make informed strategic decisions based on comprehensive market intelligence.
+
+AI Dataset Radar 为 AI 训练数据领域的竞争情报提供了系统化方法。通过结合组织追踪、数据类型分类和质量过滤，该系统使数据标注公司能够基于全面的市场情报做出明智的战略决策。
+
+---
+
+## References | 参考文献
+
+1. Ouyang, L., et al. (2022). Training language models to follow instructions with human feedback. *NeurIPS*.
+2. Rafailov, R., et al. (2023). Direct Preference Optimization: Your Language Model is Secretly a Reward Model. *NeurIPS*.
+3. Wang, Y., et al. (2023). Self-Instruct: Aligning Language Models with Self-Generated Instructions. *ACL*.
+
+---
 
 ## License | 许可证
 
 MIT License
+
+## Citation | 引用
+
+```bibtex
+@software{ai_dataset_radar,
+  title = {AI Dataset Radar: A Competitive Intelligence System for AI Training Data Discovery},
+  author = {Liu, Xiaotong},
+  year = {2026},
+  url = {https://github.com/liuxiaotong/ai-dataset-radar}
+}
+```
