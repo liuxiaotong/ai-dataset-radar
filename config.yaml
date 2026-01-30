@@ -160,8 +160,100 @@ focus_areas:
     hf_tags:
       - task_categories:text-generation
 
+  # Post-training focus areas
+  sft:
+    enabled: true
+    keywords:
+      - instruction tuning
+      - supervised fine-tuning
+      - instruction following
+      - chat dataset
+      - conversational
+      - ShareGPT
+      - Alpaca
+      - assistant
+      - dialogue
+      - FLAN
+      - Dolly
+      - OpenOrca
+      - WizardLM
+      - Evol-Instruct
+      - instruct dataset
+    hf_tags:
+      - task_categories:conversational
+      - task_categories:text-generation
+
+  preference:
+    enabled: true
+    keywords:
+      - preference
+      - chosen rejected
+      - DPO
+      - RLHF
+      - reward model
+      - human feedback
+      - pairwise comparison
+      - UltraFeedback
+      - HelpSteer
+      - Nectar
+      - hh-rlhf
+      - helpful harmless
+      - preference ranking
+      - ORPO
+      - KTO
+      - IPO
+    hf_tags:
+      - task_categories:text-classification
+
+  agent:
+    enabled: true
+    keywords:
+      - agent
+      - tool use
+      - function calling
+      - API call
+      - web navigation
+      - trajectory
+      - action sequence
+      - SWE-bench
+      - WebArena
+      - ToolBench
+      - AgentBench
+      - Mind2Web
+      - GAIA
+      - AgentInstruct
+      - tool-augmented
+      - ReAct
+      - task automation
+    hf_tags:
+      - task_categories:reinforcement-learning
+
+  evaluation:
+    enabled: true
+    keywords:
+      - benchmark
+      - evaluation dataset
+      - MMLU
+      - HumanEval
+      - GPQA
+      - ARC-Challenge
+      - BigBench
+      - MATH dataset
+      - GSM8K
+      - TruthfulQA
+      - HellaSwag
+      - WinoGrande
+      - test set
+      - exam dataset
+      - Humanity's Last Exam
+      - HLE
+      - hard evaluation
+    hf_tags:
+      - task_categories:question-answering
+
 # Organization tracking for competitive intelligence
 tracked_orgs:
+  # Major tech companies
   bytedance:
     - 字节
     - ByteDance
@@ -197,10 +289,72 @@ tracked_orgs:
     - Meta
     - FAIR
 
+  # Post-training specialists
+  anthropic:
+    - Anthropic
+    - Claude
+  mistral:
+    - Mistral
+    - MistralAI
+  deepseek:
+    - DeepSeek
+    - 深度求索
+  yi:
+    - 01.AI
+    - Yi
+    - 零一万物
+  zhipu:
+    - 智谱
+    - Zhipu
+    - GLM
+    - ChatGLM
+  moonshot:
+    - Moonshot
+    - 月之暗面
+    - Kimi
+
+  # Research labs (post-training focus)
+  lmsys:
+    - LMSys
+    - LMSYS
+    - Chatbot Arena
+    - Vicuna
+  eleutherai:
+    - EleutherAI
+    - Pythia
+  allen_ai:
+    - Allen AI
+    - AI2
+    - Tulu
+    - OLMo
+  berkeley:
+    - UC Berkeley
+    - Berkeley
+    - BAIR
+    - Gorilla
+    - Koala
+    - Starling
+  stanford:
+    - Stanford
+    - Alpaca
+    - HELM
+  nvidia:
+    - NVIDIA
+    - HelpSteer
+    - Nemotron
+  huggingface:
+    - Hugging Face
+    - HuggingFace
+    - BigCode
+    - StarCoder
+    - Zephyr
+    - OpenAssistant
+
 # Opportunity detection settings
 opportunities:
   # Signals indicating annotation needs in papers
   annotation_signals:
+    # General signals
     - human annotation
     - manually labeled
     - crowdsourced
@@ -208,11 +362,43 @@ opportunities:
     - data collection
     - benchmark
     - human evaluation
-    - human preference
-    - RLHF
-    - evaluation dataset
     - training data
     - annotation guideline
+
+    # SFT signals
+    - instruction dataset
+    - instruction tuning data
+    - fine-tuning dataset
+    - chat data
+    - dialogue dataset
+    - conversational data
+
+    # RLHF/Preference signals
+    - human preference
+    - preference data
+    - RLHF
+    - reward model training
+    - pairwise comparison
+    - chosen and rejected
+    - preference annotation
+    - human feedback
+    - alignment data
+
+    # Agent signals
+    - trajectory data
+    - action annotation
+    - tool use data
+    - function calling dataset
+    - web interaction data
+    - agent training data
+
+    # Evaluation signals
+    - evaluation dataset
+    - test set
+    - benchmark dataset
+    - ground truth
+    - gold labels
+    - expert annotation
 
   # Data factory detection
   data_factory:

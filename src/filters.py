@@ -371,3 +371,268 @@ class OrganizationFilter:
         for item in items:
             item["detected_org"] = self.detect_org(item)
         return items
+
+
+class PostTrainingFilter:
+    """Specialized filter for post-training datasets (SFT, RLHF, Agent, Eval)."""
+
+    # Post-training category patterns with confidence signals
+    CATEGORIES = {
+        "sft": {
+            "strong_signals": [
+                "instruction tuning",
+                "supervised fine-tuning",
+                "instruction following",
+                "instruct dataset",
+                "chat-sft",
+            ],
+            "medium_signals": [
+                "shareGPT",
+                "alpaca",
+                "dolly",
+                "openorca",
+                "wizardlm",
+                "evol-instruct",
+                "flan",
+                "dialogues",
+                "conversations",
+                "assistant",
+            ],
+            "weak_signals": [
+                "instruction",
+                "chat",
+                "dialogue",
+                "conversational",
+            ],
+        },
+        "preference": {
+            "strong_signals": [
+                "preference dataset",
+                "dpo dataset",
+                "rlhf data",
+                "reward model",
+                "chosen rejected",
+                "pairwise comparison",
+                "human feedback",
+            ],
+            "medium_signals": [
+                "ultrafeedback",
+                "helpsteer",
+                "nectar",
+                "hh-rlhf",
+                "anthropic hh",
+                "orpo",
+                "kto",
+                "ipo",
+                "preference ranking",
+            ],
+            "weak_signals": [
+                "preference",
+                "alignment",
+                "feedback",
+                "ranking",
+            ],
+        },
+        "agent": {
+            "strong_signals": [
+                "agent dataset",
+                "tool use data",
+                "function calling",
+                "trajectory data",
+                "action sequence",
+                "web navigation",
+            ],
+            "medium_signals": [
+                "swe-bench",
+                "webarena",
+                "toolbench",
+                "agentbench",
+                "mind2web",
+                "gaia",
+                "agentinstruct",
+                "react",
+                "gorilla",
+                "api call",
+                "tau-bench",
+            ],
+            "weak_signals": [
+                "agent",
+                "tool",
+                "action",
+                "trajectory",
+                "automation",
+            ],
+        },
+        "evaluation": {
+            "strong_signals": [
+                "benchmark dataset",
+                "evaluation dataset",
+                "test set",
+                "exam dataset",
+            ],
+            "medium_signals": [
+                "mmlu",
+                "humaneval",
+                "gpqa",
+                "arc-challenge",
+                "bigbench",
+                "gsm8k",
+                "math dataset",
+                "truthfulqa",
+                "hellaswag",
+                "winogrande",
+                "hle",
+                "humanity's last exam",
+            ],
+            "weak_signals": [
+                "benchmark",
+                "evaluation",
+                "test",
+                "exam",
+            ],
+        },
+    }
+
+    def __init__(self):
+        """Initialize the post-training filter."""
+        self._compile_patterns()
+
+    def _compile_patterns(self):
+        """Pre-compile patterns for faster matching."""
+        self._compiled = {}
+        for category, signals in self.CATEGORIES.items():
+            self._compiled[category] = {
+                "strong": [s.lower() for s in signals["strong_signals"]],
+                "medium": [s.lower() for s in signals["medium_signals"]],
+                "weak": [s.lower() for s in signals["weak_signals"]],
+            }
+
+    def classify_item(self, item: dict) -> dict:
+        """Classify an item into post-training categories with confidence scores.
+
+        Args:
+            item: Dataset or paper dictionary.
+
+        Returns:
+            Dictionary with category names and confidence scores (0-1).
+        """
+        # Build searchable text
+        searchable_parts = []
+        for field in ["name", "title", "id", "description", "summary", "card"]:
+            if field in item and item[field]:
+                searchable_parts.append(str(item[field]))
+
+        # Include tags
+        for field in ["tags", "categories", "task_categories"]:
+            if field in item and item[field]:
+                if isinstance(item[field], list):
+                    searchable_parts.extend([str(t) for t in item[field]])
+                else:
+                    searchable_parts.append(str(item[field]))
+
+        searchable_text = " ".join(searchable_parts).lower()
+
+        results = {}
+        for category, patterns in self._compiled.items():
+            score = 0.0
+
+            # Strong signals: +0.6 each (max 1.0)
+            for signal in patterns["strong"]:
+                if signal in searchable_text:
+                    score += 0.6
+
+            # Medium signals: +0.3 each
+            for signal in patterns["medium"]:
+                if signal in searchable_text:
+                    score += 0.3
+
+            # Weak signals: +0.1 each
+            for signal in patterns["weak"]:
+                if signal in searchable_text:
+                    score += 0.1
+
+            if score > 0:
+                results[category] = min(1.0, score)
+
+        return results
+
+    def get_primary_category(self, item: dict) -> Optional[tuple]:
+        """Get the primary post-training category for an item.
+
+        Args:
+            item: Dataset or paper dictionary.
+
+        Returns:
+            Tuple of (category_name, confidence) or None.
+        """
+        classifications = self.classify_item(item)
+        if not classifications:
+            return None
+
+        # Return highest confidence category
+        best = max(classifications.items(), key=lambda x: x[1])
+        return best
+
+    def filter_by_category(
+        self, items: list[dict], category: str, min_confidence: float = 0.3
+    ) -> list[dict]:
+        """Filter items by post-training category.
+
+        Args:
+            items: List of items to filter.
+            category: Category name (sft, preference, agent, evaluation).
+            min_confidence: Minimum confidence score (0-1).
+
+        Returns:
+            Filtered and sorted list of items.
+        """
+        results = []
+        for item in items:
+            classifications = self.classify_item(item)
+            if category in classifications and classifications[category] >= min_confidence:
+                item["pt_category"] = category
+                item["pt_confidence"] = classifications[category]
+                results.append(item)
+
+        # Sort by confidence
+        return sorted(results, key=lambda x: x.get("pt_confidence", 0), reverse=True)
+
+    def enrich_items(self, items: list[dict]) -> list[dict]:
+        """Add post-training classifications to each item.
+
+        Args:
+            items: List of items to enrich.
+
+        Returns:
+            Items with added 'pt_categories' field.
+        """
+        for item in items:
+            item["pt_categories"] = self.classify_item(item)
+            primary = self.get_primary_category(item)
+            if primary:
+                item["pt_primary"] = primary[0]
+                item["pt_confidence"] = primary[1]
+        return items
+
+    def summarize(self, items: list[dict]) -> dict:
+        """Summarize post-training dataset distribution.
+
+        Args:
+            items: List of items to summarize.
+
+        Returns:
+            Summary statistics by category.
+        """
+        summary = {cat: {"count": 0, "items": []} for cat in self.CATEGORIES}
+        summary["uncategorized"] = {"count": 0, "items": []}
+
+        for item in items:
+            classifications = self.classify_item(item)
+            if classifications:
+                for cat in classifications:
+                    summary[cat]["count"] += 1
+                    summary[cat]["items"].append(item.get("name") or item.get("title"))
+            else:
+                summary["uncategorized"]["count"] += 1
+
+        return summary
