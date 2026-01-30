@@ -112,22 +112,24 @@ watched_vendors:
       hf_ids: ["humanloop"]
       keywords: ["humanloop"]
 
-  # 博客监控配置
+  # 博客监控配置（全部使用网页抓取，RSS 不可用）
   blogs:
     - name: "Scale AI"
-      url: "https://scale.com/blog/rss.xml"
-      type: "rss"
+      url: "https://scale.com/blog"
+      type: "scrape"
+      selector: "article, .blog-post, [class*='post'], [class*='article']"
     - name: "Snorkel AI"
       url: "https://snorkel.ai/blog/"
       type: "scrape"
-      selector: ".blog-card"
+      selector: "article, .blog-card, [class*='post'], [class*='blog']"
     - name: "Argilla"
-      url: "https://argilla.io/blog/feed.xml"
-      type: "rss"
+      url: "https://argilla.io/blog/"
+      type: "scrape"
+      selector: "article, .post, [class*='post'], [class*='blog']"
     - name: "Anthropic Research"
       url: "https://www.anthropic.com/research"
       type: "scrape"
-      selector: "article"
+      selector: "article, [class*='post'], [class*='card'], a[href*='/research/']"
 
 # =============================================================================
 # 关注的数据类型 | Priority Data Types
