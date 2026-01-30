@@ -5,6 +5,10 @@ from .trend import TrendAnalyzer
 from .opportunities import OpportunityAnalyzer
 from .model_card_analyzer import ModelCardAnalyzer
 from .value_scorer import ValueScorer, ValueAggregator
+from .author_filter import AuthorFilter
+from .quality_scorer import QualityScorer
+from .org_detector import OrgDetector
+from .data_type_classifier import DataTypeClassifier
 
 __all__ = [
     "ModelDatasetAnalyzer",
@@ -13,4 +17,8 @@ __all__ = [
     "ModelCardAnalyzer",
     "ValueScorer",
     "ValueAggregator",
+    "AuthorFilter",
+    "QualityScorer",
+    "OrgDetector",
+    "DataTypeClassifier",
 ]
