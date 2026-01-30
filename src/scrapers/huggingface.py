@@ -13,8 +13,12 @@ class HuggingFaceScraper:
     MODELS_URL = "https://huggingface.co/api/models"
     BASE_URL = "https://huggingface.co/api/datasets"  # Keep for backward compatibility
 
-    def __init__(self, limit: int = 50):
+    def __init__(self, config: dict = None, limit: int = 50):
+        self.config = config or {}
         self.limit = limit
+        self.headers = {
+            "User-Agent": "AI-Dataset-Radar/1.0"
+        }
 
     def fetch(self) -> list[dict]:
         """Fetch latest datasets from Hugging Face Hub.
@@ -252,3 +256,42 @@ class HuggingFaceScraper:
         except requests.RequestException as e:
             print(f"Error fetching dataset {dataset_id}: {e}")
             return None
+
+    def fetch_dataset_readme(self, dataset_id: str) -> Optional[str]:
+        """Fetch the README content for a dataset.
+
+        Args:
+            dataset_id: The dataset ID (e.g., 'allenai/dolma').
+
+        Returns:
+            README content string or None if not found.
+        """
+        # Try the API endpoint first
+        url = f"{self.DATASETS_URL}/{dataset_id}"
+
+        try:
+            response = requests.get(url, headers=self.headers, timeout=15)
+            if response.status_code == 200:
+                data = response.json()
+                # cardData often contains the README-like content
+                card_data = data.get("cardData", "")
+                if card_data:
+                    return str(card_data)
+
+                # Try description
+                description = data.get("description", "")
+                if description:
+                    return description
+        except requests.RequestException:
+            pass
+
+        # Fallback: try to fetch raw README.md
+        readme_url = f"https://huggingface.co/datasets/{dataset_id}/raw/main/README.md"
+        try:
+            response = requests.get(readme_url, headers=self.headers, timeout=15)
+            if response.status_code == 200:
+                return response.text
+        except requests.RequestException:
+            pass
+
+        return None

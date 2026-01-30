@@ -1,5 +1,7 @@
 """Trackers module for monitoring specific organizations."""
 
 from .org_tracker import OrgTracker
+from .github_tracker import GitHubTracker
+from .blog_tracker import BlogTracker, map_blog_to_vendor
 
-__all__ = ["OrgTracker"]
+__all__ = ["OrgTracker", "GitHubTracker", "BlogTracker", "map_blog_to_vendor"]
