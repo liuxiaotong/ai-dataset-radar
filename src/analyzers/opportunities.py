@@ -13,6 +13,9 @@ if str(_src_dir) not in sys.path:
     sys.path.insert(0, str(_src_dir))
 
 from db import RadarDatabase
+from analyzers.author_filter import AuthorFilter
+from analyzers.quality_scorer import QualityScorer
+from analyzers.org_detector import OrgDetector
 
 
 class OpportunityAnalyzer:
@@ -70,16 +73,27 @@ class OpportunityAnalyzer:
         # Load tracked organizations
         self.tracked_orgs = self.config.get("tracked_orgs", {})
 
-    def detect_data_factories(self, datasets: list[dict]) -> list[dict]:
+        # Initialize quality filters (new in v4)
+        self.author_filter = AuthorFilter(self.config)
+        self.quality_scorer = QualityScorer(self.config)
+        self.org_detector = OrgDetector(self.config)
+
+        # Quality filter settings
+        quality_config = self.config.get("quality_filter", {})
+        self.enable_quality_filter = quality_config.get("enabled", True)
+        self.min_dataset_quality = quality_config.get("min_dataset_quality", 2)
+
+    def detect_data_factories(self, datasets: list[dict]) -> dict:
         """Detect authors/organizations publishing datasets at high frequency.
 
         A "data factory" is an author who has published 3+ datasets in the last 7 days.
+        Now includes quality filtering to remove spam accounts.
 
         Args:
             datasets: List of dataset dictionaries with 'author' and 'created_at' fields.
 
         Returns:
-            List of data factory detections with author info and their datasets.
+            Dict with 'org_factories', 'individual_factories', and 'filtered_stats'.
         """
         # Group datasets by author
         author_datasets = defaultdict(list)
@@ -109,24 +123,70 @@ class OpportunityAnalyzer:
 
             author_datasets[author].append(ds)
 
-        # Find authors with multiple datasets
-        factories = []
-        for author, ds_list in author_datasets.items():
-            if len(ds_list) >= self.factory_min_datasets:
-                # Try to detect organization affiliation
-                org = self._detect_org_from_author(author)
+        # Filter to authors with minimum datasets
+        qualified_authors = {
+            author: ds_list
+            for author, ds_list in author_datasets.items()
+            if len(ds_list) >= self.factory_min_datasets
+        }
 
-                factories.append({
-                    "author": author,
-                    "dataset_count": len(ds_list),
-                    "datasets": ds_list,
-                    "possible_org": org,
-                    "period_days": self.factory_days,
-                })
+        # Apply quality filtering if enabled
+        filtered_out = []
+        if self.enable_quality_filter:
+            qualified_authors, filtered_out = self.author_filter.filter_authors(
+                qualified_authors
+            )
+
+        # Separate into org-affiliated and individual publishers
+        org_factories = []
+        individual_factories = []
+
+        for author, ds_list in qualified_authors.items():
+            # Detect organization
+            org_detection = self.org_detector.detect_from_dataset(ds_list[0] if ds_list else {})
+            org = org_detection["organization"]
+
+            # If not detected from dataset, try author name
+            if not org:
+                org = self.org_detector.detect_from_author(author)
+
+            # Score datasets
+            total_quality = 0
+            for ds in ds_list:
+                score_result = self.quality_scorer.score_dataset(ds)
+                ds["_quality_score"] = score_result["total_score"]
+                total_quality += score_result["total_score"]
+
+            avg_quality = total_quality / len(ds_list) if ds_list else 0
+
+            factory_info = {
+                "author": author,
+                "dataset_count": len(ds_list),
+                "datasets": ds_list,
+                "possible_org": org,
+                "org_display": self.org_detector.get_org_display_name(org) if org else None,
+                "period_days": self.factory_days,
+                "avg_quality_score": round(avg_quality, 1),
+                "quality_stars": self.quality_scorer.get_quality_stars(int(avg_quality)),
+            }
+
+            if org:
+                org_factories.append(factory_info)
+            else:
+                individual_factories.append(factory_info)
 
         # Sort by dataset count descending
-        factories.sort(key=lambda x: x["dataset_count"], reverse=True)
-        return factories
+        org_factories.sort(key=lambda x: x["dataset_count"], reverse=True)
+        individual_factories.sort(key=lambda x: (-x["avg_quality_score"], -x["dataset_count"]))
+
+        return {
+            "org_factories": org_factories,
+            "individual_factories": individual_factories,
+            "filtered_stats": {
+                "filtered_count": len(filtered_out),
+                "filtered_authors": filtered_out,
+            },
+        }
 
     def _detect_org_from_author(self, author: str) -> Optional[str]:
         """Try to detect organization from author name.
@@ -283,8 +343,11 @@ class OpportunityAnalyzer:
             Comprehensive opportunity analysis results.
         """
         print("Detecting data factories...")
-        data_factories = self.detect_data_factories(datasets)
-        print(f"  Found {len(data_factories)} potential data factories")
+        factory_results = self.detect_data_factories(datasets)
+        org_count = len(factory_results["org_factories"])
+        ind_count = len(factory_results["individual_factories"])
+        filtered_count = factory_results["filtered_stats"]["filtered_count"]
+        print(f"  Found {org_count} org + {ind_count} individual factories (filtered {filtered_count} low-quality)")
 
         print("Extracting annotation signals from papers...")
         annotation_opportunities = self.extract_annotation_signals(papers)
@@ -296,11 +359,13 @@ class OpportunityAnalyzer:
         print(f"  Found activity from {len(active_orgs)} tracked organizations")
 
         return {
-            "data_factories": data_factories,
+            "data_factories": factory_results,
             "annotation_opportunities": annotation_opportunities,
             "org_activity": org_activity,
             "summary": {
-                "data_factory_count": len(data_factories),
+                "org_factory_count": org_count,
+                "individual_factory_count": ind_count,
+                "filtered_factory_count": filtered_count,
                 "annotation_opportunity_count": len(annotation_opportunities),
                 "active_org_count": len(active_orgs),
             },
@@ -322,26 +387,76 @@ class OpportunityAnalyzer:
         lines.append("")
 
         summary = results.get("summary", {})
-        lines.append(f"Data factories detected: {summary.get('data_factory_count', 0)}")
+        org_count = summary.get('org_factory_count', 0)
+        ind_count = summary.get('individual_factory_count', 0)
+        filtered_count = summary.get('filtered_factory_count', 0)
+        lines.append(f"Organization data factories: {org_count}")
+        lines.append(f"Individual data factories: {ind_count}")
+        lines.append(f"Low-quality accounts filtered: {filtered_count}")
         lines.append(f"Papers with annotation signals: {summary.get('annotation_opportunity_count', 0)}")
         lines.append(f"Active tracked organizations: {summary.get('active_org_count', 0)}")
         lines.append("")
 
-        # Data factories
-        factories = results.get("data_factories", [])
-        if factories:
+        # Data factories - new format
+        factory_results = results.get("data_factories", {})
+
+        # Organization factories
+        org_factories = factory_results.get("org_factories", [])
+        if org_factories:
             lines.append("-" * 60)
-            lines.append("  Data Factories (High-frequency Dataset Publishers)")
+            lines.append("  Organization Data Factories")
             lines.append("-" * 60)
 
-            for factory in factories[:5]:
-                org_str = f" ({factory['possible_org']})" if factory.get("possible_org") else ""
-                lines.append(f"\n  {factory['author']}{org_str}")
-                lines.append(f"    Published {factory['dataset_count']} datasets in {factory['period_days']} days:")
+            for factory in org_factories[:5]:
+                org_display = factory.get("org_display", factory.get("possible_org", "Unknown"))
+                quality = factory.get("quality_stars", "")
+                lines.append(f"\n  {org_display} ({factory['author']}) {quality}")
+                lines.append(f"    Published {factory['dataset_count']} datasets in {factory['period_days']} days")
+                lines.append(f"    Avg quality: {factory.get('avg_quality_score', 0)}/10")
                 for ds in factory["datasets"][:3]:
-                    lines.append(f"      - {ds.get('name', ds.get('id', 'Unknown'))}")
+                    ds_name = ds.get('name', ds.get('id', 'Unknown'))
+                    lines.append(f"      - {ds_name}")
                 if len(factory["datasets"]) > 3:
                     lines.append(f"      ... and {len(factory['datasets']) - 3} more")
+        else:
+            lines.append("-" * 60)
+            lines.append("  Organization Data Factories")
+            lines.append("-" * 60)
+            lines.append("\n  No organization factories this week")
+
+        # Individual factories
+        individual_factories = factory_results.get("individual_factories", [])
+        if individual_factories:
+            lines.append("")
+            lines.append("-" * 60)
+            lines.append("  Individual Data Factories (Worth Watching)")
+            lines.append("-" * 60)
+
+            for factory in individual_factories[:5]:
+                quality = factory.get("quality_stars", "")
+                lines.append(f"\n  {factory['author']} {quality}")
+                lines.append(f"    Published {factory['dataset_count']} datasets | Quality: {factory.get('avg_quality_score', 0)}/10")
+                # Show signals if any
+                signals = []
+                for ds in factory["datasets"][:2]:
+                    ds_name = ds.get('name', ds.get('id', 'Unknown'))
+                    lines.append(f"      - {ds_name}")
+        else:
+            lines.append("")
+            lines.append("-" * 60)
+            lines.append("  Individual Data Factories")
+            lines.append("-" * 60)
+            lines.append("\n  No quality individual factories this week")
+
+        # Filtered accounts summary
+        filtered_stats = factory_results.get("filtered_stats", {})
+        if filtered_stats.get("filtered_count", 0) > 0:
+            lines.append("")
+            lines.append("-" * 60)
+            lines.append("  Filtered Low-Quality Accounts")
+            lines.append("-" * 60)
+            lines.append(f"\n  Filtered {filtered_stats['filtered_count']} accounts")
+            lines.append("  (Reasons: suspicious usernames, random dataset IDs, no metadata)")
 
         # Annotation opportunities
         opportunities = results.get("annotation_opportunities", [])

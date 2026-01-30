@@ -1,438 +1,314 @@
-# AI Dataset Radar Configuration
+# AI Dataset Radar - 竞争情报系统配置
+# Competitive Intelligence System for AI Data Industry
 
-# Database configuration
-database:
-  path: data/radar.db
+# =============================================================================
+# 核心监控目标 | Core Monitoring Targets
+# =============================================================================
 
-# Data sources configuration
-sources:
-  huggingface:
-    enabled: true
-    limit: 50  # Number of datasets to fetch
+# 美国 AI Labs（了解训练数据需求趋势）
+watched_orgs:
+  # Frontier Labs - 一线实验室
+  frontier_labs:
+    openai:
+      hf_ids: ["openai"]
+      keywords: ["openai", "gpt", "chatgpt"]
+      priority: high
+    anthropic:
+      hf_ids: ["anthropic", "Anthropic"]
+      keywords: ["anthropic", "claude", "constitutional"]
+      priority: high
+    google_deepmind:
+      hf_ids: ["google", "deepmind", "Google"]
+      keywords: ["google", "deepmind", "gemini", "palm"]
+      priority: high
+    meta:
+      hf_ids: ["meta-llama", "facebook", "meta"]
+      keywords: ["meta", "llama", "fair"]
+      priority: high
+    xai:
+      hf_ids: ["xai-org"]
+      keywords: ["xai", "grok"]
+      priority: high
 
-  paperswithcode:
-    enabled: false  # API migrated to Hugging Face (2026)
-    limit: 50  # Number of benchmarks to fetch
+  # Emerging Labs - 新兴实验室
+  emerging_labs:
+    mistral:
+      hf_ids: ["mistralai"]
+      keywords: ["mistral"]
+      priority: medium
+    cohere:
+      hf_ids: ["CohereForAI", "cohere"]
+      keywords: ["cohere", "command"]
+      priority: medium
+    ai21:
+      hf_ids: ["AI21Labs"]
+      keywords: ["ai21", "jamba"]
+      priority: medium
+    together:
+      hf_ids: ["togethercomputer"]
+      keywords: ["together"]
+      priority: medium
+    databricks:
+      hf_ids: ["databricks"]
+      keywords: ["databricks", "dolly", "dbrx"]
+      priority: medium
 
-  arxiv:
-    enabled: true
-    limit: 50  # Number of papers to fetch
-    categories:
-      - cs.CL  # Computation and Language
-      - cs.CV  # Computer Vision
-      - cs.LG  # Machine Learning
+  # Research Labs - 开源研究
+  research_labs:
+    eleutherai:
+      hf_ids: ["EleutherAI"]
+      keywords: ["eleuther", "pythia", "pile"]
+      priority: medium
+    huggingface:
+      hf_ids: ["HuggingFaceH4", "bigscience", "bigcode"]
+      keywords: ["huggingface", "zephyr", "starcoder"]
+      priority: medium
+    allen_ai:
+      hf_ids: ["allenai"]
+      keywords: ["allen", "ai2", "olmo", "tulu"]
+      priority: medium
+    lmsys:
+      hf_ids: ["lmsys"]
+      keywords: ["lmsys", "vicuna", "arena"]
+      priority: medium
+    nvidia:
+      hf_ids: ["nvidia", "NVIDIA"]
+      keywords: ["nvidia", "nemotron", "helpsteer"]
+      priority: medium
 
-  # Early signal sources (Phase 1.5)
-  github:
-    enabled: true
-    limit: 30  # Number of repos to fetch
-    days: 7  # Look back period
-    token: ${GITHUB_TOKEN}  # Optional: for higher rate limits
+# 数据供应商（竞品监控）
+watched_vendors:
+  # Premium Vendors - 头部供应商
+  premium:
+    scale_ai:
+      hf_ids: ["scaleai", "scale-ai"]
+      github: ["scaleapi"]
+      keywords: ["scale ai", "scaleai"]
+      blog_url: "https://scale.com/blog"
+    surge_ai:
+      hf_ids: ["surge-ai", "surgeai"]
+      github: ["surge-ai"]
+      keywords: ["surge ai", "surgeai"]
+    appen:
+      hf_ids: ["appen"]
+      keywords: ["appen"]
+    sama:
+      hf_ids: ["sama"]
+      keywords: ["sama", "samasource"]
 
-  hf_papers:
-    enabled: true
-    limit: 50  # Number of papers to fetch
-    days: 7  # Look back period
+  # Specialized - 专业供应商
+  specialized:
+    argilla:
+      hf_ids: ["argilla"]
+      github: ["argilla-io"]
+      keywords: ["argilla", "distilabel"]
+    snorkel:
+      hf_ids: ["snorkel-ai"]
+      keywords: ["snorkel"]
+    labelbox:
+      hf_ids: ["labelbox"]
+      keywords: ["labelbox"]
+    humanloop:
+      hf_ids: ["humanloop"]
+      keywords: ["humanloop"]
 
-  # Semantic Scholar for citation tracking (v3)
-  # Get API key at: https://www.semanticscholar.org/product/api (recommended)
-  # Without API key: 100 requests / 5 min; With API key: 1 request / sec
-  semantic_scholar:
-    enabled: true
-    limit: 100  # Number of papers to fetch
-    months_back: 6  # Look back period
-    min_citations: 20  # Minimum citations filter
-    min_monthly_growth: 10  # Minimum monthly citation growth
-    api_key: ${SEMANTIC_SCHOLAR_API_KEY}  # Strongly recommended for production use
+# =============================================================================
+# 关注的数据类型 | Priority Data Types
+# =============================================================================
 
-# Model tracking configuration
-models:
-  enabled: true
-  limit: 100  # Number of models to fetch
-  min_downloads: 1000  # Only track models with sufficient popularity
-
-# Analysis configuration
-analysis:
-  trend_days: [7, 30]  # Calculate trends for these periods
-  min_growth_alert: 0.5  # Alert when growth exceeds 50%
-
-# Value analysis configuration (v3)
-value_analysis:
-  min_score: 0  # Minimum score to include in analysis
-
-  # Model card analysis
-  model_cards:
-    enabled: true
-    min_downloads: 1000  # Minimum model downloads to analyze
-    limit: 500  # Max models to analyze
-    min_usage: 3  # Dataset must be used by 3+ models
-
-  # SOTA tracking (requires Papers with Code API)
-  sota:
-    enabled: false  # API migrated to Hugging Face (2026)
-    top_n: 10  # Top N SOTA results per task
-    areas:  # Priority areas
-      - robotics
-      - code-generation
-      - question-answering
-      - text-generation
-      - image-classification
-
-  # Value scoring weights
-  scoring:
-    sota_usage: 30
-    citation_growth: 20
-    model_usage: 20
-    top_institution: 15
-    paper_and_code: 10
-    large_scale: 5
-
-# LLM configuration (for future use)
-llm:
-  enabled: false  # Enable in Phase 2
-  provider: anthropic
-  model: claude-3-haiku-20240307
-
-# Filtering options
-filters:
-  min_downloads: 0  # Minimum download count (for Hugging Face)
-  keywords: []  # Filter by keywords (empty = no filter)
-  days: 7  # Only include items from the last N days
-
-# Domain focus areas for business intelligence filtering
-focus_areas:
-  robotics:
-    enabled: true
-    keywords:
-      - robotics
-      - manipulation
-      - embodied
-      - rlbench
-      - lerobot
-      - dexterous
-      - humanoid
-      - gripper
-      - robot arm
-      - pick and place
-      - grasping
-      - locomotion
-    hf_tags:
-      - task_categories:robotics
-
-  rlhf:
-    enabled: true
-    keywords:
-      - preference
-      - human feedback
-      - RLHF
-      - DPO
-      - reward model
-      - alignment
-      - instruction tuning
-      - reinforcement learning from human feedback
-    hf_tags:
-      - task_categories:reinforcement-learning
-
-  multimodal:
-    enabled: true
-    keywords:
-      - vision-language
-      - VLM
-      - multimodal
-      - image-text
-      - visual question answering
-      - image captioning
-      - video understanding
-      - CLIP
-      - LLaVA
-    hf_tags:
-      - task_categories:visual-question-answering
-      - task_categories:image-to-text
-
-  code:
-    enabled: false
-    keywords:
-      - code generation
-      - programming
-      - code completion
-      - software engineering
-      - code review
-    hf_tags:
-      - task_categories:text-generation
-
-  # Post-training focus areas
-  sft:
-    enabled: true
-    keywords:
-      - instruction tuning
-      - supervised fine-tuning
-      - instruction following
-      - chat dataset
-      - conversational
-      - ShareGPT
-      - Alpaca
-      - assistant
-      - dialogue
-      - FLAN
-      - Dolly
-      - OpenOrca
-      - WizardLM
-      - Evol-Instruct
-      - instruct dataset
-    hf_tags:
-      - task_categories:conversational
-      - task_categories:text-generation
-
+priority_data_types:
+  # RLHF/Preference Learning
   preference:
-    enabled: true
     keywords:
       - preference
-      - chosen rejected
-      - DPO
-      - RLHF
-      - reward model
+      - comparison
+      - ranking
+      - chosen
+      - rejected
+      - pairwise
       - human feedback
-      - pairwise comparison
-      - UltraFeedback
-      - HelpSteer
-      - Nectar
-      - hh-rlhf
-      - helpful harmless
-      - preference ranking
+      - RLHF
+      - DPO
       - ORPO
       - KTO
       - IPO
-    hf_tags:
-      - task_categories:text-classification
+    tags:
+      - dpo
+      - rlhf
+      - preference
 
-  agent:
-    enabled: true
+  # Reward Modeling
+  reward_model:
     keywords:
-      - agent
+      - reward model
+      - reward signal
+      - PPO
+      - trajectory
+      - return
+      - value function
+    tags:
+      - reward-model
+      - ppo
+
+  # Instruction Tuning / SFT
+  sft:
+    keywords:
+      - instruction
+      - SFT
+      - supervised fine-tuning
+      - chat
+      - conversation
+      - dialogue
+      - assistant
+      - alpaca
+      - sharegpt
+    tags:
+      - sft
+      - instruction-tuning
+      - chat
+
+  # Code & Execution
+  code:
+    keywords:
+      - code
+      - programming
+      - execution
+      - sandbox
+      - interpreter
+      - code generation
+      - HumanEval
+      - MBPP
+    tags:
+      - code
+      - code-generation
+
+  # Tool Use & Agents
+  agent:
+    keywords:
       - tool use
       - function calling
-      - API call
-      - web navigation
+      - API
+      - agent
+      - web browsing
+      - navigation
+      - action
       - trajectory
-      - action sequence
+      - ReAct
       - SWE-bench
       - WebArena
-      - ToolBench
-      - AgentBench
-      - Mind2Web
-      - GAIA
-      - AgentInstruct
-      - tool-augmented
-      - ReAct
-      - task automation
-    hf_tags:
-      - task_categories:reinforcement-learning
+    tags:
+      - tool-use
+      - agent
 
-  evaluation:
-    enabled: true
+  # Embodied AI
+  embodied:
     keywords:
-      - benchmark
-      - evaluation dataset
-      - MMLU
-      - HumanEval
-      - GPQA
-      - ARC-Challenge
-      - BigBench
-      - MATH dataset
-      - GSM8K
-      - TruthfulQA
-      - HellaSwag
-      - WinoGrande
-      - test set
-      - exam dataset
-      - Humanity's Last Exam
-      - HLE
-      - hard evaluation
-    hf_tags:
-      - task_categories:question-answering
+      - embodied
+      - robot
+      - simulation
+      - manipulation
+      - navigation
+      - physical
+      - sensorimotor
+    tags:
+      - robotics
+      - embodied
 
-# Organization tracking for competitive intelligence
-tracked_orgs:
-  # Major tech companies
-  bytedance:
-    - 字节
-    - ByteDance
-    - doubao
-    - 豆包
-    - TikTok
-  alibaba:
-    - 阿里
-    - Alibaba
-    - Qwen
-    - 通义
-    - DAMO
-  tencent:
-    - 腾讯
-    - Tencent
-    - Hunyuan
-    - 优图
-  baidu:
-    - 百度
-    - Baidu
-    - ERNIE
-    - 文心
-  huawei:
-    - 华为
-    - Huawei
-    - 盘古
-  openai:
-    - OpenAI
-  google:
-    - Google
-    - DeepMind
-  meta:
-    - Meta
-    - FAIR
+  # Safety & Alignment
+  safety:
+    keywords:
+      - safety
+      - harmful
+      - toxic
+      - jailbreak
+      - red team
+      - constitutional
+      - alignment
+      - guardrail
+    tags:
+      - safety
+      - alignment
 
-  # Post-training specialists
-  anthropic:
-    - Anthropic
-    - Claude
-  mistral:
-    - Mistral
-    - MistralAI
-  deepseek:
-    - DeepSeek
-    - 深度求索
-  yi:
-    - 01.AI
-    - Yi
-    - 零一万物
-  zhipu:
-    - 智谱
-    - Zhipu
-    - GLM
-    - ChatGLM
-  moonshot:
-    - Moonshot
-    - 月之暗面
-    - Kimi
+# =============================================================================
+# 数据源配置 | Data Source Configuration
+# =============================================================================
 
-  # Research labs (post-training focus)
-  lmsys:
-    - LMSys
-    - LMSYS
-    - Chatbot Arena
-    - Vicuna
-  eleutherai:
-    - EleutherAI
-    - Pythia
-  allen_ai:
-    - Allen AI
-    - AI2
-    - Tulu
-    - OLMo
-  berkeley:
-    - UC Berkeley
-    - Berkeley
-    - BAIR
-    - Gorilla
-    - Koala
-    - Starling
-  stanford:
-    - Stanford
-    - Alpaca
-    - HELM
-  nvidia:
-    - NVIDIA
-    - HelpSteer
-    - Nemotron
+sources:
   huggingface:
-    - Hugging Face
-    - HuggingFace
-    - BigCode
-    - StarCoder
-    - Zephyr
-    - OpenAssistant
+    enabled: true
+    # 不再抓取通用数据集，只抓取监控目标
+    mode: targeted  # targeted | general
+    include_models: true  # 也抓取模型，分析其训练数据
 
-# Opportunity detection settings
-opportunities:
-  # Signals indicating annotation needs in papers
-  annotation_signals:
-    # General signals
-    - human annotation
-    - manually labeled
-    - crowdsourced
-    - we collected
-    - data collection
-    - benchmark
-    - human evaluation
-    - training data
-    - annotation guideline
+  arxiv:
+    enabled: true
+    categories:
+      - cs.CL
+      - cs.LG
+      - cs.AI
+    # 只关注包含关键词的论文
+    require_keywords: true
+    keywords:
+      - human feedback
+      - RLHF
+      - RLAIF
+      - preference learning
+      - reward model
+      - instruction tuning
+      - SFT
+      - data collection
+      - annotation
+      - benchmark
 
-    # SFT signals
-    - instruction dataset
-    - instruction tuning data
-    - fine-tuning dataset
-    - chat data
-    - dialogue dataset
-    - conversational data
+  github:
+    enabled: true
+    # 监控特定组织的仓库
+    mode: targeted
+    token: ${GITHUB_TOKEN}
 
-    # RLHF/Preference signals
-    - human preference
-    - preference data
-    - RLHF
-    - reward model training
-    - pairwise comparison
-    - chosen and rejected
-    - preference annotation
-    - human feedback
-    - alignment data
+  hf_papers:
+    enabled: true
+    days: 7
 
-    # Agent signals
-    - trajectory data
-    - action annotation
-    - tool use data
-    - function calling dataset
-    - web interaction data
-    - agent training data
+# =============================================================================
+# 报告配置 | Report Configuration
+# =============================================================================
 
-    # Evaluation signals
-    - evaluation dataset
-    - test set
-    - benchmark dataset
-    - ground truth
-    - gold labels
-    - expert annotation
+report:
+  format: markdown
+  output_dir: data
+  filename_pattern: "intel_report_{date}.md"
 
-  # Data factory detection
-  data_factory:
-    min_datasets: 3  # Minimum datasets published
-    days: 7  # Within this many days
+  sections:
+    - us_labs_activity      # 美国 AI Labs 动态
+    - vendor_activity       # 数据供应商动态（竞品）
+    - datasets_by_type      # 高价值数据集（按类型）
+    - relevant_papers       # 相关论文
+    - trends               # 趋势观察
 
-# Notification settings
+  # 每个板块显示的最大条目数
+  limits:
+    labs_per_category: 10
+    vendors: 5
+    datasets_per_type: 10
+    papers: 15
+
+# =============================================================================
+# 数据库配置 | Database
+# =============================================================================
+
+database:
+  path: data/radar.db
+
+# =============================================================================
+# 通知配置 | Notifications
+# =============================================================================
+
 notifications:
   console:
     enabled: true
-    color: true  # Use colored output
+    color: true
 
   markdown:
-    enabled: false  # Legacy format, disabled by default
+    enabled: true
     output_dir: data
-
-  business_intel:
-    enabled: true  # New business intelligence report format
-    output_dir: data
-
-  email:
-    enabled: false
-    smtp_server: ${SMTP_SERVER}
-    smtp_port: 587
-    username: ${SMTP_USERNAME}
-    password: ${SMTP_PASSWORD}
-    from_addr: ${EMAIL_FROM}
-    to_addrs:
-      - ${EMAIL_TO}
-
-  webhook:
-    enabled: false
-    url: ${WEBHOOK_URL}
-
-# Output settings
-output:
-  json_dir: data  # Directory to save JSON data
