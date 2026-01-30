@@ -112,6 +112,23 @@ watched_vendors:
       hf_ids: ["humanloop"]
       keywords: ["humanloop"]
 
+  # 博客监控配置
+  blogs:
+    - name: "Scale AI"
+      url: "https://scale.com/blog/rss.xml"
+      type: "rss"
+    - name: "Snorkel AI"
+      url: "https://snorkel.ai/blog/"
+      type: "scrape"
+      selector: ".blog-card"
+    - name: "Argilla"
+      url: "https://argilla.io/blog/feed.xml"
+      type: "rss"
+    - name: "Anthropic Research"
+      url: "https://www.anthropic.com/research"
+      type: "scrape"
+      selector: "article"
+
 # =============================================================================
 # 关注的数据类型 | Priority Data Types
 # =============================================================================
@@ -266,9 +283,47 @@ sources:
     mode: targeted
     token: ${GITHUB_TOKEN}
 
+# GitHub 组织监控
+github:
+  token: ${GITHUB_TOKEN}
+  orgs:
+    data_vendors:
+      - scaleapi
+      - snorkel-ai
+      - labelbox
+      - argilla-io
+      - humanloop
+      - LightTag
+    ai_labs:
+      - openai
+      - anthropics
+      - meta-llama
+      - google-deepmind
+      - mistralai
+      - EleutherAI
+      - allenai
+
   hf_papers:
     enabled: true
     days: 7
+
+# =============================================================================
+# 分类器配置 | Classifier Configuration
+# =============================================================================
+
+classifier:
+  fetch_readme: true
+  readme_max_length: 5000
+  min_score_threshold: 2
+
+# =============================================================================
+# 论文过滤配置 | Paper Filter Configuration
+# =============================================================================
+
+arxiv:
+  max_papers: 15
+  lookback_days: 7
+  require_keywords: true
 
 # =============================================================================
 # 报告配置 | Report Configuration

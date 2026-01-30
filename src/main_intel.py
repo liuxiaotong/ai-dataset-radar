@@ -1,13 +1,14 @@
 #!/usr/bin/env python3
-"""AI Dataset Radar v4 - Competitive Intelligence System.
+"""AI Dataset Radar v5 - Competitive Intelligence System.
 
 Main entry point for the competitive intelligence workflow.
-Focused on tracking US AI Labs and data vendors.
+Integrates HuggingFace, GitHub, and Blog monitoring.
 """
 
 import argparse
 import json
 import sys
+import time
 from datetime import datetime
 from pathlib import Path
 
@@ -19,10 +20,14 @@ if str(src_dir) not in sys.path:
     sys.path.insert(0, str(src_dir))
 
 from trackers.org_tracker import OrgTracker
-from analyzers.data_type_classifier import DataTypeClassifier
+from trackers.github_tracker import GitHubTracker
+from trackers.blog_tracker import BlogTracker
+from analyzers.data_type_classifier import DataTypeClassifier, DataType
+from analyzers.paper_filter import PaperFilter
 from intel_report import IntelReportGenerator
 from scrapers.arxiv import ArxivScraper
 from scrapers.hf_papers import HFPapersScraper
+from scrapers.huggingface import HuggingFaceScraper
 
 
 def load_config(config_path: str = "config.yaml") -> dict:
@@ -31,45 +36,38 @@ def load_config(config_path: str = "config.yaml") -> dict:
         return yaml.safe_load(f)
 
 
-def filter_relevant_papers(papers: list[dict], config: dict) -> list[dict]:
-    """Filter papers to only those matching relevant keywords.
+def fetch_dataset_readmes(datasets: list[dict], hf_scraper: HuggingFaceScraper) -> list[dict]:
+    """Fetch README content for datasets to improve classification.
 
     Args:
-        papers: List of papers to filter.
-        config: Configuration with arxiv keywords.
+        datasets: List of datasets.
+        hf_scraper: HuggingFace scraper instance.
 
     Returns:
-        Filtered list of papers with matched keywords.
+        Datasets with card_data populated.
     """
-    keywords = config.get("sources", {}).get("arxiv", {}).get("keywords", [])
-    if not keywords:
-        return papers
+    print("  Fetching dataset READMEs for better classification...")
+    count = 0
+    for ds in datasets[:30]:  # Limit to avoid rate limiting
+        ds_id = ds.get("id", "")
+        if ds_id and not ds.get("card_data"):
+            try:
+                card_data = hf_scraper.fetch_dataset_readme(ds_id)
+                if card_data:
+                    ds["card_data"] = card_data[:5000]  # Limit length
+                    count += 1
+                time.sleep(0.3)  # Rate limiting
+            except Exception as e:
+                print(f"    Warning: Could not fetch README for {ds_id}: {e}")
 
-    keywords_lower = [kw.lower() for kw in keywords]
-    relevant = []
-
-    for paper in papers:
-        title = paper.get("title", "").lower()
-        summary = paper.get("summary", "") or paper.get("abstract", "")
-        summary = summary.lower()
-        text = f"{title} {summary}"
-
-        matched = []
-        for kw, kw_lower in zip(keywords, keywords_lower):
-            if kw_lower in text:
-                matched.append(kw)
-
-        if matched:
-            paper["_matched_keywords"] = matched
-            relevant.append(paper)
-
-    return relevant
+    print(f"    Fetched {count} READMEs")
+    return datasets
 
 
 def main():
     """Main entry point."""
     parser = argparse.ArgumentParser(
-        description="AI Dataset Radar v4 - Competitive Intelligence System"
+        description="AI Dataset Radar v5 - Competitive Intelligence System"
     )
     parser.add_argument(
         "--config",
@@ -103,16 +101,31 @@ def main():
         help="Skip vendor tracking",
     )
     parser.add_argument(
+        "--no-github",
+        action="store_true",
+        help="Skip GitHub tracking",
+    )
+    parser.add_argument(
+        "--no-blogs",
+        action="store_true",
+        help="Skip blog tracking",
+    )
+    parser.add_argument(
         "--no-papers",
         action="store_true",
         help="Skip paper fetching",
+    )
+    parser.add_argument(
+        "--no-readme",
+        action="store_true",
+        help="Skip fetching dataset READMEs",
     )
 
     args = parser.parse_args()
 
     # Load config
     print("=" * 60)
-    print("  AI Dataset Radar v4")
+    print("  AI Dataset Radar v5")
     print("  Competitive Intelligence System")
     print("=" * 60)
     print()
@@ -121,10 +134,14 @@ def main():
 
     # Initialize components
     org_tracker = OrgTracker(config)
+    github_tracker = GitHubTracker(config)
+    blog_tracker = BlogTracker(config)
     data_classifier = DataTypeClassifier(config)
+    paper_filter = PaperFilter(config)
     report_generator = IntelReportGenerator(config)
+    hf_scraper = HuggingFaceScraper(config)
 
-    # Track organizations
+    # 1. Track AI Labs on HuggingFace
     lab_activity = {"labs": {}}
     vendor_activity = {"vendors": {}}
 
@@ -141,7 +158,26 @@ def main():
                 "vendors": org_tracker.fetch_vendor_activity(days=args.days)
             }
 
-    # Collect all datasets for classification
+    # 2. Track GitHub organizations
+    github_activity = []
+    if not args.no_github:
+        print("\nTracking GitHub organizations...")
+        github_data = github_tracker.fetch_all_orgs(days=args.days)
+        github_activity = github_data.get("vendors", []) + github_data.get("labs", [])
+        active_count = sum(1 for a in github_activity if a.get("repos_updated"))
+        repo_count = sum(len(a.get("repos_updated", [])) for a in github_activity)
+        print(f"  Found {active_count} active orgs with {repo_count} updated repos")
+
+    # 3. Track company blogs
+    blog_activity = []
+    if not args.no_blogs:
+        print("\nTracking company blogs...")
+        blog_activity = blog_tracker.fetch_all_blogs(days=args.days)
+        active_count = sum(1 for a in blog_activity if a.get("articles"))
+        article_count = sum(len(a.get("articles", [])) for a in blog_activity)
+        print(f"  Found {active_count} active blogs with {article_count} relevant articles")
+
+    # 4. Collect all datasets for classification
     all_datasets = []
 
     # From labs
@@ -156,17 +192,22 @@ def main():
 
     print(f"\nCollected {len(all_datasets)} datasets from tracked organizations")
 
-    # Classify datasets
+    # 5. Fetch dataset READMEs for better classification
+    if not args.no_readme and all_datasets:
+        all_datasets = fetch_dataset_readmes(all_datasets, hf_scraper)
+
+    # 6. Classify datasets
     print("Classifying datasets by training type...")
     datasets_by_type = data_classifier.group_by_type(all_datasets)
 
     summary = data_classifier.summarize(all_datasets)
-    print(f"  Relevant datasets: {summary['relevant']}/{summary['total']}")
+    print(f"  Classified datasets: {summary['relevant']}/{summary['total']} relevant")
+    print(f"  Other ratio: {summary['other_ratio']:.1%}")
     for dtype, count in summary["by_type"].items():
         if count > 0:
             print(f"    {dtype}: {count}")
 
-    # Fetch papers
+    # 7. Fetch and filter papers
     papers = []
     if not args.no_papers:
         print("\nFetching relevant papers...")
@@ -175,12 +216,12 @@ def main():
         arxiv_config = config.get("sources", {}).get("arxiv", {})
         if arxiv_config.get("enabled", True):
             print("  Fetching from arXiv...")
-            arxiv_scraper = ArxivScraper(limit=50)
+            arxiv_scraper = ArxivScraper(limit=50, config=config)
             arxiv_papers = arxiv_scraper.fetch()
             print(f"    Found {len(arxiv_papers)} papers")
 
-            # Filter relevant
-            arxiv_papers = filter_relevant_papers(arxiv_papers, config)
+            # Filter with paper filter
+            arxiv_papers = paper_filter.filter_papers(arxiv_papers)
             print(f"    Relevant: {len(arxiv_papers)}")
             papers.extend(arxiv_papers)
 
@@ -188,19 +229,19 @@ def main():
         hf_config = config.get("sources", {}).get("hf_papers", {})
         if hf_config.get("enabled", True):
             print("  Fetching from HuggingFace Papers...")
-            hf_scraper = HFPapersScraper(
+            hf_papers_scraper = HFPapersScraper(
                 limit=50,
                 days=hf_config.get("days", 7),
             )
-            hf_papers = hf_scraper.fetch()
+            hf_papers = hf_papers_scraper.fetch()
             print(f"    Found {len(hf_papers)} papers")
 
-            # Filter relevant
-            hf_papers = filter_relevant_papers(hf_papers, config)
+            # Filter with paper filter
+            hf_papers = paper_filter.filter_papers(hf_papers)
             print(f"    Relevant: {len(hf_papers)}")
             papers.extend(hf_papers)
 
-    # Generate report
+    # 8. Generate report
     print("\nGenerating intelligence report...")
 
     report = report_generator.generate(
@@ -208,6 +249,8 @@ def main():
         vendor_activity=vendor_activity,
         datasets_by_type=datasets_by_type,
         papers=papers,
+        github_activity=github_activity,
+        blog_activity=blog_activity,
     )
 
     # Determine output path
@@ -228,18 +271,24 @@ def main():
     # Save JSON if requested
     if args.json:
         json_path = output_path.with_suffix(".json")
+
+        # Convert DataType enums to strings for JSON
+        datasets_json = {}
+        for dtype, ds_list in datasets_by_type.items():
+            key = dtype.value if isinstance(dtype, DataType) else str(dtype)
+            datasets_json[key] = [
+                {k: v for k, v in ds.items() if not k.startswith("_")}
+                for ds in ds_list
+            ]
+
         data = {
             "generated_at": datetime.now().isoformat(),
             "period_days": args.days,
             "lab_activity": lab_activity,
             "vendor_activity": vendor_activity,
-            "datasets_by_type": {
-                k: [
-                    {key: val for key, val in ds.items() if not key.startswith("_")}
-                    for ds in v
-                ]
-                for k, v in datasets_by_type.items()
-            },
+            "github_activity": github_activity,
+            "blog_activity": blog_activity,
+            "datasets_by_type": datasets_json,
             "papers": papers,
         }
         with open(json_path, "w", encoding="utf-8") as f:
@@ -249,7 +298,8 @@ def main():
     # Print console summary
     print()
     print(report_generator.generate_console_summary(
-        lab_activity, vendor_activity, datasets_by_type
+        lab_activity, vendor_activity, datasets_by_type,
+        github_activity, blog_activity
     ))
 
     print("\nDone!")
