@@ -46,14 +46,18 @@ This system addresses three fundamental questions:
 
 ### 2.1 Value Scoring Framework | 价值评分框架
 
-The system employs a weighted additive scoring model $S \in [0, 100]$:
+The system employs a weighted additive scoring model (Score ∈ [0, 100]):
 
-系统采用加权加法评分模型 $S \in [0, 100]$：
+系统采用加权加法评分模型（评分 ∈ [0, 100]）：
 
-$$S = \sum_{i=1}^{6} w_i \cdot \mathbb{1}[c_i]$$
+```
+Score = Σ (weight_i × indicator_i)
+```
 
-| Signal | Weight ($w_i$) | Criterion ($c_i$) | Rationale |
-|--------|----------------|-------------------|-----------|
+**English:**
+
+| Signal | Weight | Criterion | Rationale |
+|--------|--------|-----------|-----------|
 | SOTA Model Usage | 30 | Referenced by state-of-the-art models | Indicates benchmark relevance |
 | Citation Velocity | 20 | Monthly citation growth ≥ 10 | Leading indicator of research interest |
 | Model Adoption | 20 | Used by ≥ 3 HuggingFace models | Proxy for practical utility |
@@ -61,8 +65,10 @@ $$S = \sum_{i=1}^{6} w_i \cdot \mathbb{1}[c_i]$$
 | Reproducibility | 10 | Associated paper + code available | Scientific rigor |
 | Scale | 5 | Dataset size > 10GB | Resource investment indicator |
 
-| 信号 | 权重 ($w_i$) | 标准 ($c_i$) | 依据 |
-|------|--------------|--------------|------|
+**中文:**
+
+| 信号 | 权重 | 标准 | 依据 |
+|------|------|------|------|
 | SOTA 模型使用 | 30 | 被 SOTA 模型引用 | 表明基准相关性 |
 | 引用增速 | 20 | 月引用增长 ≥ 10 | 研究兴趣的领先指标 |
 | 模型采用度 | 20 | 被 ≥ 3 个 HuggingFace 模型使用 | 实用性代理指标 |
@@ -76,12 +82,16 @@ A specialized `PostTrainingFilter` module classifies datasets into four categori
 
 专门的 `PostTrainingFilter` 模块将数据集分类为 LLM 开发的四个关键类别：
 
+**English:**
+
 | Category | Description | Example Datasets |
 |----------|-------------|------------------|
 | **SFT** (Supervised Fine-Tuning) | Instruction-following data | Alpaca, ShareGPT, OpenOrca, FLAN |
 | **Preference** (RLHF/DPO) | Human preference pairs | UltraFeedback, HelpSteer, Nectar, HH-RLHF |
 | **Agent** | Tool use and trajectory data | WebArena, SWE-bench, ToolBench, GAIA |
 | **Evaluation** | Benchmark test sets | MMLU, HumanEval, GPQA, GSM8K |
+
+**中文:**
 
 | 类别 | 描述 | 示例数据集 |
 |------|------|-----------|
@@ -100,11 +110,15 @@ Confidence Score = 0.6 × |strong_signals| + 0.3 × |medium_signals| + 0.1 × |w
 
 ### 2.3 Temporal Signal Analysis | 时序信号分析
 
+**English:**
+
 | Signal Type | Source | Temporal Characteristic | Business Implication |
 |-------------|--------|------------------------|---------------------|
 | Citation Velocity | Semantic Scholar | Leading (6-12 months) | Predicts future industry demand |
 | Model Adoption | HuggingFace | Concurrent | Reflects current production use |
 | SOTA Association | Benchmarks | Concurrent | Indicates premium positioning |
+
+**中文:**
 
 | 信号类型 | 来源 | 时序特征 | 商业含义 |
 |----------|------|----------|----------|
@@ -148,12 +162,16 @@ Confidence Score = 0.6 × |strong_signals| + 0.3 × |medium_signals| + 0.1 × |w
 
 ### 3.1 Data Sources | 数据来源
 
+**English:**
+
 | Source | Update Frequency | Content Type | API Requirements |
 |--------|------------------|--------------|------------------|
 | Semantic Scholar | Real-time | Citation metrics, paper metadata | API key recommended |
 | HuggingFace Hub | 1-3 days | Datasets, models, papers | Public API |
 | GitHub Trending | 1-3 days | Repository metadata | Token optional |
 | arXiv | 7-14 days | Preprint papers | Public feed |
+
+**中文:**
 
 | 来源 | 更新频率 | 内容类型 | API 要求 |
 |------|----------|----------|----------|
@@ -416,6 +434,8 @@ python -m pytest tests/test_business_intel.py -v
 
 ## 9. Roadmap | 路线图
 
+**English:**
+
 | Phase | Status | Description |
 |-------|--------|-------------|
 | Phase 1 | ✅ Complete | Core infrastructure (database, scrapers, trend analysis) |
@@ -424,6 +444,8 @@ python -m pytest tests/test_business_intel.py -v
 | Phase 3.5 | ✅ Complete | Post-training dataset classification (SFT, RLHF, Agent, Eval) |
 | Phase 4 | 🔄 Planned | Deep analysis (PDF extraction, LLM summarization) |
 | Phase 5 | 🔄 Planned | Automation (scheduled execution, alerting, monitoring) |
+
+**中文:**
 
 | 阶段 | 状态 | 描述 |
 |------|------|------|
