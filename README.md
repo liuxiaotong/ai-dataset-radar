@@ -157,14 +157,16 @@ The classification engine implements a multi-dimensional matching algorithm that
 | `multilingual` | multilingual, translation | Multilingual data |
 | `evaluation` | benchmark, evaluation, test set | Evaluation benchmarks |
 
-The classification score is computed as:
+The classification score is computed by summing weighted match counts:
 
-```
-Score = Σ(keyword_matches × 1) + Σ(name_pattern_matches × 2) +
-        Σ(field_pattern_matches × 2) + Σ(tag_matches × 3)
-```
+| Match Type | Weight | Description |
+|------------|--------|-------------|
+| Keyword matches | ×1 | Keywords found in combined text |
+| Name pattern matches | ×2 | Regex patterns matched in dataset name |
+| Field pattern matches | ×2 | Patterns matched in data structure fields |
+| Tag matches | ×3 | Exact matches with predefined tags |
 
-Datasets with scores exceeding the threshold (default: 2) are assigned to the corresponding category.
+Datasets with total scores exceeding the threshold (default: 2) are assigned to the corresponding category.
 
 ### 4.3 Paper Filtering
 
@@ -178,20 +180,17 @@ Accepted papers are scored based on keyword density, bonus signals (e.g., "we re
 
 ### 4.4 Quality Filtering
 
-To address noise from spam accounts and low-quality uploads, the system implements a multi-factor quality scoring mechanism:
+To address noise from spam accounts and low-quality uploads, the system implements a multi-factor quality scoring mechanism (0-10 scale):
 
-```
-Quality Score (0-10) = Σ weights × indicators
-
-Indicators:
-  - Description length ≥ 100 characters    (+2)
-  - Downloads > 10                          (+1)
-  - Downloads > 1000                        (+2)
-  - Explicit license defined                (+1)
-  - Task tags defined                       (+1)
-  - Associated paper reference              (+2)
-  - Known institution author                (+1)
-```
+| Quality Indicator | Score | Condition |
+|-------------------|-------|-----------|
+| Description quality | +2 | Length ≥ 100 characters |
+| Basic popularity | +1 | Downloads > 10 |
+| High popularity | +2 | Downloads > 1,000 |
+| License clarity | +1 | Explicit license defined |
+| Task specification | +1 | Task tags defined |
+| Academic backing | +2 | Associated paper reference |
+| Institutional credibility | +1 | Known institution author |
 
 ## 5. Installation
 
@@ -480,14 +479,16 @@ ai-dataset-radar/
 | `multilingual` | multilingual、translation | 多语言数据 |
 | `evaluation` | benchmark、evaluation、test set | 评估基准 |
 
-分类分数计算公式：
+分类分数通过加权匹配计数求和计算：
 
-```
-分数 = Σ(关键词匹配 × 1) + Σ(名称模式匹配 × 2) +
-       Σ(字段模式匹配 × 2) + Σ(标签匹配 × 3)
-```
+| 匹配类型 | 权重 | 说明 |
+|----------|------|------|
+| 关键词匹配 | ×1 | 在组合文本中找到的关键词 |
+| 名称模式匹配 | ×2 | 在数据集名称中匹配的正则模式 |
+| 字段模式匹配 | ×2 | 在数据结构字段中匹配的模式 |
+| 标签匹配 | ×3 | 与预定义标签的精确匹配 |
 
-分数超过阈值（默认：2）的数据集将被分配到相应类别。
+总分超过阈值（默认：2）的数据集将被分配到相应类别。
 
 ### 4.3 论文过滤
 
@@ -501,20 +502,17 @@ ai-dataset-radar/
 
 ### 4.4 质量过滤
 
-为解决垃圾账号和低质量上传带来的噪声问题，系统实现了多因子质量评分机制：
+为解决垃圾账号和低质量上传带来的噪声问题，系统实现了多因子质量评分机制（0-10分制）：
 
-```
-质量分数 (0-10) = Σ 权重 × 指标
-
-指标：
-  - 描述长度 ≥ 100字符    (+2)
-  - 下载量 > 10            (+1)
-  - 下载量 > 1000          (+2)
-  - 明确定义许可证         (+1)
-  - 定义任务标签           (+1)
-  - 关联论文引用           (+2)
-  - 知名机构作者           (+1)
-```
+| 质量指标 | 分数 | 条件 |
+|----------|------|------|
+| 描述质量 | +2 | 长度 ≥ 100字符 |
+| 基础热度 | +1 | 下载量 > 10 |
+| 高热度 | +2 | 下载量 > 1,000 |
+| 许可证明确性 | +1 | 明确定义许可证 |
+| 任务规范 | +1 | 定义任务标签 |
+| 学术支撑 | +2 | 关联论文引用 |
+| 机构可信度 | +1 | 知名机构作者 |
 
 ## 5. 安装
 
