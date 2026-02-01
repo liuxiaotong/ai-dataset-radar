@@ -2,6 +2,7 @@
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 [![Python 3.8+](https://img.shields.io/badge/python-3.8+-blue.svg)](https://www.python.org/downloads/)
+[![Version](https://img.shields.io/badge/version-v5.0-green.svg)](https://github.com/liuxiaotong/ai-dataset-radar)
 
 **A Multi-Signal Intelligence System for High-Value AI Dataset Discovery**
 
@@ -19,8 +20,9 @@ AI Dataset Radar 是一个自动化情报系统，旨在识别和评估机器学
 
 1. A weighted multi-factor scoring model integrating six orthogonal signals for dataset valuation
 2. Specialized filtering mechanisms for post-training datasets (SFT, RLHF, Agent, Evaluation)
-3. Organization-level competitive intelligence tracking across 20+ research institutions
+3. Organization-level competitive intelligence tracking across 30+ research institutions (US & China)
 4. Temporal signal analysis distinguishing leading indicators from lagging metrics
+5. Comprehensive China AI ecosystem monitoring (open source & closed source models)
 
 ---
 
@@ -170,6 +172,7 @@ Confidence Score = 0.6 × |strong_signals| + 0.3 × |medium_signals| + 0.1 × |w
 | HuggingFace Hub | 1-3 days | Datasets, models, papers | Public API |
 | GitHub Trending | 1-3 days | Repository metadata | Token optional |
 | arXiv | 7-14 days | Preprint papers | Public feed |
+| Blog Monitoring | 1-7 days | Research updates, product news | Web scraping |
 
 **中文:**
 
@@ -179,18 +182,44 @@ Confidence Score = 0.6 × |strong_signals| + 0.3 × |medium_signals| + 0.1 × |w
 | HuggingFace Hub | 1-3 天 | 数据集、模型、论文 | 公开 API |
 | GitHub Trending | 1-3 天 | 仓库元数据 | Token 可选 |
 | arXiv | 7-14 天 | 预印本论文 | 公开 Feed |
+| Blog Monitoring | 1-7 天 | 研究动态、产品更新 | 网页抓取 |
+
+**Blog Monitoring Targets | 博客监控目标:**
+
+Scale AI, Snorkel AI, Argilla, Anthropic Research, DeepSeek, Qwen, 智谱 AI
 
 ### 3.2 Organization Tracking | 组织追踪
 
-The system monitors dataset publications from 20+ organizations:
+The system monitors dataset publications from 30+ organizations across five categories:
 
-系统监控 20+ 组织的数据集发布：
+系统监控 30+ 组织的数据集发布，覆盖五大类别：
 
-**Technology Companies | 科技公司:**
-Google/DeepMind, OpenAI, Meta/FAIR, ByteDance, Alibaba, Tencent, Baidu, Huawei
+**English:**
 
-**Research Laboratories | 研究实验室:**
-Anthropic, Mistral, DeepSeek, LMSys, EleutherAI, Allen AI, UC Berkeley, Stanford, NVIDIA, Hugging Face
+| Category | Organizations | Priority |
+|----------|---------------|----------|
+| **Frontier Labs** | OpenAI, Anthropic, Google/DeepMind, Meta, xAI | High |
+| **Emerging Labs** | Mistral, Cohere, AI21, Together, Databricks | Medium |
+| **Research Labs** | EleutherAI, HuggingFace, Allen AI, LMSys, NVIDIA | Medium |
+| **China Open Source** | Qwen (通义千问), DeepSeek (深度求索), ChatGLM (智谱), Baichuan (百川), Yi (零一万物), InternLM (书生), MiniMax, Stepfun (阶跃星辰) | High |
+| **China Closed Source** | Baidu ERNIE (文心一言), ByteDance Doubao (豆包), Tencent Hunyuan (混元), iFlytek Spark (星火), Moonshot Kimi (月之暗面), SenseTime (商汤) | Medium |
+
+**中文:**
+
+| 类别 | 组织 | 优先级 |
+|------|------|--------|
+| **一线实验室** | OpenAI, Anthropic, Google/DeepMind, Meta, xAI | 高 |
+| **新兴实验室** | Mistral, Cohere, AI21, Together, Databricks | 中 |
+| **研究实验室** | EleutherAI, HuggingFace, Allen AI, LMSys, NVIDIA | 中 |
+| **中国开源大模型** | Qwen (通义千问), DeepSeek (深度求索), ChatGLM (智谱), Baichuan (百川), Yi (零一万物), InternLM (书生), MiniMax, Stepfun (阶跃星辰) | 高 |
+| **中国闭源大模型** | Baidu ERNIE (文心一言), ByteDance Doubao (豆包), Tencent Hunyuan (混元), iFlytek Spark (星火), Moonshot Kimi (月之暗面), SenseTime (商汤) | 中 |
+
+**Data Vendors | 数据供应商:**
+
+| Tier | Vendors |
+|------|---------|
+| **Premium** | Scale AI, Surge AI, Appen, Sama |
+| **Specialized** | Argilla, Snorkel, Labelbox, Humanloop |
 
 ---
 
@@ -250,7 +279,22 @@ python src/main.py --focus agent         # Agent datasets
 python src/main.py --focus evaluation    # Benchmark datasets
 ```
 
-### 5.2 Filtered Analysis | 过滤分析
+### 5.2 Competitive Intelligence | 竞争情报
+
+```bash
+# Generate competitive intelligence report
+# 生成竞争情报报告
+python src/main_intel.py
+
+# Output includes | 报告包含:
+# - US Labs Activity (美国实验室动态)
+# - China Labs Activity (中国大模型厂商动态)
+# - Data Vendor Activity (数据供应商动态)
+# - Datasets by Type (按类型分类的数据集)
+# - Relevant Papers (相关论文)
+```
+
+### 5.3 Filtered Analysis | 过滤分析
 
 ```bash
 # High-value datasets only (score ≥ 60)
@@ -267,7 +311,7 @@ python src/main.py --focus robotics
 python src/main.py --focus multimodal
 ```
 
-### 5.3 Command Reference | 命令参考
+### 5.4 Command Reference | 命令参考
 
 | Option | Description | Default |
 |--------|-------------|---------|
@@ -308,7 +352,35 @@ Generated at `data/value_report_YYYY-MM-DD.md`:
 | 1    | UltraFeedback | 78 | 89,000 | OpenBMB |
 ```
 
-### 6.2 JSON Export | JSON 导出
+### 6.2 Intelligence Report | 竞争情报报告
+
+Generated at `data/intel_report_YYYY-MM-DD.md`:
+
+生成于 `data/intel_report_YYYY-MM-DD.md`:
+
+```markdown
+# AI Data Intelligence Report | AI 数据情报报告
+
+## US Labs Activity | 美国实验室动态
+- OpenAI: 2 new datasets, 5 new models
+- Anthropic: 1 research paper on constitutional AI
+
+## China Labs Activity | 中国大模型厂商动态
+- Qwen: Released Qwen2.5-Coder series
+- DeepSeek: New reasoning dataset published
+
+## Data Vendor Activity | 数据供应商动态
+- Scale AI: Blog post on synthetic data generation
+- Argilla: New distilabel release
+
+## Datasets by Type | 数据集分类
+### SFT (Supervised Fine-Tuning)
+| Dataset | Organization | Downloads |
+|---------|--------------|-----------|
+| ... | ... | ... |
+```
+
+### 6.3 JSON Export | JSON 导出
 
 ```json
 {
@@ -372,19 +444,38 @@ focus_areas:
 ### 7.2 Organization Tracking | 组织追踪
 
 ```yaml
-tracked_orgs:
-  anthropic:
-    - Anthropic
-    - Claude
-  lmsys:
-    - LMSys
-    - Chatbot Arena
-    - Vicuna
-  berkeley:
-    - UC Berkeley
-    - BAIR
-    - Gorilla
-    - Starling
+# config.yaml
+watched_orgs:
+  # Frontier Labs - 一线实验室
+  frontier_labs:
+    openai:
+      hf_ids: ["openai"]
+      keywords: ["openai", "gpt", "chatgpt"]
+      priority: high
+    anthropic:
+      hf_ids: ["anthropic", "Anthropic"]
+      keywords: ["anthropic", "claude", "constitutional"]
+      priority: high
+
+  # China Open Source Labs - 中国开源大模型
+  china_opensource:
+    alibaba_qwen:
+      hf_ids: ["Qwen", "qwen"]
+      github: ["QwenLM"]
+      keywords: ["qwen", "通义千问", "tongyi"]
+      priority: high
+    deepseek:
+      hf_ids: ["deepseek-ai"]
+      github: ["deepseek-ai"]
+      keywords: ["deepseek", "深度求索"]
+      priority: high
+
+  # China Closed Source Labs - 中国闭源大模型（关键词监控）
+  china_closedsource:
+    baidu_ernie:
+      hf_ids: []
+      keywords: ["文心一言", "ernie", "wenxin", "百度"]
+      priority: medium
 ```
 
 ---
@@ -396,22 +487,32 @@ tracked_orgs:
 ```
 ai-dataset-radar/
 ├── src/
-│   ├── main.py                    # Entry point
+│   ├── main.py                    # Value analysis entry point | 价值分析入口
+│   ├── main_intel.py              # Competitive intelligence entry point | 竞争情报入口
 │   ├── db.py                      # SQLite persistence layer
 │   ├── filters.py                 # Dataset filtering & classification
-│   ├── report.py                  # Report generation
+│   ├── report.py                  # Value report generation
+│   ├── intel_report.py            # Intelligence report generation
 │   ├── notifiers.py               # Notification system
 │   ├── scrapers/
 │   │   ├── semantic_scholar.py    # Citation tracking
 │   │   ├── huggingface.py         # HF datasets/models
 │   │   ├── github.py              # Trending repositories
 │   │   ├── arxiv.py               # Paper retrieval
-│   │   └── hf_papers.py           # HF daily papers
-│   └── analyzers/
-│       ├── value_scorer.py        # Multi-factor scoring
-│       ├── model_card_analyzer.py # Model card parsing
-│       ├── trend.py               # Growth analysis
-│       └── opportunities.py       # Business signal detection
+│   │   ├── hf_papers.py           # HF daily papers
+│   │   └── pwc_sota.py            # PapersWithCode SOTA tracking
+│   ├── analyzers/
+│   │   ├── value_scorer.py        # Multi-factor scoring
+│   │   ├── model_card_analyzer.py # Model card parsing
+│   │   ├── trend.py               # Growth analysis
+│   │   ├── opportunities.py       # Business signal detection
+│   │   ├── data_type_classifier.py# Post-training data classification
+│   │   ├── org_detector.py        # Organization detection
+│   │   └── quality_scorer.py      # Quality scoring
+│   └── trackers/
+│       ├── org_tracker.py         # Organization activity tracking | 组织活动追踪
+│       ├── github_tracker.py      # GitHub repository tracking | GitHub 仓库追踪
+│       └── blog_tracker.py        # Blog/RSS monitoring | 博客监控
 ├── tests/                         # Test suite (50+ test cases)
 ├── config.yaml                    # Configuration file
 └── requirements.txt               # Dependencies
@@ -442,8 +543,9 @@ python -m pytest tests/test_business_intel.py -v
 | Phase 2 | ✅ Complete | Multi-source aggregation (GitHub, HF Papers, org tracking) |
 | Phase 3 | ✅ Complete | Value scoring system (citations, SOTA, model cards) |
 | Phase 3.5 | ✅ Complete | Post-training dataset classification (SFT, RLHF, Agent, Eval) |
-| Phase 4 | 🔄 Planned | Deep analysis (PDF extraction, LLM summarization) |
-| Phase 5 | 🔄 Planned | Automation (scheduled execution, alerting, monitoring) |
+| Phase 4 | ✅ Complete | Competitive intelligence (China labs monitoring, blog tracking, intel reports) |
+| Phase 5 | 🔄 Planned | Deep analysis (PDF extraction, LLM summarization) |
+| Phase 6 | 🔄 Planned | Automation (scheduled execution, alerting, monitoring) |
 
 **中文:**
 
@@ -453,8 +555,9 @@ python -m pytest tests/test_business_intel.py -v
 | 阶段 2 | ✅ 完成 | 多源聚合（GitHub、HF 论文、机构追踪） |
 | 阶段 3 | ✅ 完成 | 价值评分系统（引用、SOTA、模型卡） |
 | 阶段 3.5 | ✅ 完成 | 后训练数据集分类（SFT、RLHF、Agent、Eval） |
-| 阶段 4 | 🔄 计划中 | 深度分析（PDF 提取、LLM 摘要） |
-| 阶段 5 | 🔄 计划中 | 自动化（定时执行、告警、监控） |
+| 阶段 4 | ✅ 完成 | 竞争情报增强（中国大模型监控、博客追踪、情报报告） |
+| 阶段 5 | 🔄 计划中 | 深度分析（PDF 提取、LLM 摘要） |
+| 阶段 6 | 🔄 计划中 | 自动化（定时执行、告警、监控） |
 
 ---
 
