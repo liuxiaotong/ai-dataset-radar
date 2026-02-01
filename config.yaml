@@ -76,6 +76,74 @@ watched_orgs:
       keywords: ["nvidia", "nemotron", "helpsteer"]
       priority: medium
 
+  # China Open Source Labs - 中国开源大模型
+  china_opensource:
+    alibaba_qwen:
+      hf_ids: ["Qwen", "qwen"]
+      github: ["QwenLM"]
+      keywords: ["qwen", "通义千问", "tongyi"]
+      priority: high
+    deepseek:
+      hf_ids: ["deepseek-ai"]
+      github: ["deepseek-ai"]
+      keywords: ["deepseek", "深度求索"]
+      priority: high
+    zhipu_glm:
+      hf_ids: ["THUDM"]
+      github: ["THUDM"]
+      keywords: ["chatglm", "glm", "智谱", "zhipu"]
+      priority: high
+    baichuan:
+      hf_ids: ["baichuan-inc"]
+      github: ["baichuan-inc"]
+      keywords: ["baichuan", "百川"]
+      priority: high
+    yi_01ai:
+      hf_ids: ["01-ai"]
+      github: ["01-ai"]
+      keywords: ["yi", "零一万物", "01.ai"]
+      priority: high
+    internlm:
+      hf_ids: ["internlm", "Shanghai_AI_Laboratory"]
+      github: ["InternLM"]
+      keywords: ["internlm", "书生", "shusheng"]
+      priority: medium
+    minimax:
+      hf_ids: ["MiniMaxAI"]
+      keywords: ["minimax", "abab"]
+      priority: medium
+    stepfun:
+      hf_ids: ["stepfun-ai"]
+      keywords: ["step", "阶跃星辰"]
+      priority: medium
+
+  # China Closed Source Labs - 中国闭源大模型（关键词监控）
+  china_closedsource:
+    baidu_ernie:
+      hf_ids: []
+      keywords: ["文心一言", "ernie", "wenxin", "百度"]
+      priority: medium
+    bytedance_doubao:
+      hf_ids: []
+      keywords: ["豆包", "doubao", "云雀", "skylark", "字节"]
+      priority: medium
+    tencent_hunyuan:
+      hf_ids: []
+      keywords: ["混元", "hunyuan", "腾讯"]
+      priority: medium
+    iflytek_spark:
+      hf_ids: []
+      keywords: ["星火", "spark", "讯飞", "iflytek"]
+      priority: medium
+    moonshot_kimi:
+      hf_ids: []
+      keywords: ["kimi", "moonshot", "月之暗面"]
+      priority: medium
+    sensetime:
+      hf_ids: []
+      keywords: ["商汤", "sensetime", "日日新"]
+      priority: medium
+
 # 数据供应商（竞品监控）
 watched_vendors:
   # Premium Vendors - 头部供应商
@@ -130,6 +198,19 @@ watched_vendors:
       url: "https://www.anthropic.com/research"
       type: "scrape"
       selector: "article, [class*='post'], [class*='card'], a[href*='/research/']"
+    # 中国 AI 公司博客/研究页面
+    - name: "DeepSeek"
+      url: "https://www.deepseek.com/zh"
+      type: "scrape"
+      selector: "article, [class*='post'], [class*='blog'], [class*='news']"
+    - name: "Qwen Blog"
+      url: "https://qwenlm.github.io/"
+      type: "scrape"
+      selector: "article, .post, [class*='post']"
+    - name: "智谱AI"
+      url: "https://www.zhipuai.cn/news"
+      type: "scrape"
+      selector: "article, [class*='news'], [class*='post']"
 
 # =============================================================================
 # 关注的数据类型 | Priority Data Types
@@ -304,6 +385,14 @@ github:
       - mistralai
       - EleutherAI
       - allenai
+    # 中国开源大模型 GitHub 组织
+    china_labs:
+      - QwenLM
+      - deepseek-ai
+      - THUDM
+      - baichuan-inc
+      - 01-ai
+      - InternLM
 
   hf_papers:
     enabled: true
@@ -338,6 +427,7 @@ report:
 
   sections:
     - us_labs_activity      # 美国 AI Labs 动态
+    - china_labs_activity   # 中国大模型厂商动态
     - vendor_activity       # 数据供应商动态（竞品）
     - datasets_by_type      # 高价值数据集（按类型）
     - relevant_papers       # 相关论文
