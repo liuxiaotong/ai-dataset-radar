@@ -9,7 +9,7 @@ import re
 import time
 from datetime import datetime, timedelta
 from typing import Optional
-from urllib.parse import urljoin
+from urllib.parse import urljoin, urlparse, urlunparse, parse_qs, urlencode
 
 import feedparser
 import requests
@@ -246,20 +246,75 @@ class BlogTracker:
             days: Look back period in days.
 
         Returns:
-            List of blog activity dicts.
+            List of blog activity dicts, deduplicated by URL.
         """
         results = []
+        seen_urls = set()
 
         print(f"  Tracking {len(self.blogs)} company blogs...")
 
         for blog_config in self.blogs:
             print(f"    Checking {blog_config.get('name', 'Unknown')}...")
             activity = self.fetch_blog(blog_config, days)
+
+            # Deduplicate articles by normalized URL
+            unique_articles = []
+            for article in activity.get("articles", []):
+                normalized_url = self._normalize_url(article.get("url", ""))
+                if normalized_url and normalized_url not in seen_urls:
+                    seen_urls.add(normalized_url)
+                    unique_articles.append(article)
+
+            activity["articles"] = unique_articles
+            activity["has_activity"] = len(unique_articles) > 0
+
             if activity["has_activity"] or activity["total_articles"] > 0:
                 results.append(activity)
             time.sleep(1)  # Politeness delay
 
         return results
+
+    def _normalize_url(self, url: str) -> str:
+        """Normalize URL for deduplication.
+
+        Removes trailing slashes, fragments, and tracking params.
+
+        Args:
+            url: URL to normalize.
+
+        Returns:
+            Normalized URL.
+        """
+        if not url:
+            return ""
+
+        try:
+            parsed = urlparse(url)
+
+            # Remove fragment
+            parsed = parsed._replace(fragment="")
+
+            # Remove tracking query params
+            tracking_params = {
+                "utm_source", "utm_medium", "utm_campaign",
+                "utm_content", "utm_term", "ref", "source"
+            }
+            if parsed.query:
+                params = parse_qs(parsed.query, keep_blank_values=True)
+                filtered = {
+                    k: v for k, v in params.items()
+                    if k.lower() not in tracking_params
+                }
+                new_query = urlencode(filtered, doseq=True) if filtered else ""
+                parsed = parsed._replace(query=new_query)
+
+            # Normalize path (remove trailing slash)
+            path = parsed.path.rstrip("/") or "/"
+            parsed = parsed._replace(path=path)
+
+            return urlunparse(parsed).lower()
+        except Exception:
+            return url.lower()
 
 
 # Mapping from blog source name to vendor key

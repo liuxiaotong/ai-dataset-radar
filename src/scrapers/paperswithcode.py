@@ -9,13 +9,21 @@ from datetime import datetime
 from typing import Optional
 import requests
 
+from .base import BaseScraper
+from .registry import register_scraper
 
-class PapersWithCodeScraper:
+
+@register_scraper("paperswithcode")
+class PapersWithCodeScraper(BaseScraper):
     """Scraper for Papers with Code benchmarks/datasets."""
+
+    name = "paperswithcode"
+    source_type = "dataset_registry"
 
     BASE_URL = "https://paperswithcode.com/api/v1"
 
-    def __init__(self, limit: int = 50):
+    def __init__(self, config: dict = None, limit: int = 50):
+        super().__init__(config)
         self.limit = limit
         self.session = requests.Session()
         self.session.headers.update({
@@ -24,6 +32,17 @@ class PapersWithCodeScraper:
         })
         self._last_request_time = 0
         self._base_delay = 1.0
+
+    def scrape(self, config: dict = None) -> list[dict]:
+        """Scrape datasets from Papers with Code.
+
+        Args:
+            config: Optional runtime configuration.
+
+        Returns:
+            List of dataset dictionaries.
+        """
+        return self.fetch()
 
     def _rate_limit_wait(self) -> None:
         """Wait to respect rate limits."""

@@ -560,3 +560,92 @@ class TestIntegration:
 
         assert items[0]["domains"] == ["robotics"]
         assert items[0]["detected_org"] == "google"
+
+
+class TestConfigParsing:
+    """Tests for loading new config sections."""
+
+    def test_load_sources_config(self):
+        """Test loading sources config with new sections."""
+        import yaml
+
+        config_yaml = """
+sources:
+  huggingface:
+    enabled: true
+    watch_orgs:
+      - allenai
+      - google
+  github:
+    enabled: true
+    watch_orgs:
+      - openai
+      - anthropics
+    relevance_keywords:
+      - dataset
+      - benchmark
+  blogs:
+    enabled: true
+    feeds:
+      - name: Argilla
+        url: https://argilla.io/blog/feed
+"""
+        config = yaml.safe_load(config_yaml)
+
+        # Verify huggingface watch_orgs
+        hf_config = config["sources"]["huggingface"]
+        assert hf_config["enabled"] is True
+        assert "allenai" in hf_config["watch_orgs"]
+        assert "google" in hf_config["watch_orgs"]
+
+        # Verify github config
+        gh_config = config["sources"]["github"]
+        assert "openai" in gh_config["watch_orgs"]
+        assert "dataset" in gh_config["relevance_keywords"]
+        assert "benchmark" in gh_config["relevance_keywords"]
+
+        # Verify blogs config
+        blogs_config = config["sources"]["blogs"]
+        assert blogs_config["enabled"] is True
+        assert len(blogs_config["feeds"]) == 1
+        assert blogs_config["feeds"][0]["name"] == "Argilla"
+
+    def test_scraper_registry_integration(self):
+        """Test that scrapers can be retrieved from registry."""
+        from scrapers import get_all_scrapers, list_scrapers, get_scraper
+
+        # List should contain registered scrapers
+        names = list_scrapers()
+        assert "huggingface" in names
+        assert "github" in names
+        assert "arxiv" in names
+        assert "paperswithcode" in names
+        assert "github_org" in names
+        assert "blog_rss" in names
+
+        # Get specific scraper
+        hf = get_scraper("huggingface")
+        assert hf is not None
+        assert hf.name == "huggingface"
+        assert hf.source_type == "dataset_registry"
+
+        # Get all scrapers
+        all_scrapers = get_all_scrapers()
+        assert len(all_scrapers) >= 6
+
+    def test_scraper_by_type(self):
+        """Test getting scrapers filtered by type."""
+        from scrapers import get_scrapers_by_type
+
+        # Get paper scrapers
+        paper_scrapers = get_scrapers_by_type("paper")
+        assert "arxiv" in paper_scrapers
+
+        # Get code host scrapers
+        code_scrapers = get_scrapers_by_type("code_host")
+        assert "github" in code_scrapers
+        assert "github_org" in code_scrapers
+
+        # Get blog scrapers
+        blog_scrapers = get_scrapers_by_type("blog")
+        assert "blog_rss" in blog_scrapers

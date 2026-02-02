@@ -339,13 +339,21 @@ sources:
     # 不再抓取通用数据集，只抓取监控目标
     mode: targeted  # targeted | general
     include_models: true  # 也抓取模型，分析其训练数据
+    # Organizations to watch for new datasets
+    watch_orgs:
+      - allenai
+      - google
+      - facebook
+      - nvidia
+      - Qwen
+      - MiniMaxAI
 
   arxiv:
     enabled: true
     categories:
       - cs.CL
-      - cs.LG
       - cs.AI
+      - cs.LG
     # 只关注包含关键词的论文
     require_keywords: true
     keywords:
@@ -365,6 +373,38 @@ sources:
     # 监控特定组织的仓库
     mode: targeted
     token: ${GITHUB_TOKEN}
+    # GitHub organizations to watch
+    watch_orgs:
+      - openai
+      - anthropics
+      - deepseek-ai
+      - argilla-io
+      - scaleapi
+      - EleutherAI
+    # Keywords for relevance scoring
+    relevance_keywords:
+      - dataset
+      - annotation
+      - benchmark
+      - rlhf
+      - evaluation
+      - preference
+      - training-data
+
+  # Blog RSS feeds for monitoring
+  blogs:
+    enabled: true
+    feeds:
+      - name: Argilla
+        url: https://argilla.io/blog/feed
+      - name: Qwen
+        url: https://qwenlm.github.io/feed.xml
+      - name: Hugging Face
+        url: https://huggingface.co/blog/feed.xml
+
+  paperswithcode:
+    enabled: true
+    limit: 30
 
 # GitHub 组织监控
 github:

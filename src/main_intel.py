@@ -28,6 +28,7 @@ from intel_report import IntelReportGenerator
 from scrapers.arxiv import ArxivScraper
 from scrapers.hf_papers import HFPapersScraper
 from scrapers.huggingface import HuggingFaceScraper
+from output_formatter import DualOutputFormatter
 
 
 def load_config(config_path: str = "config.yaml") -> dict:
@@ -253,46 +254,60 @@ def main():
         blog_activity=blog_activity,
     )
 
-    # Determine output path
+    # Prepare structured data for JSON output
+    datasets_json = {}
+    for dtype, ds_list in datasets_by_type.items():
+        key = dtype.value if isinstance(dtype, DataType) else str(dtype)
+        datasets_json[key] = [
+            {k: v for k, v in ds.items() if not k.startswith("_")}
+            for ds in ds_list
+        ]
+
+    all_data = {
+        "period": {
+            "days": args.days,
+            "start": None,
+            "end": datetime.now().isoformat(),
+        },
+        "labs_activity": lab_activity,
+        "vendor_activity": vendor_activity,
+        "github_activity": github_activity,
+        "blog_posts": blog_activity,
+        "datasets": all_datasets,
+        "datasets_by_type": datasets_json,
+        "papers": papers,
+    }
+
+    # Determine output directory and save reports
+    output_dir = Path(config.get("report", {}).get("output_dir", "data"))
+    output_dir.mkdir(parents=True, exist_ok=True)
+
+    # Initialize dual formatter
+    formatter = DualOutputFormatter(output_dir=str(output_dir / "reports"))
+
+    # Use custom output path if specified
     if args.output:
         output_path = Path(args.output)
+        with open(output_path, "w", encoding="utf-8") as f:
+            f.write(report)
+        print(f"Report saved to: {output_path}")
+
+        if args.json:
+            json_path = output_path.with_suffix(".json")
+            with open(json_path, "w", encoding="utf-8") as f:
+                json.dump(
+                    formatter._format_json_output(all_data),
+                    f, ensure_ascii=False, indent=2, default=str
+                )
+            print(f"JSON data saved to: {json_path}")
     else:
-        output_dir = Path(config.get("report", {}).get("output_dir", "data"))
-        output_dir.mkdir(parents=True, exist_ok=True)
-        date_str = datetime.now().strftime("%Y-%m-%d")
-        output_path = output_dir / f"intel_report_{date_str}.md"
-
-    # Save report
-    with open(output_path, "w", encoding="utf-8") as f:
-        f.write(report)
-
-    print(f"Report saved to: {output_path}")
-
-    # Save JSON if requested
-    if args.json:
-        json_path = output_path.with_suffix(".json")
-
-        # Convert DataType enums to strings for JSON
-        datasets_json = {}
-        for dtype, ds_list in datasets_by_type.items():
-            key = dtype.value if isinstance(dtype, DataType) else str(dtype)
-            datasets_json[key] = [
-                {k: v for k, v in ds.items() if not k.startswith("_")}
-                for ds in ds_list
-            ]
-
-        data = {
-            "generated_at": datetime.now().isoformat(),
-            "period_days": args.days,
-            "lab_activity": lab_activity,
-            "vendor_activity": vendor_activity,
-            "github_activity": github_activity,
-            "blog_activity": blog_activity,
-            "datasets_by_type": datasets_json,
-            "papers": papers,
-        }
-        with open(json_path, "w", encoding="utf-8") as f:
-            json.dump(data, f, ensure_ascii=False, indent=2, default=str)
+        # Use DualOutputFormatter for default path
+        md_path, json_path = formatter.save_reports(
+            markdown_content=report,
+            data=all_data,
+            filename_prefix="intel_report"
+        )
+        print(f"Report saved to: {md_path}")
         print(f"JSON data saved to: {json_path}")
 
     # Print console summary
