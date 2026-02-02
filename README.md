@@ -1,356 +1,216 @@
 <p align="center">
-  <h1 align="center">AI Dataset Radar</h1>
+  <h1 align="center">🛰️ AI Dataset Radar</h1>
   <p align="center">
-    <strong>Discover high-value AI datasets before they go mainstream</strong>
+    <strong>Track AI training datasets across HuggingFace, GitHub, arXiv & blogs</strong>
   </p>
   <p align="center">
     <a href="https://opensource.org/licenses/MIT"><img src="https://img.shields.io/badge/License-MIT-yellow.svg" alt="License: MIT"></a>
-    <a href="https://www.python.org/downloads/"><img src="https://img.shields.io/badge/python-3.8+-blue.svg" alt="Python 3.8+"></a>
-    <a href="https://github.com/liuxiaotong/ai-dataset-radar"><img src="https://img.shields.io/badge/version-5.0-green.svg" alt="Version"></a>
+    <a href="https://www.python.org/downloads/"><img src="https://img.shields.io/badge/python-3.10+-blue.svg" alt="Python 3.10+"></a>
+    <a href="#mcp-server"><img src="https://img.shields.io/badge/MCP-Server-purple.svg" alt="MCP Server"></a>
   </p>
 </p>
 
 ---
 
-AI Dataset Radar is a neutral data collection layer that aggregates signals from HuggingFace, GitHub, arXiv, and blogs. It provides structured Markdown and JSON output for downstream analysis and LLM consumption.
+Monitor 30+ AI labs and data vendors. Get structured reports on new datasets, GitHub repos, papers, and blog posts — delivered as Markdown for humans or JSON for LLMs.
 
-## Quick Start
+## ✨ What You Get
+
+```
+┌────────────────────────────────────────────────────────────────┐
+│  12 datasets │ 138 repos │ 28 papers │ 4 blog posts            │
+│  ─────────────────────────────────────────────────────────────  │
+│  • OpenAI, Anthropic, Google, Meta, DeepSeek, Qwen...          │
+│  • Scale AI, Argilla, Snorkel, Labelbox...                     │
+│  • RLHF, SFT, Synthetic, Agent, Evaluation datasets            │
+└────────────────────────────────────────────────────────────────┘
+```
+
+## 🚀 Quick Start
+
+### Option 1: Command Line
 
 ```bash
-# Clone and install
 git clone https://github.com/liuxiaotong/ai-dataset-radar.git
-cd ai-dataset-radar && pip install -r requirements.txt
+cd ai-dataset-radar
+python -m venv .venv && source .venv/bin/activate
+pip install -r requirements.txt
 
-# Run competitive intelligence
-python src/main_intel.py
-
-# Run value analysis
-python src/main.py --value-analysis
+# Run scan
+python src/main_intel.py --days 7
 ```
 
-## Features
+Reports saved to `data/reports/`:
+- `intel_report_2024-01-15.md` — Human-readable
+- `intel_report_2024-01-15.json` — For LLMs/scripts
 
-- **Plugin-Based Scrapers** — Modular architecture with `BaseScraper` class and registry for easy extension
-- **Multi-Source Aggregation** — Collect from HuggingFace Hub, GitHub orgs, arXiv, Papers with Code, and RSS feeds
-- **Post-Training Classification** — Auto-categorize datasets into SFT, Preference/RLHF, Agent, and Evaluation types
-- **Competitive Intelligence** — Monitor 30+ organizations: US labs, China labs, and data vendors
-- **Dual Output Format** — Generate both Markdown reports and structured JSON for LLM consumption
-- **Watchlist Mechanism** — Configure orgs, keywords, and feeds via `config.yaml`
+### Option 2: Claude Desktop (MCP)
 
-## Architecture
-
-```
-┌─────────────────────────────────────────────────────────────────┐
-│                         main_intel.py                           │
-│                    (Orchestration Layer)                        │
-└─────────────────────────────────────────────────────────────────┘
-                              │
-        ┌─────────────────────┼─────────────────────┐
-        ▼                     ▼                     ▼
-┌───────────────┐   ┌─────────────────┐   ┌─────────────────┐
-│   Scrapers    │   │    Trackers     │   │   Analyzers     │
-│ (Plugin-based)│   │  (Org Monitor)  │   │ (Classification)│
-└───────────────┘   └─────────────────┘   └─────────────────┘
-        │                     │                     │
-        ▼                     ▼                     ▼
-┌─────────────────────────────────────────────────────────────────┐
-│                     DualOutputFormatter                         │
-│              (Markdown + JSON Report Generation)                │
-└─────────────────────────────────────────────────────────────────┘
-```
-
-### Scraper Registry
-
-All scrapers inherit from `BaseScraper` and are registered via decorator:
-
-```python
-from src.scrapers import get_all_scrapers, get_scraper
-
-# List all registered scrapers
-scrapers = get_all_scrapers()
-# {'huggingface': <HuggingFaceScraper>, 'arxiv': <ArxivScraper>, ...}
-
-# Get specific scraper
-hf = get_scraper("huggingface")
-datasets = hf.scrape()
-```
-
-## Data Sources
-
-| Source | Type | Content | Relevance Scoring |
-|--------|------|---------|-------------------|
-| HuggingFace Hub | `dataset_registry` | Datasets with metadata (downloads, likes, tags, license) | By org watchlist |
-| arXiv | `paper` | Papers with abstracts from cs.CL, cs.AI, cs.LG | By keyword filter |
-| HuggingFace Papers | `paper` | Daily papers with upvotes | By dataset relevance |
-| Papers with Code | `dataset_registry` | Trending benchmarks and datasets | By recency |
-| GitHub Org Monitor | `code_host` | Repos from tracked orgs with stars, topics | high/medium/low by keywords |
-| Blog RSS/Scrape | `blog` | Articles with signal detection | By keyword match |
-
-## Configuration
-
-### Watchlist Mechanism
-
-Configure organizations and keywords in `config.yaml`:
-
-```yaml
-sources:
-  huggingface:
-    enabled: true
-    watch_orgs:
-      - allenai
-      - google
-      - facebook
-      - nvidia
-      - Qwen
-
-  github:
-    enabled: true
-    watch_orgs:
-      - openai
-      - anthropics
-      - deepseek-ai
-      - argilla-io
-    relevance_keywords:
-      - dataset
-      - annotation
-      - benchmark
-      - rlhf
-
-  blogs:
-    enabled: true
-    feeds:
-      - name: Argilla
-        url: https://argilla.io/blog/
-        rss_url: https://argilla.io/blog/rss.xml
-      - name: Qwen Blog
-        url: https://qwenlm.github.io/
-        rss_url: https://qwenlm.github.io/feed.xml
-      - name: Hugging Face
-        url: https://huggingface.co/blog
-        rss_url: https://huggingface.co/blog/feed.xml
-
-  arxiv:
-    enabled: true
-    categories:
-      - cs.CL
-      - cs.AI
-      - cs.LG
-    keywords:
-      - human feedback
-      - RLHF
-      - preference learning
-```
-
-### API Keys (Optional)
-
-```bash
-export GITHUB_TOKEN=your_token  # Higher rate limits
-```
-
-## Output Formats
-
-### Markdown Report
-
-Human-readable reports saved to `data/reports/intel_report_YYYY-MM-DD.md`:
-
-```markdown
-# AI Dataset Radar - Competitive Intelligence Report
-
-## Executive Summary
-- 12 datasets from tracked organizations
-- 138 repos from 11 GitHub orgs (2 high relevance)
-- 28 relevant papers
-- 4 blog posts with signals
-
-## AI Labs Activity
-### Frontier Labs
-#### google_deepmind
-- **WaxalNLP** (1.5K downloads) - ASR and TTS for African languages
-
-## GitHub Activity
-### argilla-io (3 repos)
-- **argilla** ⭐ 8.2K [HIGH] - Open-source data curation...
-```
-
-### JSON Output
-
-Structured data for LLM consumption at `data/reports/intel_report_YYYY-MM-DD.json`:
+Add to `~/Library/Application Support/Claude/claude_desktop_config.json`:
 
 ```json
 {
-  "generated_at": "2026-02-02T12:48:01.892245",
-  "period": {
-    "days": 7,
-    "start": "2026-01-26T12:48:01.892245",
-    "end": "2026-02-02T12:48:01.892245"
-  },
+  "mcpServers": {
+    "ai-dataset-radar": {
+      "command": "/path/to/ai-dataset-radar/.venv/bin/python",
+      "args": ["/path/to/ai-dataset-radar/mcp_server/server.py"]
+    }
+  }
+}
+```
+
+Then ask Claude: *"Scan for new AI datasets"* or *"What's new from OpenAI?"*
+
+### Option 3: Claude Code
+
+```bash
+/radar    # Get project context
+/scan     # Run intelligence scan
+```
+
+---
+
+## 📊 Output Example
+
+### JSON (for LLMs)
+
+```json
+{
   "summary": {
     "total_datasets": 12,
-    "total_github_orgs": 11,
     "total_github_repos": 138,
     "total_github_repos_high_relevance": 2,
-    "total_papers": 28,
-    "total_blog_posts": 4
+    "total_papers": 28
   },
-  "labs_activity": {...},
-  "vendor_activity": null,
   "datasets": [
     {
       "id": "google/WaxalNLP",
-      "author": "google",
-      "downloads": 1539,
-      "likes": 54,
-      "description": "...",
-      "license": ["cc-by-sa-4.0", "cc-by-4.0"],
-      "languages": ["ach", "aka", ...],
-      "size_category": "1M<n<10M",
-      "task_categories": ["automatic-speech-recognition"],
       "category": "multilingual",
-      "all_categories": ["multilingual"],
-      "signals": ["multilingual"]
+      "downloads": 1539,
+      "license": "cc-by-4.0",
+      "signals": ["multilingual", "audio"]
     }
   ],
-  "datasets_by_type": {
-    "synthetic": ["allenai/Sera-4.5A-Lite-T1", ...],
-    "multilingual": ["google/WaxalNLP", ...]
-  },
   "github_activity": [
     {
       "org": "argilla-io",
       "repos_updated": [
-        {
-          "name": "argilla",
-          "relevance": "high",
-          "relevance_signals": ["annotation", "dataset", "rlhf"]
-        }
+        {"name": "argilla", "relevance": "high", "relevance_signals": ["annotation", "rlhf"]}
       ]
-    }
-  ],
-  "papers": [...],
-  "blog_posts": [
-    {
-      "source": "Hugging Face",
-      "status": "success",
-      "articles": [...],
-      "error": null
     }
   ]
 }
 ```
 
-#### GitHub Relevance Scoring
+### Markdown (for humans)
 
-Repos are scored based on keyword matches in name, description, and topics:
-- **high**: 2+ keyword matches (e.g., `annotation`, `dataset`, `rlhf`)
-- **medium**: 1 keyword match
-- **low**: No matches
+```markdown
+## AI Labs Activity
 
-#### Dataset Fields
+### google_deepmind
+- **WaxalNLP** (1.5K downloads) - ASR/TTS for African languages
 
-Datasets are cleaned and enriched:
-- Internal fields (`_id`, `sha`, `gated`, etc.) are removed
-- Structured fields (`license`, `languages`, `size_category`, `task_categories`) extracted from HuggingFace tags
-- `category` and `all_categories` derived from classification results
-- `signals` contains matched classification keywords
-
-## Usage
-
-### Competitive Intelligence
-
-```bash
-# Full report (default: last 7 days)
-python src/main_intel.py
-
-# Custom time range
-python src/main_intel.py --days 14
-
-# Skip specific sources
-python src/main_intel.py --no-blogs --no-papers
-
-# Custom output path
-python src/main_intel.py --output my_report.md
+## GitHub Activity
+### argilla-io
+- **argilla** ⭐ 8.2K [HIGH] - Data curation for LLMs
 ```
 
-### Value Analysis
+---
 
-```bash
-# Full analysis
-python src/main.py --value-analysis
+## ⚙️ Configuration
 
-# Focus on specific types
-python src/main.py --focus sft
-python src/main.py --focus preference
+Edit `config.yaml` to customize:
 
-# Filter by score
-python src/main.py --value-analysis --min-score 60
+```yaml
+# Organizations to monitor
+watched_orgs:
+  frontier_labs:
+    openai: { hf_ids: ["openai"], keywords: ["gpt"] }
+    anthropic: { hf_ids: ["anthropic"], keywords: ["claude"] }
+  china_opensource:
+    qwen: { hf_ids: ["Qwen"], keywords: ["qwen"] }
+    deepseek: { hf_ids: ["deepseek-ai"], keywords: ["deepseek"] }
+
+# Data types to track
+priority_data_types:
+  preference: { keywords: ["rlhf", "dpo", "preference"] }
+  sft: { keywords: ["instruction", "chat", "alpaca"] }
+  agent: { keywords: ["tool use", "function calling"] }
+
+# GitHub relevance keywords
+sources:
+  github:
+    relevance_keywords: [dataset, annotation, benchmark, rlhf]
 ```
 
-## Organizations Tracked
+**Optional:** Set `GITHUB_TOKEN` for higher API rate limits.
 
-| Category | Organizations |
-|----------|---------------|
-| **Frontier Labs** | OpenAI, Anthropic, Google/DeepMind, Meta, xAI |
-| **Emerging Labs** | Mistral, Cohere, AI21, Together, Databricks |
-| **Research Labs** | EleutherAI, HuggingFace, Allen AI, LMSys, NVIDIA |
-| **China Open Source** | Qwen, DeepSeek, ChatGLM, Baichuan, Yi, InternLM |
-| **China Closed Source** | Baidu ERNIE, ByteDance Doubao, Tencent Hunyuan, Moonshot Kimi |
-| **Data Vendors** | Scale AI, Surge AI, Argilla, Snorkel, Labelbox |
+---
 
-## Dataset Categories
-
-| Category | Description | Examples |
-|----------|-------------|----------|
-| **SFT** | Instruction-following data | Alpaca, ShareGPT, OpenOrca |
-| **Preference** | Human preference pairs for RLHF/DPO | UltraFeedback, HelpSteer, HH-RLHF |
-| **Synthetic** | AI-generated training data | Sera, Magpie, synthetic-data-kit |
-| **Agent** | Tool use and trajectory data | SWE-bench, WebArena, ToolBench |
-| **Evaluation** | Benchmark test sets | MMLU, HumanEval, GPQA |
-| **Multimodal** | Image/video/audio datasets | Action100M, VoxPopuli |
-| **Multilingual** | Cross-language datasets | WaxalNLP, OPUS |
-| **Code** | Programming and execution data | StarCoder, CodeParrot |
-
-## Project Structure
+## 🏗️ Architecture
 
 ```
 ai-dataset-radar/
 ├── src/
-│   ├── main.py              # Value analysis entry point
-│   ├── main_intel.py        # Competitive intelligence entry point
-│   ├── output_formatter.py  # Dual output (MD + JSON)
-│   ├── scrapers/
-│   │   ├── base.py          # BaseScraper abstract class
-│   │   ├── registry.py      # Scraper registration
-│   │   ├── huggingface.py   # HuggingFace Hub scraper
-│   │   ├── arxiv.py         # arXiv paper scraper
-│   │   ├── github.py        # GitHub search scraper
-│   │   ├── github_org.py    # GitHub org monitor
-│   │   ├── blog_rss.py      # RSS feed scraper
-│   │   └── ...
-│   ├── analyzers/           # Scoring & classification
-│   └── trackers/            # Org & blog monitoring
-├── tests/                   # Test suite
-├── config.yaml              # Configuration
-└── requirements.txt         # Dependencies
+│   ├── main_intel.py      # Entry point
+│   ├── scrapers/          # HuggingFace, GitHub, arXiv, RSS
+│   ├── trackers/          # Org & blog monitors
+│   ├── analyzers/         # Dataset classification
+│   └── output_formatter.py
+├── mcp_server/            # Claude Desktop integration
+│   └── server.py
+├── .claude/commands/      # Claude Code skills
+│   ├── radar.md
+│   └── scan.md
+├── config.yaml            # Watchlist configuration
+└── data/reports/          # Generated reports
 ```
 
-## Roadmap
+---
 
-- [x] Core infrastructure (database, scrapers)
-- [x] Multi-source aggregation
-- [x] Value scoring system
-- [x] Post-training classification
-- [x] Competitive intelligence (US & China labs)
-- [x] Plugin-based scraper architecture
-- [x] Dual output format (Markdown + JSON)
-- [x] Config-driven watchlist mechanism
-- [ ] Deep analysis (PDF extraction, LLM summarization)
-- [ ] Automation (scheduled execution, alerting)
+## 🔌 MCP Server Tools
 
-## Contributing
+When using Claude Desktop:
 
-Contributions welcome! Please feel free to submit a Pull Request.
+| Tool | Description |
+|------|-------------|
+| `radar_scan` | Run full intelligence scan |
+| `radar_summary` | Get latest report summary |
+| `radar_datasets` | List datasets (filter by category) |
+| `radar_github` | View GitHub activity (filter by relevance) |
+| `radar_papers` | View recent papers |
+| `radar_config` | Show current watchlist |
 
-### Adding a New Scraper
+---
+
+## 📦 Dataset Categories
+
+| Category | Examples |
+|----------|----------|
+| **SFT** | Alpaca, ShareGPT, OpenOrca |
+| **Preference** | UltraFeedback, HelpSteer, HH-RLHF |
+| **Synthetic** | Sera, Magpie |
+| **Agent** | SWE-bench, WebArena, ToolBench |
+| **Evaluation** | MMLU, HumanEval, GPQA |
+| **Multimodal** | Action100M, VoxPopuli |
+| **Code** | StarCoder, CodeParrot |
+
+---
+
+## 🧪 Development
+
+```bash
+# Run tests
+python -m pytest tests/ -v
+
+# Add a new scraper
+# 1. Create src/scrapers/my_source.py
+# 2. Inherit from BaseScraper
+# 3. Register with @register_scraper("my_source")
+```
+
+<details>
+<summary>Example: Custom Scraper</summary>
 
 ```python
 from src.scrapers.base import BaseScraper
@@ -359,23 +219,45 @@ from src.scrapers.registry import register_scraper
 @register_scraper("my_source")
 class MySourceScraper(BaseScraper):
     name = "my_source"
-    source_type = "dataset_registry"  # or "paper", "code_host", "blog"
+    source_type = "dataset_registry"
 
     def scrape(self, config=None) -> list[dict]:
-        # Your scraping logic
-        return [{"source": "my_source", "id": "...", ...}]
+        return [{"source": "my_source", "id": "dataset-1"}]
 ```
 
-## License
+</details>
 
-MIT License - see [LICENSE](LICENSE) for details.
+---
 
-## Acknowledgments
+## 🗺️ Roadmap
 
-Built with data from [Hugging Face](https://huggingface.co/), [GitHub](https://github.com/), [arXiv](https://arxiv.org/), and [Papers with Code](https://paperswithcode.com/).
+- [x] Multi-source aggregation (HF, GitHub, arXiv, blogs)
+- [x] Dual output (Markdown + JSON)
+- [x] MCP Server for Claude Desktop
+- [x] Claude Code skills
+- [ ] Scheduled execution & alerts
+- [ ] Web dashboard
+- [ ] LLM-powered summarization
+
+---
+
+## 🤝 Contributing
+
+PRs welcome! Areas where help is needed:
+
+- New data sources (e.g., Twitter/X, Discord)
+- Improved classification heuristics
+- Web UI
+- Documentation translations
+
+---
+
+## 📄 License
+
+MIT — see [LICENSE](LICENSE)
 
 ---
 
 <p align="center">
-  <sub>If you find this useful, please consider giving it a star</sub>
+  <sub>Built for the AI data community. Star ⭐ if useful!</sub>
 </p>
