@@ -15,8 +15,8 @@ from typing import Optional
 import requests
 
 
-# Signal keywords for detecting relevant repos
-SIGNAL_KEYWORDS = [
+# Default signal keywords for detecting relevant repos
+DEFAULT_SIGNAL_KEYWORDS = [
     "rlhf", "reward", "preference", "annotation", "labeling", "label",
     "evaluation", "benchmark", "human-feedback", "sft", "instruction",
     "fine-tuning", "fine-tune", "data-quality", "dataset", "training-data",
@@ -38,6 +38,7 @@ class GitHubTracker:
         """
         self.config = config
         github_config = config.get("github", {})
+        sources_github = config.get("sources", {}).get("github", {})
 
         # Get token from config or environment
         # Handle ${VAR} syntax in config that wasn't expanded
@@ -59,6 +60,12 @@ class GitHubTracker:
         # Get org lists from config
         self.vendor_orgs = github_config.get("orgs", {}).get("data_vendors", [])
         self.lab_orgs = github_config.get("orgs", {}).get("ai_labs", [])
+
+        # Get relevance keywords from config (sources.github.relevance_keywords)
+        self.relevance_keywords = (
+            sources_github.get("relevance_keywords") or
+            DEFAULT_SIGNAL_KEYWORDS
+        )
 
     def _make_request(self, url: str, params: dict = None) -> Optional[dict]:
         """Make a GitHub API request with rate limit handling."""
@@ -126,7 +133,12 @@ class GitHubTracker:
                 "topics": repo.get("topics", []),
             }
 
-            # Extract signals from description and topics
+            # Extract relevance signals from description and topics
+            relevance_signals = self._extract_relevance_signals(repo_info)
+            repo_info["relevance_signals"] = relevance_signals
+            repo_info["relevance"] = self._calculate_relevance(relevance_signals)
+
+            # Keep legacy signals field for backward compat
             repo_info["signals"] = self._extract_signals(repo_info)
 
             recent_repos.append(repo_info)
@@ -134,7 +146,7 @@ class GitHubTracker:
         return recent_repos
 
     def _extract_signals(self, repo: dict) -> list[str]:
-        """Extract signal keywords from repo info.
+        """Extract signal keywords from repo info (legacy method).
 
         Args:
             repo: Repository info dict.
@@ -149,13 +161,71 @@ class GitHubTracker:
         ]).lower()
 
         signals = []
-        for keyword in SIGNAL_KEYWORDS:
+        for keyword in DEFAULT_SIGNAL_KEYWORDS:
             # Handle hyphenated keywords
             keyword_pattern = keyword.replace("-", "[- ]?")
             if re.search(keyword_pattern, text):
                 signals.append(keyword)
 
         return list(set(signals))  # Deduplicate
+
+    def _extract_relevance_signals(self, repo: dict) -> list[str]:
+        """Extract relevance signals using config keywords.
+
+        Matches config relevance_keywords against repo name, description, and topics.
+        Supports partial matching and case-insensitive comparison.
+
+        Args:
+            repo: Repository info dict.
+
+        Returns:
+            List of matched keywords.
+        """
+        name = (repo.get("name") or "").lower()
+        description = (repo.get("description") or "").lower()
+        topics = [t.lower() for t in repo.get("topics", [])]
+        topics_text = " ".join(topics)
+
+        matched = set()
+
+        for keyword in self.relevance_keywords:
+            kw_lower = keyword.lower()
+            # Handle hyphenated keywords - match with or without hyphen
+            kw_pattern = kw_lower.replace("-", "[- ]?")
+
+            # Check in name
+            if re.search(kw_pattern, name):
+                matched.add(keyword)
+                continue
+
+            # Check in description
+            if re.search(kw_pattern, description):
+                matched.add(keyword)
+                continue
+
+            # Check in topics (exact or partial)
+            if kw_lower in topics or re.search(kw_pattern, topics_text):
+                matched.add(keyword)
+                continue
+
+        return sorted(list(matched))
+
+    def _calculate_relevance(self, signals: list[str]) -> str:
+        """Calculate relevance level based on matched signals.
+
+        Args:
+            signals: List of matched keywords.
+
+        Returns:
+            "high" if 2+ matches, "medium" if 1 match, "low" if none.
+        """
+        count = len(signals)
+        if count >= 2:
+            return "high"
+        elif count == 1:
+            return "medium"
+        else:
+            return "low"
 
     def get_repo_readme(self, full_name: str) -> Optional[str]:
         """Get README content for a repo.

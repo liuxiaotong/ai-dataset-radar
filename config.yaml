@@ -180,37 +180,32 @@ watched_vendors:
       hf_ids: ["humanloop"]
       keywords: ["humanloop"]
 
-  # 博客监控配置（全部使用网页抓取，RSS 不可用）
+  # 博客监控配置（优先使用 RSS，回退到网页抓取）
   blogs:
+    - name: "Argilla"
+      url: "https://argilla.io/blog/"
+      type: "auto"
+      rss_url: "https://argilla.io/blog/rss.xml"
+    - name: "Qwen Blog"
+      url: "https://qwenlm.github.io/"
+      type: "auto"
+      rss_url: "https://qwenlm.github.io/feed.xml"
+    - name: "Hugging Face"
+      url: "https://huggingface.co/blog"
+      type: "auto"
+      rss_url: "https://huggingface.co/blog/feed.xml"
     - name: "Scale AI"
       url: "https://scale.com/blog"
-      type: "scrape"
+      type: "auto"
       selector: "article, .blog-post, [class*='post'], [class*='article']"
     - name: "Snorkel AI"
       url: "https://snorkel.ai/blog/"
-      type: "scrape"
+      type: "auto"
       selector: "article, .blog-card, [class*='post'], [class*='blog']"
-    - name: "Argilla"
-      url: "https://argilla.io/blog/"
-      type: "scrape"
-      selector: "article, .post, [class*='post'], [class*='blog']"
     - name: "Anthropic Research"
       url: "https://www.anthropic.com/research"
-      type: "scrape"
+      type: "auto"
       selector: "article, [class*='post'], [class*='card'], a[href*='/research/']"
-    # 中国 AI 公司博客/研究页面
-    - name: "DeepSeek"
-      url: "https://www.deepseek.com/zh"
-      type: "scrape"
-      selector: "article, [class*='post'], [class*='blog'], [class*='news']"
-    - name: "Qwen Blog"
-      url: "https://qwenlm.github.io/"
-      type: "scrape"
-      selector: "article, .post, [class*='post']"
-    - name: "智谱AI"
-      url: "https://www.zhipuai.cn/news"
-      type: "scrape"
-      selector: "article, [class*='news'], [class*='post']"
 
 # =============================================================================
 # 关注的数据类型 | Priority Data Types

@@ -25,6 +25,20 @@ SIGNAL_KEYWORDS = [
     "product launch", "release", "announcing", "introducing"
 ]
 
+# Common RSS feed paths to try
+RSS_PATHS = [
+    "/feed",
+    "/feed.xml",
+    "/rss",
+    "/rss.xml",
+    "/atom.xml",
+    "/blog/feed",
+    "/blog/feed.xml",
+    "/blog/rss",
+    "/blog/rss.xml",
+    "/index.xml",
+]
+
 
 class BlogTracker:
     """Track blog and RSS feed updates."""
@@ -44,10 +58,57 @@ class BlogTracker:
         )
 
         self.headers = {
-            "User-Agent": "Mozilla/5.0 (compatible; AI-Dataset-Radar/1.0)"
+            "User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
         }
 
-    def fetch_rss(self, url: str, days: int = 7) -> list[dict]:
+    def _discover_rss_feed(self, base_url: str) -> Optional[str]:
+        """Try to discover RSS feed URL for a blog.
+
+        Args:
+            base_url: Blog base URL.
+
+        Returns:
+            RSS feed URL if found, None otherwise.
+        """
+        parsed = urlparse(base_url)
+        base = f"{parsed.scheme}://{parsed.netloc}"
+
+        # Try common RSS paths
+        for path in RSS_PATHS:
+            feed_url = base + path
+            try:
+                resp = requests.head(feed_url, headers=self.headers, timeout=5, allow_redirects=True)
+                if resp.status_code == 200:
+                    content_type = resp.headers.get("Content-Type", "")
+                    if any(t in content_type for t in ["xml", "rss", "atom", "feed"]):
+                        return feed_url
+                    # Try GET to check content
+                    resp = requests.get(feed_url, headers=self.headers, timeout=5)
+                    if resp.status_code == 200 and ("<?xml" in resp.text[:100] or "<rss" in resp.text[:200] or "<feed" in resp.text[:200]):
+                        return feed_url
+            except requests.RequestException:
+                continue
+
+        # Try to find feed link in HTML
+        try:
+            resp = requests.get(base_url, headers=self.headers, timeout=10)
+            if resp.status_code == 200:
+                soup = BeautifulSoup(resp.text, "html.parser")
+                # Look for RSS/Atom link tags
+                for link in soup.find_all("link", rel=["alternate", "feed"]):
+                    link_type = link.get("type", "")
+                    if "rss" in link_type or "atom" in link_type or "xml" in link_type:
+                        href = link.get("href", "")
+                        if href:
+                            if not href.startswith("http"):
+                                href = urljoin(base_url, href)
+                            return href
+        except requests.RequestException:
+            pass
+
+        return None
+
+    def fetch_rss(self, url: str, days: int = 7) -> tuple[list[dict], Optional[str]]:
         """Parse RSS feed and extract recent articles.
 
         Args:
@@ -55,13 +116,20 @@ class BlogTracker:
             days: Look back period in days.
 
         Returns:
-            List of article dicts.
+            Tuple of (articles list, error message or None).
         """
         try:
             feed = feedparser.parse(url)
         except Exception as e:
-            print(f"    RSS parse error for {url}: {e}")
-            return []
+            return [], f"RSS parse error: {e}"
+
+        if feed.bozo and feed.bozo_exception:
+            # Check if we got any entries despite the error
+            if not feed.entries:
+                return [], f"Feed error: {feed.bozo_exception}"
+
+        if not feed.entries:
+            return [], "No entries found in feed"
 
         cutoff = datetime.utcnow() - timedelta(days=days)
         articles = []
@@ -70,30 +138,91 @@ class BlogTracker:
             # Parse published date
             published = None
             if hasattr(entry, "published_parsed") and entry.published_parsed:
-                published = datetime(*entry.published_parsed[:6])
-            elif hasattr(entry, "updated_parsed") and entry.updated_parsed:
-                published = datetime(*entry.updated_parsed[:6])
+                try:
+                    published = datetime(*entry.published_parsed[:6])
+                except (TypeError, ValueError):
+                    pass
+            if not published and hasattr(entry, "updated_parsed") and entry.updated_parsed:
+                try:
+                    published = datetime(*entry.updated_parsed[:6])
+                except (TypeError, ValueError):
+                    pass
 
+            # Skip articles outside the time window
             if published and published < cutoff:
                 continue
 
+            # Get title
+            title = entry.get("title", "").strip()
+            if not title:
+                continue
+
+            # Get URL
+            article_url = entry.get("link", "")
+            if not article_url:
+                continue
+
+            # Get summary - prefer summary over description, clean HTML
+            summary_raw = entry.get("summary", "") or entry.get("description", "") or ""
+            summary = self._clean_html(summary_raw)
+            # Validate summary is not just a date or navigation text
+            summary = self._validate_summary(summary, title)
+
             article = {
-                "title": entry.get("title", ""),
-                "url": entry.get("link", ""),
+                "title": title,
+                "url": article_url,
                 "date": published.strftime("%Y-%m-%d") if published else "",
-                "summary": self._clean_html(
-                    entry.get("summary", "") or entry.get("description", "")
-                )[:300],
+                "summary": summary[:300] if summary else "",
             }
 
             article["signals"] = self._extract_signals(article)
             articles.append(article)
 
-        return articles
+        return articles, None
+
+    def _validate_summary(self, summary: str, title: str) -> str:
+        """Validate and clean summary text.
+
+        Args:
+            summary: Raw summary text.
+            title: Article title for comparison.
+
+        Returns:
+            Cleaned summary or empty string if invalid.
+        """
+        if not summary:
+            return ""
+
+        # Remove if it's just a date
+        date_patterns = [
+            r"^\w+\s+\d{1,2},?\s+\d{4}$",  # "January 15, 2024"
+            r"^\d{4}-\d{2}-\d{2}$",  # "2024-01-15"
+            r"^\d{1,2}/\d{1,2}/\d{4}$",  # "01/15/2024"
+        ]
+        for pattern in date_patterns:
+            if re.match(pattern, summary.strip()):
+                return ""
+
+        # Remove if it's navigation/menu text
+        nav_indicators = [
+            "github", "hugging face", "modelscope", "demo", "discord",
+            "navigation", "menu", "home", "about", "contact",
+            "skip to content", "toggle menu"
+        ]
+        summary_lower = summary.lower()
+        nav_matches = sum(1 for ind in nav_indicators if ind in summary_lower)
+        if nav_matches >= 3 or (len(summary) < 50 and nav_matches >= 2):
+            return ""
+
+        # Remove if summary is same as title
+        if summary.strip().lower() == title.strip().lower():
+            return ""
+
+        return summary
 
     def scrape_blog(
         self, url: str, selector: str, days: int = 7
-    ) -> list[dict]:
+    ) -> tuple[list[dict], Optional[str]]:
         """Scrape blog page for articles.
 
         Args:
@@ -102,64 +231,95 @@ class BlogTracker:
             days: Look back period in days.
 
         Returns:
-            List of article dicts.
+            Tuple of (articles list, error message or None).
         """
         try:
             resp = requests.get(url, headers=self.headers, timeout=30)
             resp.raise_for_status()
         except requests.RequestException as e:
-            print(f"    Scrape error for {url}: {e}")
-            return []
+            return [], f"HTTP error: {e}"
 
         soup = BeautifulSoup(resp.text, "html.parser")
         articles = []
+        cutoff = datetime.utcnow() - timedelta(days=days)
 
         # Try to find articles with the selector
-        elements = soup.select(selector)[:10]
+        elements = soup.select(selector)[:15]
+
+        if not elements:
+            return [], f"No elements found with selector: {selector}"
 
         for elem in elements:
-            # Extract title
-            title_elem = elem.select_one("h1, h2, h3, .title, [class*='title']")
-            title = title_elem.get_text(strip=True) if title_elem else ""
+            # Extract title - try multiple approaches
+            title = ""
+            for title_sel in ["h1", "h2", "h3", ".title", "[class*='title']", "a"]:
+                title_elem = elem.select_one(title_sel)
+                if title_elem:
+                    title = title_elem.get_text(strip=True)
+                    if title and len(title) > 10:  # Skip very short titles
+                        break
+
+            if not title:
+                continue
 
             # Extract link
-            link_elem = elem.select_one("a[href]") or elem.find_parent("a")
+            link = ""
+            link_elem = elem.select_one("a[href]")
+            if not link_elem:
+                link_elem = elem.find_parent("a")
             if link_elem:
                 link = link_elem.get("href", "")
                 if link and not link.startswith("http"):
                     link = urljoin(url, link)
-            else:
-                link = ""
+
+            if not link:
+                continue
+
+            # Extract date
+            date_str = ""
+            date_elem = elem.select_one("time, .date, [class*='date'], [datetime]")
+            if date_elem:
+                date_str = date_elem.get("datetime", "") or date_elem.get_text(strip=True)
+                date_str = self._parse_date(date_str)
+
+            # Filter by date if we have one
+            if date_str:
+                try:
+                    article_date = datetime.strptime(date_str, "%Y-%m-%d")
+                    if article_date < cutoff:
+                        continue
+                except ValueError:
+                    pass
 
             # Extract summary
-            summary_elem = elem.select_one(
-                "p, .summary, .excerpt, [class*='excerpt'], [class*='description']"
-            )
-            summary = summary_elem.get_text(strip=True)[:300] if summary_elem else ""
+            summary = ""
+            for sum_sel in ["p", ".summary", ".excerpt", "[class*='excerpt']", "[class*='description']"]:
+                sum_elem = elem.select_one(sum_sel)
+                if sum_elem:
+                    summary = sum_elem.get_text(strip=True)
+                    summary = self._validate_summary(summary, title)
+                    if summary:
+                        break
 
-            # Extract date if available
-            date_elem = elem.select_one(
-                "time, .date, [class*='date'], [datetime]"
-            )
-            date = ""
-            if date_elem:
-                date = date_elem.get("datetime", "") or date_elem.get_text(strip=True)
-                date = self._parse_date(date)
+            article = {
+                "title": title,
+                "url": link,
+                "date": date_str,
+                "summary": summary[:300] if summary else "",
+            }
 
-            if title and link:
-                article = {
-                    "title": title,
-                    "url": link,
-                    "date": date,
-                    "summary": summary,
-                }
-                article["signals"] = self._extract_signals(article)
-                articles.append(article)
+            article["signals"] = self._extract_signals(article)
+            articles.append(article)
 
-        return articles
+        if not articles:
+            return [], "No valid articles extracted"
+
+        return articles, None
 
     def _clean_html(self, text: str) -> str:
         """Remove HTML tags from text."""
+        if not text:
+            return ""
         soup = BeautifulSoup(text, "html.parser")
         return soup.get_text(strip=True)
 
@@ -168,22 +328,34 @@ class BlogTracker:
         if not date_str:
             return ""
 
+        # Clean the string
+        date_str = date_str.strip()
+
         # Try common formats
         formats = [
             "%Y-%m-%d",
             "%Y-%m-%dT%H:%M:%S",
+            "%Y-%m-%dT%H:%M:%SZ",
+            "%Y-%m-%dT%H:%M:%S%z",
             "%B %d, %Y",
             "%b %d, %Y",
             "%d %B %Y",
             "%d %b %Y",
+            "%m/%d/%Y",
+            "%d/%m/%Y",
         ]
 
         for fmt in formats:
             try:
-                dt = datetime.strptime(date_str.strip()[:20], fmt)
+                dt = datetime.strptime(date_str[:30], fmt)
                 return dt.strftime("%Y-%m-%d")
             except ValueError:
                 continue
+
+        # Try to extract date with regex
+        date_match = re.search(r"(\d{4})-(\d{2})-(\d{2})", date_str)
+        if date_match:
+            return date_match.group(0)
 
         return ""
 
@@ -216,28 +388,74 @@ class BlogTracker:
             days: Look back period in days.
 
         Returns:
-            Blog activity dict.
+            Blog activity dict with status.
         """
         name = blog_config.get("name", "Unknown")
         url = blog_config.get("url", "")
-        blog_type = blog_config.get("type", "rss")
+        blog_type = blog_config.get("type", "auto")
+        rss_url = blog_config.get("rss_url")
 
-        if blog_type == "rss":
-            articles = self.fetch_rss(url, days)
-        else:
-            selector = blog_config.get("selector", "article")
-            articles = self.scrape_blog(url, selector, days)
-
-        # Filter to articles with signals
-        relevant = [a for a in articles if a.get("signals")]
-
-        return {
+        result = {
             "source": name,
             "url": url,
-            "articles": relevant,
-            "total_articles": len(articles),
-            "has_activity": len(relevant) > 0
+            "articles": [],
+            "total_articles": 0,
+            "has_activity": False,
+            "status": "success",
+            "error": None,
         }
+
+        if not url:
+            result["status"] = "scrape_failed"
+            result["error"] = "No URL configured"
+            return result
+
+        articles = []
+        error = None
+
+        # Strategy 1: Use explicit RSS URL if provided
+        if rss_url:
+            articles, error = self.fetch_rss(rss_url, days)
+            if articles:
+                result["feed_url"] = rss_url
+
+        # Strategy 2: Try to discover RSS feed
+        if not articles and blog_type in ("auto", "rss"):
+            discovered_feed = self._discover_rss_feed(url)
+            if discovered_feed:
+                articles, error = self.fetch_rss(discovered_feed, days)
+                if articles:
+                    result["feed_url"] = discovered_feed
+
+        # Strategy 3: Try direct RSS URL patterns
+        if not articles and blog_type in ("auto", "rss"):
+            for rss_path in ["/feed", "/feed.xml", "/rss.xml", "/atom.xml"]:
+                parsed = urlparse(url)
+                test_url = f"{parsed.scheme}://{parsed.netloc}{rss_path}"
+                articles, error = self.fetch_rss(test_url, days)
+                if articles:
+                    result["feed_url"] = test_url
+                    break
+
+        # Strategy 4: Fall back to HTML scraping
+        if not articles and blog_type in ("auto", "scrape"):
+            selector = blog_config.get("selector", "article, [class*='post'], [class*='blog']")
+            articles, error = self.scrape_blog(url, selector, days)
+
+        # Process results
+        if articles:
+            result["total_articles"] = len(articles)
+            # Filter to articles with signals
+            relevant = [a for a in articles if a.get("signals")]
+            result["articles"] = relevant
+            result["has_activity"] = len(relevant) > 0
+            result["status"] = "success"
+            result["error"] = None
+        else:
+            result["status"] = "scrape_failed"
+            result["error"] = error or "No articles found"
+
+        return result
 
     def fetch_all_blogs(self, days: int = 7) -> list[dict]:
         """Fetch articles from all configured blogs.
@@ -266,10 +484,11 @@ class BlogTracker:
                     unique_articles.append(article)
 
             activity["articles"] = unique_articles
-            activity["has_activity"] = len(unique_articles) > 0
+            if unique_articles:
+                activity["has_activity"] = True
 
-            if activity["has_activity"] or activity["total_articles"] > 0:
-                results.append(activity)
+            # Always include in results (even failures for transparency)
+            results.append(activity)
             time.sleep(1)  # Politeness delay
 
         return results
