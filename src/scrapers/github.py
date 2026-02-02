@@ -6,14 +6,21 @@ from datetime import datetime, timedelta
 from typing import Optional
 from bs4 import BeautifulSoup
 
+from .base import BaseScraper
+from .registry import register_scraper
 
-class GitHubScraper:
+
+@register_scraper("github")
+class GitHubScraper(BaseScraper):
     """Scraper for GitHub repositories related to datasets.
 
     Monitors:
     1. GitHub Search API for new dataset repos
     2. GitHub Trending page for popular new repos
     """
+
+    name = "github"
+    source_type = "code_host"
 
     SEARCH_API = "https://api.github.com/search/repositories"
     TRENDING_URL = "https://github.com/trending"
@@ -31,19 +38,94 @@ class GitHubScraper:
         "nlp-dataset", "benchmark", "llm", "fine-tuning",
     ]
 
-    def __init__(self, limit: int = 50, days: int = 7, token: Optional[str] = None):
+    # Keywords for relevance scoring
+    RELEVANCE_KEYWORDS = [
+        "dataset", "annotation", "benchmark", "rlhf", "evaluation",
+        "training-data", "preference", "instruction", "fine-tuning",
+    ]
+
+    def __init__(
+        self,
+        config: dict = None,
+        limit: int = 50,
+        days: int = 7,
+        token: Optional[str] = None
+    ):
         """Initialize the scraper.
 
         Args:
+            config: Optional configuration dict.
             limit: Maximum number of repos to fetch.
             days: Look back period in days.
             token: Optional GitHub API token for higher rate limits.
         """
+        super().__init__(config)
         self.limit = limit
         self.days = days
         self.headers = {"Accept": "application/vnd.github.v3+json"}
         if token:
             self.headers["Authorization"] = f"token {token}"
+        # Load relevance keywords from config if available
+        self.relevance_keywords = (
+            self.config.get("relevance_keywords") or self.RELEVANCE_KEYWORDS
+        )
+
+    def scrape(self, config: dict = None) -> list[dict]:
+        """Scrape repositories from GitHub.
+
+        Args:
+            config: Optional runtime configuration.
+
+        Returns:
+            List of repository dictionaries with relevance field.
+        """
+        repos = self.fetch()
+        # Add relevance scoring to all repos
+        for repo in repos:
+            if "relevance" not in repo:
+                repo["relevance"] = self._calculate_relevance(repo)
+        return repos
+
+    def _calculate_relevance(
+        self,
+        repo: dict,
+        keywords: Optional[list[str]] = None
+    ) -> str:
+        """Calculate relevance score for a repository.
+
+        Args:
+            repo: Repository dictionary.
+            keywords: Keywords to check against.
+
+        Returns:
+            "high" if 2+ keyword matches or dataset-related topic, else "low".
+        """
+        keywords = keywords or self.relevance_keywords
+        matches = 0
+
+        # Check name
+        name = (repo.get("name") or "").lower()
+        for kw in keywords:
+            if kw.lower() in name:
+                matches += 1
+
+        # Check description
+        description = (repo.get("description") or "").lower()
+        for kw in keywords:
+            if kw.lower() in description:
+                matches += 1
+
+        # Check topics
+        topics = [t.lower() for t in repo.get("topics", [])]
+        dataset_topics = {"dataset", "datasets", "benchmark", "training-data"}
+        if any(t in dataset_topics for t in topics):
+            return "high"
+
+        for kw in keywords:
+            if kw.lower() in topics:
+                matches += 1
+
+        return "high" if matches >= 2 else "low"
 
     def fetch(self) -> list[dict]:
         """Fetch dataset-related repositories.

@@ -11,9 +11,16 @@ import urllib.parse
 from datetime import datetime
 from typing import Optional
 
+from .base import BaseScraper
+from .registry import register_scraper
 
-class ArxivScraper:
+
+@register_scraper("arxiv")
+class ArxivScraper(BaseScraper):
     """Scraper for arXiv papers related to RLHF and data annotation."""
+
+    name = "arxiv"
+    source_type = "paper"
 
     BASE_URL = "http://export.arxiv.org/api/query"
 
@@ -52,9 +59,20 @@ class ArxivScraper:
             categories: arXiv categories to search.
             config: Optional configuration dict.
         """
+        super().__init__(config)
         self.limit = limit
         self.categories = categories or ["cs.CL", "cs.LG", "cs.AI"]
-        self.config = config or {}
+
+    def scrape(self, config: dict = None) -> list[dict]:
+        """Scrape papers from arXiv.
+
+        Args:
+            config: Optional runtime configuration.
+
+        Returns:
+            List of paper dictionaries.
+        """
+        return self.fetch()
 
     def fetch(self) -> list[dict]:
         """Fetch latest RLHF/annotation related papers from arXiv.

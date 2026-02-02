@@ -5,20 +5,38 @@ import requests
 from datetime import datetime
 from typing import Optional
 
+from .base import BaseScraper
+from .registry import register_scraper
 
-class HuggingFaceScraper:
+
+@register_scraper("huggingface")
+class HuggingFaceScraper(BaseScraper):
     """Scraper for Hugging Face Hub datasets and models."""
+
+    name = "huggingface"
+    source_type = "dataset_registry"
 
     DATASETS_URL = "https://huggingface.co/api/datasets"
     MODELS_URL = "https://huggingface.co/api/models"
     BASE_URL = "https://huggingface.co/api/datasets"  # Keep for backward compatibility
 
     def __init__(self, config: dict = None, limit: int = 50):
-        self.config = config or {}
+        super().__init__(config)
         self.limit = limit
         self.headers = {
             "User-Agent": "AI-Dataset-Radar/1.0"
         }
+
+    def scrape(self, config: dict = None) -> list[dict]:
+        """Scrape datasets from Hugging Face Hub.
+
+        Args:
+            config: Optional runtime configuration.
+
+        Returns:
+            List of dataset dictionaries.
+        """
+        return self.fetch()
 
     def fetch(self) -> list[dict]:
         """Fetch latest datasets from Hugging Face Hub.
@@ -65,17 +83,35 @@ class HuggingFaceScraper:
             else:
                 created_at = None
 
+            last_modified = ds.get("lastModified", "")
+            if last_modified:
+                last_modified = datetime.fromisoformat(
+                    last_modified.replace("Z", "+00:00")
+                )
+            else:
+                last_modified = None
+
+            dataset_id = ds.get("id", "")
+            dataset_url = f"https://huggingface.co/datasets/{dataset_id}"
+
             return {
                 "source": "huggingface",
-                "id": ds.get("id", ""),
-                "name": ds.get("id", "").split("/")[-1],
+                "id": dataset_id,
+                "name": dataset_id.split("/")[-1],
                 "author": ds.get("author", ""),
                 "downloads": ds.get("downloads", 0),
                 "likes": ds.get("likes", 0),
                 "tags": ds.get("tags", []),
-                "description": ds.get("description", ""),
+                "task_categories": ds.get("taskCategories", []),
+                "languages": ds.get("languages", []),
+                "license": ds.get("license", ""),
+                "size_category": ds.get("sizeCategory", ""),
                 "created_at": created_at.isoformat() if created_at else None,
-                "url": f"https://huggingface.co/datasets/{ds.get('id', '')}",
+                "last_modified": last_modified.isoformat() if last_modified else None,
+                "card_data": ds.get("cardData", {}),
+                "description": ds.get("description", ""),
+                "url": dataset_url,
+                "source_url": dataset_url,
             }
         except Exception as e:
             print(f"Error parsing dataset {ds.get('id', 'unknown')}: {e}")
