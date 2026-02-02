@@ -77,14 +77,14 @@ datasets = hf.scrape()
 
 ## Data Sources
 
-| Source | Type | Update Frequency | Content |
-|--------|------|------------------|---------|
-| HuggingFace Hub | `dataset_registry` | 1-3 days | Datasets, models, metadata |
-| arXiv | `paper` | 7-14 days | Preprints, abstracts |
-| Papers with Code | `dataset_registry` | 1-3 days | Benchmarks, datasets |
-| GitHub Search | `code_host` | 1-3 days | Repository metadata |
-| GitHub Org Monitor | `code_host` | Real-time | Org-specific repos |
-| Blog RSS | `blog` | 1-7 days | Research updates |
+| Source | Type | Content | Relevance Scoring |
+|--------|------|---------|-------------------|
+| HuggingFace Hub | `dataset_registry` | Datasets with metadata (downloads, likes, tags, license) | By org watchlist |
+| arXiv | `paper` | Papers with abstracts from cs.CL, cs.AI, cs.LG | By keyword filter |
+| HuggingFace Papers | `paper` | Daily papers with upvotes | By dataset relevance |
+| Papers with Code | `dataset_registry` | Trending benchmarks and datasets | By recency |
+| GitHub Org Monitor | `code_host` | Repos from tracked orgs with stars, topics | high/medium/low by keywords |
+| Blog RSS/Scrape | `blog` | Articles with signal detection | By keyword match |
 
 ## Configuration
 
@@ -120,9 +120,14 @@ sources:
     enabled: true
     feeds:
       - name: Argilla
-        url: https://argilla.io/blog/feed
-      - name: Qwen
-        url: https://qwenlm.github.io/feed.xml
+        url: https://argilla.io/blog/
+        rss_url: https://argilla.io/blog/rss.xml
+      - name: Qwen Blog
+        url: https://qwenlm.github.io/
+        rss_url: https://qwenlm.github.io/feed.xml
+      - name: Hugging Face
+        url: https://huggingface.co/blog
+        rss_url: https://huggingface.co/blog/feed.xml
 
   arxiv:
     enabled: true
@@ -149,16 +154,22 @@ export GITHUB_TOKEN=your_token  # Higher rate limits
 Human-readable reports saved to `data/reports/intel_report_YYYY-MM-DD.md`:
 
 ```markdown
-# AI Dataset Radar - Intelligence Report
+# AI Dataset Radar - Competitive Intelligence Report
 
 ## Executive Summary
-- 42 datasets from tracked organizations
-- 15 relevant papers
-- 8 blog posts with signals
+- 12 datasets from tracked organizations
+- 138 repos from 11 GitHub orgs (2 high relevance)
+- 28 relevant papers
+- 4 blog posts with signals
 
-## US AI Labs Activity
-### OpenAI
-- **new-dataset** (1.2K downloads) - Description...
+## AI Labs Activity
+### Frontier Labs
+#### google_deepmind
+- **WaxalNLP** (1.5K downloads) - ASR and TTS for African languages
+
+## GitHub Activity
+### argilla-io (3 repos)
+- **argilla** ⭐ 8.2K [HIGH] - Open-source data curation...
 ```
 
 ### JSON Output
@@ -167,19 +178,80 @@ Structured data for LLM consumption at `data/reports/intel_report_YYYY-MM-DD.jso
 
 ```json
 {
-  "generated_at": "2024-01-15T10:30:00",
-  "summary": {
-    "total_datasets": 42,
-    "total_repos": 15,
-    "total_papers": 8,
-    "total_blog_posts": 5
+  "generated_at": "2026-02-02T12:48:01.892245",
+  "period": {
+    "days": 7,
+    "start": "2026-01-26T12:48:01.892245",
+    "end": "2026-02-02T12:48:01.892245"
   },
-  "datasets": [...],
+  "summary": {
+    "total_datasets": 12,
+    "total_github_orgs": 11,
+    "total_github_repos": 138,
+    "total_github_repos_high_relevance": 2,
+    "total_papers": 28,
+    "total_blog_posts": 4
+  },
+  "labs_activity": {...},
+  "vendor_activity": null,
+  "datasets": [
+    {
+      "id": "google/WaxalNLP",
+      "author": "google",
+      "downloads": 1539,
+      "likes": 54,
+      "description": "...",
+      "license": ["cc-by-sa-4.0", "cc-by-4.0"],
+      "languages": ["ach", "aka", ...],
+      "size_category": "1M<n<10M",
+      "task_categories": ["automatic-speech-recognition"],
+      "category": "multilingual",
+      "all_categories": ["multilingual"],
+      "signals": ["multilingual"]
+    }
+  ],
+  "datasets_by_type": {
+    "synthetic": ["allenai/Sera-4.5A-Lite-T1", ...],
+    "multilingual": ["google/WaxalNLP", ...]
+  },
+  "github_activity": [
+    {
+      "org": "argilla-io",
+      "repos_updated": [
+        {
+          "name": "argilla",
+          "relevance": "high",
+          "relevance_signals": ["annotation", "dataset", "rlhf"]
+        }
+      ]
+    }
+  ],
   "papers": [...],
-  "github_activity": [...],
-  "blog_posts": [...]
+  "blog_posts": [
+    {
+      "source": "Hugging Face",
+      "status": "success",
+      "articles": [...],
+      "error": null
+    }
+  ]
 }
 ```
+
+#### GitHub Relevance Scoring
+
+Repos are scored based on keyword matches in name, description, and topics:
+- **high**: 2+ keyword matches (e.g., `annotation`, `dataset`, `rlhf`)
+- **medium**: 1 keyword match
+- **low**: No matches
+
+#### Dataset Fields
+
+Datasets are cleaned and enriched:
+- Internal fields (`_id`, `sha`, `gated`, etc.) are removed
+- Structured fields (`license`, `languages`, `size_category`, `task_categories`) extracted from HuggingFace tags
+- `category` and `all_categories` derived from classification results
+- `signals` contains matched classification keywords
 
 ## Usage
 
@@ -230,8 +302,12 @@ python src/main.py --value-analysis --min-score 60
 |----------|-------------|----------|
 | **SFT** | Instruction-following data | Alpaca, ShareGPT, OpenOrca |
 | **Preference** | Human preference pairs for RLHF/DPO | UltraFeedback, HelpSteer, HH-RLHF |
+| **Synthetic** | AI-generated training data | Sera, Magpie, synthetic-data-kit |
 | **Agent** | Tool use and trajectory data | SWE-bench, WebArena, ToolBench |
 | **Evaluation** | Benchmark test sets | MMLU, HumanEval, GPQA |
+| **Multimodal** | Image/video/audio datasets | Action100M, VoxPopuli |
+| **Multilingual** | Cross-language datasets | WaxalNLP, OPUS |
+| **Code** | Programming and execution data | StarCoder, CodeParrot |
 
 ## Project Structure
 
