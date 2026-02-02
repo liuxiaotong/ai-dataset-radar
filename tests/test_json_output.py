@@ -135,7 +135,9 @@ class TestJSONSchema:
 
         summary = output["summary"]
         assert "total_datasets" in summary
-        assert "total_repos" in summary
+        assert "total_github_orgs" in summary
+        assert "total_github_repos" in summary
+        assert "total_github_repos_high_relevance" in summary
         assert "total_papers" in summary
         assert "total_blog_posts" in summary
 
@@ -179,11 +181,16 @@ class TestJSONSchema:
         data = {
             "datasets": [],
             "papers": [],
-            "github_activity": [{"id": "1"}, {"id": "2"}, {"id": "3"}, {"id": "4"}],
+            "github_activity": [
+                {"org": "org1", "repos_updated": [{"name": "r1"}, {"name": "r2"}]},
+                {"org": "org2", "repos_updated": [{"name": "r3", "relevance": "high"}]},
+            ],
             "blog_posts": [],
         }
         output = formatter._format_json_output(data)
-        assert output["summary"]["total_repos"] == 4
+        assert output["summary"]["total_github_orgs"] == 2
+        assert output["summary"]["total_github_repos"] == 3
+        assert output["summary"]["total_github_repos_high_relevance"] == 1
 
     def test_blog_posts_count_correct(self, formatter):
         """Test that blog post count aggregates articles."""
@@ -200,7 +207,7 @@ class TestJSONSchema:
         assert output["summary"]["total_blog_posts"] == 3
 
     def test_has_period(self, formatter):
-        """Test that output has period section."""
+        """Test that output has period section with calculated start."""
         data = {
             "period": {"days": 7, "start": None, "end": "2024-01-01"},
             "datasets": [],
@@ -211,18 +218,25 @@ class TestJSONSchema:
         output = formatter._format_json_output(data)
         assert "period" in output
         assert output["period"]["days"] == 7
+        # start should be calculated, not null
+        assert output["period"]["start"] is not None
+        assert output["period"]["end"] is not None
 
-    def test_preserves_raw_data(self, formatter):
-        """Test that raw data is preserved in output."""
+    def test_preserves_allowed_data(self, formatter):
+        """Test that allowed fields are preserved in output."""
         data = {
-            "datasets": [{"id": "ds1", "custom_field": "value"}],
+            "datasets": [{"id": "ds1", "author": "test_org", "description": "A test dataset"}],
             "papers": [{"id": "p1", "title": "Test"}],
             "github_activity": [{"id": "r1", "stars": 100}],
             "blog_posts": [],
         }
         output = formatter._format_json_output(data)
 
-        assert output["datasets"][0]["custom_field"] == "value"
+        # Datasets: only allowed fields are preserved (id, author, description are allowed)
+        assert output["datasets"][0]["id"] == "ds1"
+        assert output["datasets"][0]["author"] == "test_org"
+        assert output["datasets"][0]["description"] == "A test dataset"
+        # Papers and github_activity are passed through as-is
         assert output["papers"][0]["title"] == "Test"
         assert output["github_activity"][0]["stars"] == 100
 
@@ -239,13 +253,17 @@ class TestFormatSummary:
         data = {
             "datasets": [{"id": "1"}, {"id": "2"}],
             "papers": [{"id": "1"}],
-            "github_activity": [{"id": "1"}, {"id": "2"}, {"id": "3"}],
+            "github_activity": [
+                {"org": "org1", "repos_updated": [{"name": "r1", "relevance": "high"}]},
+                {"org": "org2", "repos_updated": [{"name": "r2"}, {"name": "r3"}]},
+            ],
             "blog_posts": [{"articles": [{"t": 1}]}],
         }
         summary = formatter.format_summary(data)
 
         assert "2 datasets" in summary
         assert "3 repos" in summary
+        assert "1 high relevance" in summary
         assert "1 papers" in summary
         assert "1 blog posts" in summary
 
