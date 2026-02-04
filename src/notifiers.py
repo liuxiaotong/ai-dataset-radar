@@ -508,7 +508,11 @@ class BusinessIntelNotifier:
 
 
 class EmailNotifier:
-    """Send email notifications via SMTP."""
+    """Send email notifications via SMTP.
+
+    Security note: Password should be passed via environment variable reference
+    (e.g., ${SMTP_PASSWORD}) and will be resolved at send time, not stored.
+    """
 
     def __init__(
         self,
@@ -522,9 +526,16 @@ class EmailNotifier:
         self.smtp_server = smtp_server
         self.smtp_port = smtp_port
         self.username = username
-        self.password = password
+        # Store password reference, not the actual password
+        # If it's an env var reference like ${SMTP_PASSWORD}, it will be resolved at send time
+        self._password_ref = password
         self.from_addr = from_addr
         self.to_addrs = to_addrs
+
+    @property
+    def password(self) -> str:
+        """Get password, expanding environment variables if needed."""
+        return expand_env_vars(self._password_ref)
 
     def notify(self, data: dict) -> bool:
         """Send email notification with report.
@@ -601,11 +612,12 @@ class WebhookNotifier:
             return False
 
 
-def expand_env_vars(value: str) -> str:
+def expand_env_vars(value: str, warn_missing: bool = True) -> str:
     """Expand environment variables in a string.
 
     Args:
         value: String potentially containing ${VAR} patterns.
+        warn_missing: If True, print warning for missing env vars.
 
     Returns:
         String with environment variables expanded.
@@ -616,12 +628,22 @@ def expand_env_vars(value: str) -> str:
     import re
 
     pattern = r"\$\{([^}]+)\}"
+    missing_vars = []
 
     def replace(match):
         var_name = match.group(1)
-        return os.environ.get(var_name, "")
+        env_value = os.environ.get(var_name)
+        if env_value is None:
+            missing_vars.append(var_name)
+            return ""
+        return env_value
 
-    return re.sub(pattern, replace, value)
+    result = re.sub(pattern, replace, value)
+
+    if warn_missing and missing_vars:
+        print(f"Warning: Missing environment variables: {', '.join(missing_vars)}")
+
+    return result
 
 
 def create_notifiers(config: dict, full_config: Optional[dict] = None) -> list:

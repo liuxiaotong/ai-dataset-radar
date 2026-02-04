@@ -32,9 +32,24 @@ from output_formatter import DualOutputFormatter
 
 
 def load_config(config_path: str = "config.yaml") -> dict:
-    """Load configuration from YAML file."""
-    with open(config_path, "r", encoding="utf-8") as f:
-        return yaml.safe_load(f)
+    """Load configuration from YAML file.
+
+    Args:
+        config_path: Path to the YAML config file.
+
+    Returns:
+        Configuration dictionary, or empty dict if file is invalid.
+    """
+    try:
+        with open(config_path, "r", encoding="utf-8") as f:
+            config = yaml.safe_load(f)
+            return config if config else {}
+    except FileNotFoundError:
+        print(f"Warning: Config file not found: {config_path}, using defaults")
+        return {}
+    except yaml.YAMLError as e:
+        print(f"Warning: Invalid YAML in {config_path}: {e}, using defaults")
+        return {}
 
 
 def fetch_dataset_readmes(datasets: list[dict], hf_scraper: HuggingFaceScraper) -> list[dict]:
