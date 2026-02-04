@@ -142,7 +142,7 @@ class HFPapersScraper:
             if published_at:
                 try:
                     published_at = datetime.fromisoformat(published_at.replace("Z", "+00:00"))
-                except:
+                except (ValueError, TypeError):
                     published_at = None
 
             return {
