@@ -19,18 +19,16 @@ Track datasets, papers, and announcements from 30+ AI labs and data vendors acro
 
 ## What You Get / 输出概览
 
-```
-┌─────────────────────────────────────────────────────────────────┐
-│  15 datasets │ 137 repos │ 21 papers │ 56 blog posts           │
-│  15 个数据集 │ 137 个仓库 │ 21 篇论文 │ 56 篇博客               │
-├─────────────────────────────────────────────────────────────────┤
-│  Sources / 数据源:                                              │
-│  • HuggingFace: OpenAI, Google, Meta, Qwen, DeepSeek...        │
-│  • Blogs: OpenAI, Anthropic, Mistral, Scale AI, Stanford HAI   │
-│  • GitHub: argilla-io, scaleapi, openai, deepseek-ai...        │
-│  • Papers: RLHF, instruction tuning, dataset construction      │
-└─────────────────────────────────────────────────────────────────┘
-```
+| Source | What's Tracked |
+|--------|----------------|
+| **HuggingFace** | New datasets from 30+ AI labs (OpenAI, Google, Meta, Qwen, DeepSeek...) |
+| **Blogs** | 17 sources: OpenAI, Anthropic, Mistral, Scale AI, Stanford HAI, Tencent... |
+| **GitHub** | Repo activity from data vendors & AI labs (argilla-io, scaleapi, openai...) |
+| **Papers** | arXiv + HuggingFace Papers filtered by RLHF, SFT, dataset keywords |
+
+**Output formats / 输出格式:**
+- `intel_report_YYYY-MM-DD.md` — Markdown for humans
+- `intel_report_YYYY-MM-DD.json` — Structured JSON for LLMs
 
 ---
 
