@@ -91,7 +91,7 @@ class ModelCardAnalyzer:
             if response.status_code == 200:
                 return response.text
         except requests.RequestException:
-            pass
+            pass  # Network errors expected for some models, return None
 
         return None
 

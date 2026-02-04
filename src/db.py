@@ -6,6 +6,27 @@ from datetime import datetime, timedelta
 from pathlib import Path
 from typing import Optional
 
+# Valid column names for dynamic SQL (whitelist for security)
+VALID_GROWTH_COLUMNS = {"downloads_7d_growth", "downloads_30d_growth"}
+
+
+def _get_growth_column(days: int) -> str:
+    """Get validated growth column name.
+
+    Args:
+        days: 7 or 30 for corresponding growth column.
+
+    Returns:
+        Valid column name.
+
+    Raises:
+        ValueError: If days is not 7 or 30.
+    """
+    if days not in (7, 30):
+        raise ValueError(f"Invalid days value: {days}, must be 7 or 30")
+    column = "downloads_7d_growth" if days == 7 else "downloads_30d_growth"
+    return column
+
 
 class RadarDatabase:
     """SQLite database for storing radar data and historical trends."""
@@ -474,7 +495,7 @@ class RadarDatabase:
         cursor = conn.cursor()
         today = datetime.now().strftime("%Y-%m-%d")
 
-        growth_column = "downloads_7d_growth" if days == 7 else "downloads_30d_growth"
+        growth_column = _get_growth_column(days)
 
         cursor.execute(
             f"""
@@ -556,7 +577,7 @@ class RadarDatabase:
         cursor = conn.cursor()
         today = datetime.now().strftime("%Y-%m-%d")
 
-        growth_column = "downloads_7d_growth" if days == 7 else "downloads_30d_growth"
+        growth_column = _get_growth_column(days)
 
         cursor.execute(
             f"""
