@@ -110,6 +110,25 @@ async def list_tools():
                 "properties": {}
             }
         ),
+        Tool(
+            name="radar_blogs",
+            description="获取最新博客文章（来自 OpenAI、Anthropic、Mistral、Scale AI、Stanford HAI 等 17 个博客源）",
+            inputSchema={
+                "type": "object",
+                "properties": {
+                    "source": {
+                        "type": "string",
+                        "description": "按博客源过滤，如 'OpenAI Blog', 'Mistral AI', 'Stanford HAI'",
+                        "default": ""
+                    },
+                    "limit": {
+                        "type": "integer",
+                        "description": "返回数量限制",
+                        "default": 20
+                    }
+                }
+            }
+        ),
     ]
 
 
@@ -338,6 +357,65 @@ async def call_tool(name: str, arguments: dict):
         lines.append("\n### 关注的数据类型")
         for dtype in list(priority_types.keys())[:8]:
             lines.append(f"- {dtype}")
+
+        return [TextContent(type="text", text="\n".join(lines))]
+
+    elif name == "radar_blogs":
+        report = get_latest_report()
+        if not report:
+            return [TextContent(type="text", text="没有找到报告，请先运行 `radar_scan`。")]
+
+        blog_posts = report.get("blog_posts", [])
+        source_filter = arguments.get("source", "")
+        limit = arguments.get("limit", 20)
+
+        lines = ["**博客文章动态:**\n"]
+        total_articles = 0
+        shown_articles = 0
+
+        for blog in blog_posts:
+            source = blog.get("source", "unknown")
+            articles = blog.get("articles", [])
+
+            if not articles:
+                continue
+
+            # Filter by source if specified
+            if source_filter and source_filter.lower() not in source.lower():
+                continue
+
+            total_articles += len(articles)
+
+            lines.append(f"### {source} ({len(articles)} 篇)")
+            for article in articles[:5]:  # Max 5 per source
+                if shown_articles >= limit:
+                    break
+                title = article.get("title", "无标题")[:60]
+                url = article.get("url", "")
+                date = article.get("date", "")
+                signals = article.get("signals", [])
+
+                lines.append(f"- [{title}]({url})")
+                if date or signals:
+                    meta = []
+                    if date:
+                        meta.append(date)
+                    if signals:
+                        meta.append(f"信号: {', '.join(signals[:3])}")
+                    lines.append(f"  - {' | '.join(meta)}")
+                shown_articles += 1
+
+            lines.append("")
+
+            if shown_articles >= limit:
+                break
+
+        if total_articles == 0:
+            return [TextContent(type="text", text=f"没有找到{'来自 ' + source_filter + ' 的' if source_filter else ''}博客文章。")]
+
+        # Add summary
+        active_sources = len([b for b in blog_posts if b.get("articles")])
+        lines.insert(1, f"*共 {active_sources} 个活跃博客源，{total_articles} 篇文章*\n")
 
         return [TextContent(type="text", text="\n".join(lines))]
 
