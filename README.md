@@ -7,28 +7,34 @@
   <p align="center">
     <a href="https://opensource.org/licenses/MIT"><img src="https://img.shields.io/badge/License-MIT-yellow.svg" alt="License: MIT"></a>
     <a href="https://www.python.org/downloads/"><img src="https://img.shields.io/badge/python-3.10+-blue.svg" alt="Python 3.10+"></a>
-    <a href="#mcp-server"><img src="https://img.shields.io/badge/MCP-Server-purple.svg" alt="MCP Server"></a>
+    <a href="#mcp-server"><img src="https://img.shields.io/badge/MCP-7_Tools-purple.svg" alt="MCP Server"></a>
   </p>
 </p>
 
 ---
 
-Track datasets, papers, and announcements from 30+ AI labs and data vendors across HuggingFace, GitHub, arXiv, and company blogs.
+**What is this?** A monitoring system that tracks AI training data activity from 30+ organizations. It aggregates datasets from HuggingFace, repos from GitHub, papers from arXiv, and blog posts from 17 company blogs — then outputs both human-readable Markdown and structured JSON for LLM consumption.
 
-追踪 30+ AI 实验室和数据供应商在 HuggingFace、GitHub、arXiv 和公司博客上发布的数据集、论文和公告。
+**这是什么？** 一个监控系统，追踪 30+ 组织的 AI 训练数据动态。它聚合 HuggingFace 数据集、GitHub 仓库、arXiv 论文和 17 个公司博客的文章，输出人类可读的 Markdown 和供 LLM 使用的结构化 JSON。
+
+**Use cases / 使用场景:**
+- Stay updated on new datasets from frontier labs (数据集追踪)
+- Monitor competitor announcements (竞品动态)
+- Feed structured data to Claude/GPT for analysis (喂给大模型分析)
+- Research what data others are using for training (训练数据研究)
 
 ## What You Get / 输出概览
 
-| Source | What's Tracked |
-|--------|----------------|
-| **HuggingFace** | New datasets from 30+ AI labs (OpenAI, Google, Meta, Qwen, DeepSeek...) |
-| **Blogs** | 17 sources: OpenAI, Anthropic, Mistral, Scale AI, Stanford HAI, Tencent... |
-| **GitHub** | Repo activity from data vendors & AI labs (argilla-io, scaleapi, openai...) |
-| **Papers** | arXiv + HuggingFace Papers filtered by RLHF, SFT, dataset keywords |
+| Source | Coverage | What's Tracked |
+|--------|----------|----------------|
+| **HuggingFace** | 30+ orgs | Datasets from OpenAI, Google, Meta, Qwen, DeepSeek, Mistral... |
+| **Blogs** | 17 sources | OpenAI, Anthropic, DeepMind, Mistral, Scale AI, Stanford HAI, Tencent... |
+| **GitHub** | 15+ orgs | Repos from argilla-io, scaleapi, openai, anthropics, deepseek-ai... |
+| **Papers** | 2 sources | arXiv (cs.CL/AI/LG) + HuggingFace Daily Papers |
 
 **Output formats / 输出格式:**
-- `intel_report_YYYY-MM-DD.md` — Markdown for humans
-- `intel_report_YYYY-MM-DD.json` — Structured JSON for LLMs
+- `intel_report_YYYY-MM-DD.md` — Human-readable report
+- `intel_report_YYYY-MM-DD.json` — Structured data for LLM agents
 
 ---
 
@@ -275,6 +281,6 @@ MIT — see [LICENSE](LICENSE)
 ---
 
 <p align="center">
-  <sub>Built for the AI data community</sub><br>
-  <sub>为 AI 数据社区而建</sub>
+  <sub>Built for AI researchers, data teams, and anyone tracking the training data landscape</sub><br>
+  <sub>为 AI 研究者、数据团队和所有关注训练数据动态的人而建</sub>
 </p>
