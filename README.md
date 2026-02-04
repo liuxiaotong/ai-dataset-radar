@@ -75,7 +75,46 @@ Add to `~/Library/Application Support/Claude/claude_desktop_config.json`:
 }
 ```
 
-Then ask Claude: *"Scan for new AI datasets"* / 然后问 Claude：*"扫描新的 AI 数据集"*
+Then ask Claude in natural language / 然后用自然语言问 Claude：
+
+| 你说 | AI 做 |
+|------|-------|
+| "扫描最近的数据集动态" | 运行扫描，返回摘要 |
+| "有哪些合成数据集？" | 筛选 synthetic 类型 |
+| "分析一下 allenai/Dolci-Instruct-SFT" | 调用分析工具 |
+
+### AI Native Workflow (配合 DataRecipe)
+
+联合 [DataRecipe](https://github.com/liuxiaotong/data-recipe) 实现完整的数据集情报 + 逆向分析工作流：
+
+```json
+{
+  "mcpServers": {
+    "ai-dataset-radar": {
+      "command": "/path/to/ai-dataset-radar/.venv/bin/python",
+      "args": ["/path/to/ai-dataset-radar/mcp_server/server.py"]
+    },
+    "datarecipe": {
+      "command": "uv",
+      "args": ["--directory", "/path/to/data-recipe", "run", "datarecipe-mcp"]
+    }
+  }
+}
+```
+
+**工作流示例 / Workflow Examples:**
+
+```
+用户: "扫描这周的数据集，找一个 SFT 类型的深度分析"
+
+AI 自动执行:
+  1. radar_scan → 获取 15 个数据集
+  2. 筛选 category=sft → allenai/Dolci-Instruct-SFT
+  3. datarecipe analyze → 生成逆向分析报告
+  4. 返回：构造方法、成本估算、复刻指南
+```
+
+**这是 AI Native 的工作方式** — 用自然语言表达意图，AI 协调多个工具完成任务。
 
 ### Claude Code
 
@@ -207,6 +246,26 @@ Set `GITHUB_TOKEN` environment variable for higher API rate limits.
 ## Architecture / 架构
 
 ```
+┌─────────────────────────────────────────────────────────────┐
+│                      Claude Desktop                          │
+│                    (自然语言交互层)                           │
+└─────────────────┬───────────────────────┬───────────────────┘
+                  │                       │
+                  ▼                       ▼
+┌─────────────────────────┐   ┌─────────────────────────┐
+│   ai-dataset-radar      │   │      data-recipe        │
+│   (情报收集)             │ → │     (逆向分析)          │
+│                         │   │                         │
+│  • HuggingFace 数据集    │   │  • 构造方法分析         │
+│  • GitHub 仓库活动       │   │  • 成本估算             │
+│  • arXiv 论文           │   │  • 复刻指南             │
+│  • 公司博客             │   │  • Prompt 模板提取      │
+└─────────────────────────┘   └─────────────────────────┘
+```
+
+**项目结构 / Project Structure:**
+
+```
 ai-dataset-radar/
 ├── src/
 │   ├── main_intel.py        # Entry point
@@ -254,12 +313,12 @@ ai-dataset-radar/
 
 - [x] Multi-source aggregation (HF, GitHub, arXiv, blogs)
 - [x] Dual output format (Markdown + JSON)
-- [x] MCP Server for Claude Desktop
+- [x] MCP Server for Claude Desktop (7 tools)
 - [x] Playwright support for JS-rendered blogs
 - [x] 17 active blog sources across US/China/Research
+- [x] AI Native workflow with DataRecipe integration
 - [ ] Scheduled execution & alerts
 - [ ] Web dashboard
-- [ ] LLM-powered summarization
 
 ---
 
