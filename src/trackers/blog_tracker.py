@@ -361,7 +361,31 @@ class BlogTracker:
 
                 # First pass: collect metadata from list page
                 items_data = []
-                for i, elem in enumerate(elements[:15]):
+                seen_links = set()  # Deduplicate by link
+
+                for i, elem in enumerate(elements[:30]):  # Check more elements for dedup
+                    # Check if the element itself is an anchor tag
+                    tag_name = elem.evaluate("el => el.tagName.toLowerCase()")
+                    is_anchor = tag_name == "a"
+
+                    # Extract link first (for deduplication)
+                    link = ""
+                    if is_anchor:
+                        link = elem.get_attribute("href") or ""
+                    else:
+                        link_elem = elem.query_selector("a[href]")
+                        if link_elem:
+                            link = link_elem.get_attribute("href") or ""
+
+                    if link and not link.startswith("http"):
+                        link = urljoin(url, link)
+
+                    # Skip if link is just the base URL or we've seen it
+                    if link and (link.rstrip("/") == url.rstrip("/") or link in seen_links):
+                        continue
+                    if link:
+                        seen_links.add(link)
+
                     # Extract title
                     title = ""
                     for title_sel in [".blog-title", "h1", "h2", "h3", ".title", "[class*='title']"]:
@@ -371,8 +395,20 @@ class BlogTracker:
                             if title and len(title) > 5:
                                 break
 
+                    # If no title found in child elements, use element's own text
                     if not title:
+                        title = elem.inner_text().strip()
+                        # Clean up: take first line if multi-line
+                        if "\n" in title:
+                            title = title.split("\n")[0].strip()
+
+                    # Skip generic titles
+                    if not title or len(title) < 5 or title.lower() in ["read more", "read post", "learn more"]:
                         continue
+
+                    # Stop after collecting 15 valid items
+                    if len(items_data) >= 15:
+                        break
 
                     # Extract date
                     date_str = ""
@@ -380,14 +416,6 @@ class BlogTracker:
                     if date_elem:
                         date_str = date_elem.get_attribute("datetime") or date_elem.inner_text().strip()
                         date_str = self._parse_date(date_str)
-
-                    # Check if there's a direct link
-                    link = ""
-                    link_elem = elem.query_selector("a[href]")
-                    if link_elem:
-                        link = link_elem.get_attribute("href") or ""
-                        if link and not link.startswith("http"):
-                            link = urljoin(url, link)
 
                     # Extract summary
                     summary = ""
@@ -402,8 +430,8 @@ class BlogTracker:
                     items_data.append({
                         "index": i,
                         "title": title,
-                        "date": date_str,
                         "link": link,
+                        "date": date_str,
                         "summary": summary,
                     })
 
