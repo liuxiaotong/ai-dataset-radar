@@ -336,7 +336,7 @@ class BlogTracker:
             Tuple of (articles list, error message or None).
         """
         try:
-            from playwright.sync_api import sync_playwright
+            from playwright.sync_api import sync_playwright, TimeoutError as PlaywrightTimeout
         except ImportError:
             return [], "Playwright not installed. Run: pip install playwright && playwright install chromium"
 
@@ -353,69 +353,95 @@ class BlogTracker:
                 page.goto(url, wait_until="networkidle")
                 page.wait_for_timeout(2000)  # Extra wait for dynamic content
 
-                # Get page content
-                html = page.content()
+                # Find all article elements
+                elements = page.query_selector_all(selector)
+                if not elements:
+                    browser.close()
+                    return [], f"No elements found with selector: {selector}"
+
+                # First pass: collect metadata from list page
+                items_data = []
+                for i, elem in enumerate(elements[:15]):
+                    # Extract title
+                    title = ""
+                    for title_sel in [".blog-title", "h1", "h2", "h3", ".title", "[class*='title']"]:
+                        title_elem = elem.query_selector(title_sel)
+                        if title_elem:
+                            title = title_elem.inner_text().strip()
+                            if title and len(title) > 5:
+                                break
+
+                    if not title:
+                        continue
+
+                    # Extract date
+                    date_str = ""
+                    date_elem = elem.query_selector(".blog-item-date, time, .date, [class*='date'], [datetime]")
+                    if date_elem:
+                        date_str = date_elem.get_attribute("datetime") or date_elem.inner_text().strip()
+                        date_str = self._parse_date(date_str)
+
+                    # Check if there's a direct link
+                    link = ""
+                    link_elem = elem.query_selector("a[href]")
+                    if link_elem:
+                        link = link_elem.get_attribute("href") or ""
+                        if link and not link.startswith("http"):
+                            link = urljoin(url, link)
+
+                    # Extract summary
+                    summary = ""
+                    for sum_sel in [".blog-desc", "p", ".summary", ".excerpt", "[class*='desc']"]:
+                        sum_elem = elem.query_selector(sum_sel)
+                        if sum_elem:
+                            summary = sum_elem.inner_text().strip()
+                            summary = self._validate_summary(summary, title)
+                            if summary:
+                                break
+
+                    items_data.append({
+                        "index": i,
+                        "title": title,
+                        "date": date_str,
+                        "link": link,
+                        "summary": summary,
+                    })
+
+                # Second pass: for items without links, click to discover URL
+                for item in items_data:
+                    if not item["link"]:
+                        try:
+                            # Re-query elements (page state may have changed)
+                            elements = page.query_selector_all(selector)
+                            if item["index"] < len(elements):
+                                elem = elements[item["index"]]
+                                # Click and wait for navigation
+                                try:
+                                    with page.expect_navigation(timeout=5000):
+                                        elem.click()
+                                    # Capture the new URL
+                                    item["link"] = page.url
+                                    # Go back to list page
+                                    page.go_back(wait_until="networkidle")
+                                    page.wait_for_timeout(1000)
+                                except PlaywrightTimeout:
+                                    # No navigation occurred, use list page URL
+                                    item["link"] = url
+                        except Exception:
+                            item["link"] = url
+
                 browser.close()
 
-            soup = BeautifulSoup(html, "html.parser")
-            elements = soup.select(selector)[:15]
-
-            if not elements:
-                return [], f"No elements found with selector: {selector}"
-
-            for elem in elements:
-                # Extract title
-                title = ""
-                for title_sel in [".blog-title", "h1", "h2", "h3", ".title", "[class*='title']", "a"]:
-                    title_elem = elem.select_one(title_sel)
-                    if title_elem:
-                        title = title_elem.get_text(strip=True)
-                        if title and len(title) > 5:
-                            break
-
-                if not title:
-                    continue
-
-                # Extract link
-                link = ""
-                link_elem = elem.select_one("a[href]")
-                if not link_elem:
-                    link_elem = elem.find_parent("a")
-                if link_elem:
-                    link = link_elem.get("href", "")
-                    if link and not link.startswith("http"):
-                        link = urljoin(url, link)
-
-                # If no link found, use the page URL as fallback
-                if not link:
-                    link = url
-
-                # Extract date
-                date_str = ""
-                date_elem = elem.select_one(".blog-item-date, time, .date, [class*='date'], [datetime]")
-                if date_elem:
-                    date_str = date_elem.get("datetime", "") or date_elem.get_text(strip=True)
-                    date_str = self._parse_date(date_str)
-
-                # Extract summary
-                summary = ""
-                for sum_sel in [".blog-desc", "p", ".summary", ".excerpt", "[class*='desc']"]:
-                    sum_elem = elem.select_one(sum_sel)
-                    if sum_elem:
-                        summary = sum_elem.get_text(strip=True)
-                        summary = self._validate_summary(summary, title)
-                        if summary:
-                            break
-
-                article = {
-                    "title": title,
-                    "url": link,
-                    "date": date_str,
-                    "summary": summary[:300] if summary else "",
-                }
-
-                article["signals"] = self._extract_signals(article)
-                articles.append(article)
+                # Build article list
+                for item in items_data:
+                    article = {
+                        "title": item["title"],
+                        "url": item["link"] or url,
+                        "date": item["date"],
+                        "summary": item["summary"][:300] if item["summary"] else "",
+                    }
+                    article["signals"] = self._extract_signals(article)
+                    articles.append(article)
 
             if not articles:
                 return [], "No valid articles extracted from browser render"
