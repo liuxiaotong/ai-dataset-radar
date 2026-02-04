@@ -225,6 +225,7 @@ ai-dataset-radar/
 | `radar_datasets` | List datasets by category |
 | `radar_github` | View GitHub activity |
 | `radar_papers` | View recent papers |
+| `radar_blogs` | View blog articles from 17 sources |
 | `radar_config` | Show monitoring configuration |
 
 ---
