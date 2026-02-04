@@ -18,11 +18,17 @@ from bs4 import BeautifulSoup
 
 # Signal keywords for detecting relevant articles
 SIGNAL_KEYWORDS = [
+    # Data & Training
     "rlhf", "human feedback", "preference", "annotation", "labeling",
     "data quality", "evaluation", "benchmark", "dataset", "training data",
     "fine-tuning", "instruction", "crowdsourcing", "data collection",
     "synthetic data", "reward model", "alignment", "llm", "language model",
-    "product launch", "release", "announcing", "introducing"
+    # Research announcements
+    "product launch", "release", "announcing", "introducing",
+    # AI Research topics (Chinese labs)
+    "reasoning", "context", "learning", "model", "multimodal", "vision",
+    "agent", "tool", "code", "math", "science", "knowledge",
+    "open source", "开源", "发布", "数据集", "训练", "模型",
 ]
 
 # Common RSS feed paths to try
@@ -316,6 +322,109 @@ class BlogTracker:
 
         return articles, None
 
+    def scrape_with_browser(
+        self, url: str, selector: str, days: int = 7
+    ) -> tuple[list[dict], Optional[str]]:
+        """Scrape JavaScript-rendered page using Playwright.
+
+        Args:
+            url: Page URL.
+            selector: CSS selector for article elements.
+            days: Look back period in days.
+
+        Returns:
+            Tuple of (articles list, error message or None).
+        """
+        try:
+            from playwright.sync_api import sync_playwright
+        except ImportError:
+            return [], "Playwright not installed. Run: pip install playwright && playwright install chromium"
+
+        articles = []
+        cutoff = datetime.utcnow() - timedelta(days=days)
+
+        try:
+            with sync_playwright() as p:
+                browser = p.chromium.launch(headless=True)
+                page = browser.new_page()
+                page.set_default_timeout(30000)
+
+                # Navigate and wait for content
+                page.goto(url, wait_until="networkidle")
+                page.wait_for_timeout(2000)  # Extra wait for dynamic content
+
+                # Get page content
+                html = page.content()
+                browser.close()
+
+            soup = BeautifulSoup(html, "html.parser")
+            elements = soup.select(selector)[:15]
+
+            if not elements:
+                return [], f"No elements found with selector: {selector}"
+
+            for elem in elements:
+                # Extract title
+                title = ""
+                for title_sel in [".blog-title", "h1", "h2", "h3", ".title", "[class*='title']", "a"]:
+                    title_elem = elem.select_one(title_sel)
+                    if title_elem:
+                        title = title_elem.get_text(strip=True)
+                        if title and len(title) > 5:
+                            break
+
+                if not title:
+                    continue
+
+                # Extract link
+                link = ""
+                link_elem = elem.select_one("a[href]")
+                if not link_elem:
+                    link_elem = elem.find_parent("a")
+                if link_elem:
+                    link = link_elem.get("href", "")
+                    if link and not link.startswith("http"):
+                        link = urljoin(url, link)
+
+                # If no link found, use the page URL as fallback
+                if not link:
+                    link = url
+
+                # Extract date
+                date_str = ""
+                date_elem = elem.select_one(".blog-item-date, time, .date, [class*='date'], [datetime]")
+                if date_elem:
+                    date_str = date_elem.get("datetime", "") or date_elem.get_text(strip=True)
+                    date_str = self._parse_date(date_str)
+
+                # Extract summary
+                summary = ""
+                for sum_sel in [".blog-desc", "p", ".summary", ".excerpt", "[class*='desc']"]:
+                    sum_elem = elem.select_one(sum_sel)
+                    if sum_elem:
+                        summary = sum_elem.get_text(strip=True)
+                        summary = self._validate_summary(summary, title)
+                        if summary:
+                            break
+
+                article = {
+                    "title": title,
+                    "url": link,
+                    "date": date_str,
+                    "summary": summary[:300] if summary else "",
+                }
+
+                article["signals"] = self._extract_signals(article)
+                articles.append(article)
+
+            if not articles:
+                return [], "No valid articles extracted from browser render"
+
+            return articles, None
+
+        except Exception as e:
+            return [], f"Browser scrape error: {e}"
+
     def _clean_html(self, text: str) -> str:
         """Remove HTML tags from text."""
         if not text:
@@ -441,6 +550,13 @@ class BlogTracker:
         if not articles and blog_type in ("auto", "scrape"):
             selector = blog_config.get("selector", "article, [class*='post'], [class*='blog']")
             articles, error = self.scrape_blog(url, selector, days)
+
+        # Strategy 5: Use Playwright for JavaScript-rendered pages
+        if not articles and blog_type in ("auto", "scrape", "browser"):
+            selector = blog_config.get("selector", "article, [class*='post'], [class*='blog']")
+            articles, error = self.scrape_with_browser(url, selector, days)
+            if articles:
+                result["render_method"] = "browser"
 
         # Process results
         if articles:
