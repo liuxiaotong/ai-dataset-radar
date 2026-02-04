@@ -15,6 +15,10 @@ import feedparser
 import requests
 from bs4 import BeautifulSoup
 
+from utils.logging_config import get_logger
+
+logger = get_logger("blog_tracker")
+
 
 # Signal keywords for detecting relevant articles
 SIGNAL_KEYWORDS = [
@@ -639,10 +643,10 @@ class BlogTracker:
         results = []
         seen_urls = set()
 
-        print(f"  Tracking {len(self.blogs)} company blogs...")
+        logger.info("Tracking %d company blogs...", len(self.blogs))
 
         for blog_config in self.blogs:
-            print(f"    Checking {blog_config.get('name', 'Unknown')}...")
+            logger.debug("Checking %s...", blog_config.get('name', 'Unknown'))
             activity = self.fetch_blog(blog_config, days)
 
             # Deduplicate articles by normalized URL
