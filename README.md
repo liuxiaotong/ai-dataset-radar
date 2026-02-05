@@ -9,7 +9,7 @@
 [![MCP](https://img.shields.io/badge/MCP-7_Tools-purple.svg)](#mcp-server)
 [![Tests](https://img.shields.io/badge/tests-198_passed-brightgreen.svg)](#tests)
 
-[快速开始](#快速开始) · [数据源](#数据源) · [MCP Server](#mcp-server) · [配置](#配置) · [输出格式](#输出格式)
+[快速开始](#快速开始) · [数据源](#数据源) · [Agent 集成](#agent-集成) · [MCP Server](#mcp-server) · [配置](#配置)
 
 </div>
 
@@ -174,6 +174,90 @@ Claude 自动执行:
 
 ---
 
+## Agent 集成
+
+Radar 为各类 AI Agent 提供多种集成方式：
+
+| 方式 | 适用场景 | 文件 |
+|------|----------|------|
+| **HTTP API** | LangChain / AutoGPT / 自定义 Agent | `agent/api.py` |
+| **Function Calling** | OpenAI / Anthropic API | `agent/tools.json` |
+| **JSON Schema** | 结构化输出验证 | `agent/schema.json` |
+| **MCP Server** | Claude Desktop | `mcp_server/server.py` |
+| **Agent Prompts** | 快速集成 | `agent/prompts.md` |
+
+### HTTP API (通用)
+
+```bash
+# 启动 API 服务
+pip install fastapi uvicorn
+uvicorn agent.api:app --port 8080
+
+# 调用示例
+curl http://localhost:8080/datasets?category=sft
+curl http://localhost:8080/summary
+```
+
+<details>
+<summary>API 端点列表</summary>
+
+| 端点 | 方法 | 说明 |
+|------|------|------|
+| `/scan` | POST | 运行扫描 |
+| `/summary` | GET | 最新报告摘要 |
+| `/datasets` | GET | 数据集列表 (支持 category, min_downloads 过滤) |
+| `/github` | GET | GitHub 仓库 (支持 relevance 过滤) |
+| `/papers` | GET | 论文列表 (支持 source, dataset_only 过滤) |
+| `/blogs` | GET | 博客文章 |
+| `/schema` | GET | JSON Schema |
+| `/tools` | GET | 函数定义 |
+
+</details>
+
+### OpenAI Function Calling
+
+```python
+import openai
+
+# 加载工具定义
+tools = json.load(open("agent/tools.json"))["tools"]
+
+response = openai.chat.completions.create(
+    model="gpt-4",
+    messages=[{"role": "user", "content": "有什么新的 SFT 数据集?"}],
+    tools=[{"type": "function", "function": t} for t in tools]
+)
+```
+
+### Anthropic Tool Use
+
+```python
+import anthropic
+
+tools = json.load(open("agent/tools.json"))["tools"]
+
+response = anthropic.messages.create(
+    model="claude-sonnet-4-20250514",
+    tools=[{"name": t["name"], "description": t["description"],
+            "input_schema": t["parameters"]} for t in tools],
+    messages=[{"role": "user", "content": "查找偏好数据集"}]
+)
+```
+
+### LangChain
+
+```python
+from langchain.tools import Tool
+
+tools = [
+    Tool(name="radar_datasets",
+         func=lambda x: requests.get(f"http://localhost:8080/datasets?category={x}").json(),
+         description="Get datasets by category: sft|preference|synthetic"),
+]
+```
+
+---
+
 ## MCP Server
 
 7 个工具供 Claude 调用：
@@ -327,23 +411,18 @@ ai-dataset-radar/
 │   ├── scrapers/               # 9 个爬虫
 │   │   ├── base.py             # BaseScraper 抽象类
 │   │   ├── registry.py         # 插件注册系统
-│   │   ├── huggingface.py      # HuggingFace 数据集
-│   │   ├── github.py           # GitHub 仓库
-│   │   ├── github_org.py       # GitHub 组织监控
-│   │   ├── arxiv.py            # arXiv 论文
-│   │   ├── hf_papers.py        # HuggingFace 论文
-│   │   ├── blog_rss.py         # RSS 博客
-│   │   └── ...
+│   │   └── ...                 # huggingface, github, arxiv...
 │   ├── trackers/               # 博客追踪 (RSS + Playwright)
 │   ├── analyzers/              # 数据集分类
-│   ├── utils/                  # 工具模块
-│   │   ├── cache.py            # 文件缓存 (TTL)
-│   │   ├── http.py             # HTTP 重试
-│   │   ├── keywords.py         # 关键词匹配
-│   │   └── logging_config.py   # 日志配置
+│   ├── utils/                  # 工具模块 (cache, http, logging)
 │   ├── db.py                   # SQLite (连接池)
 │   └── output_formatter.py     # Markdown + JSON 输出
-├── mcp_server/server.py        # MCP Server (7 工具)
+├── agent/                      # Agent 集成层
+│   ├── api.py                  # HTTP REST API (FastAPI)
+│   ├── tools.json              # OpenAI/Anthropic 函数定义
+│   ├── schema.json             # JSON Schema
+│   └── prompts.md              # Agent system prompts
+├── mcp_server/server.py        # MCP Server (Claude Desktop)
 ├── tests/                      # 198 个测试
 ├── config.yaml                 # 监控配置
 └── data/reports/               # 生成的报告
@@ -376,6 +455,7 @@ Radar (发现数据集) → Recipe (逆向分析) → 复刻生产
 - [x] 插件化爬虫架构 (9 个爬虫)
 - [x] 性能优化 (并行、缓存、连接池)
 - [x] 完整测试覆盖 (198 个测试)
+- [x] Agent 集成 (HTTP API + Function Calling + Schema)
 - [ ] 定时执行 & 告警
 - [ ] Web 仪表盘
 
