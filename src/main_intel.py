@@ -56,6 +56,40 @@ def load_config(config_path: str = "config.yaml") -> dict:
         return {}
 
 
+
+def validate_config(config: dict) -> list[str]:
+    """Validate configuration has required sections.
+
+    Args:
+        config: Configuration dictionary.
+
+    Returns:
+        List of warning messages.
+    """
+    warnings = []
+
+    if not config:
+        warnings.append("Configuration is empty, using defaults")
+        return warnings
+
+    # Check for watched orgs
+    watched_orgs = config.get("watched_orgs", {})
+    if not watched_orgs:
+        warnings.append("No watched_orgs configured - no HuggingFace orgs will be tracked")
+
+    # Check for watched vendors
+    watched_vendors = config.get("watched_vendors", {})
+    if not watched_vendors:
+        warnings.append("No watched_vendors configured - no vendors will be tracked")
+
+    # Check for blogs
+    blogs = watched_vendors.get("blogs", [])
+    if not blogs:
+        warnings.append("No blogs configured - blog tracking disabled")
+
+    return warnings
+
+
 def fetch_dataset_readmes(datasets: list[dict], hf_scraper: HuggingFaceScraper) -> list[dict]:
     """Fetch README content for datasets to improve classification.
 

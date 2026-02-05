@@ -13,6 +13,10 @@ from datetime import datetime, timedelta
 from typing import Optional
 import requests
 
+from utils.logging_config import get_logger
+
+logger = get_logger(__name__)
+
 
 class SemanticScholarScraper:
     """Scraper for high-citation dataset papers using Semantic Scholar API."""
@@ -89,18 +93,18 @@ class SemanticScholarScraper:
                     # Rate limited - exponential backoff
                     wait_time = (2 ** attempt) * 5 + random.uniform(1, 3)
                     if attempt < max_retries:
-                        print(f"  Rate limited, waiting {wait_time:.1f}s (attempt {attempt + 1}/{max_retries + 1})")
+                        logger.info("  Rate limited, waiting %.1fs (attempt %s/%s)", wait_time, attempt + 1, max_retries + 1)
                         time.sleep(wait_time)
                         continue
                     else:
-                        print(f"  Rate limit exceeded after {max_retries + 1} attempts")
+                        logger.info("  Rate limit exceeded after %s attempts", max_retries + 1)
                         return None
 
                 elif response.status_code == 504:
                     # Gateway timeout - retry with backoff
                     wait_time = (2 ** attempt) * 2
                     if attempt < max_retries:
-                        print(f"  Gateway timeout, retrying in {wait_time}s...")
+                        logger.info("  Gateway timeout, retrying in %.1fs...", wait_time)
                         time.sleep(wait_time)
                         continue
 
@@ -109,17 +113,17 @@ class SemanticScholarScraper:
 
             except requests.exceptions.Timeout:
                 if attempt < max_retries:
-                    print(f"  Request timeout, retrying...")
+                    logger.info("  Request timeout, retrying...")
                     time.sleep(2 ** attempt)
                     continue
-                print("  Request timeout after all retries")
+                logger.info("  Request timeout after all retries")
                 return None
 
             except requests.RequestException as e:
                 if attempt < max_retries:
                     time.sleep(2 ** attempt)
                     continue
-                print(f"  Request error: {e}")
+                logger.info("  Request error: %s", e)
                 return None
 
         return None
@@ -142,7 +146,7 @@ class SemanticScholarScraper:
         ]
 
         for i, query in enumerate(search_queries):
-            print(f"  Searching: {query[:40]}... ({i+1}/{len(search_queries)})")
+            logger.info("  Searching: %s... (%s/%s)", query[:40], i+1, len(search_queries))
             papers = self._search_papers(query)
             all_papers.extend(papers)
 
@@ -154,11 +158,11 @@ class SemanticScholarScraper:
                 seen_ids.add(paper["id"])
                 unique_papers.append(paper)
 
-        print(f"  Total unique papers: {len(unique_papers)}")
+        logger.info("  Total unique papers: %s", len(unique_papers))
 
         # Filter by citation criteria
         filtered = self._filter_by_impact(unique_papers)
-        print(f"  Papers meeting impact criteria: {len(filtered)}")
+        logger.info("  Papers meeting impact criteria: %s", len(filtered))
 
         # Sort by value (citation count + growth)
         filtered.sort(
@@ -275,7 +279,7 @@ class SemanticScholarScraper:
                 "created_at": pub_date or datetime.now().isoformat(),
             }
         except Exception as e:
-            print(f"Error parsing paper: {e}")
+            logger.info("Error parsing paper: %s", e)
             return None
 
     def _filter_by_impact(self, papers: list[dict]) -> list[dict]:

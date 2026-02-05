@@ -8,6 +8,10 @@ from typing import Optional
 from .base import BaseScraper
 from .registry import register_scraper
 
+from utils.logging_config import get_logger
+
+logger = get_logger(__name__)
+
 
 @register_scraper("huggingface")
 class HuggingFaceScraper(BaseScraper):
@@ -56,7 +60,7 @@ class HuggingFaceScraper(BaseScraper):
             response.raise_for_status()
             datasets = response.json()
         except requests.RequestException as e:
-            print(f"Error fetching Hugging Face datasets: {e}")
+            logger.info("Error fetching Hugging Face datasets: %s", e)
             return []
 
         results = []
@@ -114,7 +118,7 @@ class HuggingFaceScraper(BaseScraper):
                 "source_url": dataset_url,
             }
         except Exception as e:
-            print(f"Error parsing dataset {ds.get('id', 'unknown')}: {e}")
+            logger.info("Error parsing dataset %s: %s", ds.get('id', 'unknown'), e)
             return None
 
     def fetch_trending_models(
@@ -143,7 +147,7 @@ class HuggingFaceScraper(BaseScraper):
             response.raise_for_status()
             models = response.json()
         except requests.RequestException as e:
-            print(f"Error fetching Hugging Face models: {e}")
+            logger.info("Error fetching Hugging Face models: %s", e)
             return []
 
         results = []
@@ -183,7 +187,7 @@ class HuggingFaceScraper(BaseScraper):
                 "url": f"https://huggingface.co/{model.get('id', '')}",
             }
         except Exception as e:
-            print(f"Error parsing model {model.get('id', 'unknown')}: {e}")
+            logger.info("Error parsing model %s: %s", model.get('id', 'unknown'), e)
             return None
 
     def fetch_model_card(self, model_id: str) -> Optional[dict]:
@@ -202,7 +206,7 @@ class HuggingFaceScraper(BaseScraper):
             response.raise_for_status()
             model_data = response.json()
         except requests.RequestException as e:
-            print(f"Error fetching model card for {model_id}: {e}")
+            logger.info("Error fetching model card for %s: %s", model_id, e)
             return None
 
         # Also try to fetch the README content
@@ -290,7 +294,7 @@ class HuggingFaceScraper(BaseScraper):
             response.raise_for_status()
             return self._parse_dataset(response.json())
         except requests.RequestException as e:
-            print(f"Error fetching dataset {dataset_id}: {e}")
+            logger.info("Error fetching dataset %s: %s", dataset_id, e)
             return None
 
     def fetch_dataset_readme(self, dataset_id: str) -> Optional[str]:

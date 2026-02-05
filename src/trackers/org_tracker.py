@@ -9,6 +9,10 @@ import requests
 from datetime import datetime, timedelta
 from typing import Optional
 
+from utils.logging_config import get_logger
+
+logger = get_logger(__name__)
+
 
 class OrgTracker:
     """Track specific organizations on HuggingFace.
@@ -162,7 +166,7 @@ class OrgTracker:
         }
 
         total_orgs = len(self.watched_orgs)
-        print(f"  Tracking {total_orgs} AI labs...")
+        logger.info("  Tracking %s AI labs...", total_orgs)
 
         for i, (org_name, org_info) in enumerate(self.watched_orgs.items()):
             category = org_info["category"]
@@ -212,7 +216,7 @@ class OrgTracker:
                 results[category][org_name] = org_data
 
             if (i + 1) % 5 == 0:
-                print(f"    Processed {i + 1}/{total_orgs} orgs...")
+                logger.info("    Processed %s/%s orgs...", i + 1, total_orgs)
 
         return results
 
@@ -232,7 +236,7 @@ class OrgTracker:
         }
 
         total_vendors = len(self.watched_vendors)
-        print(f"  Tracking {total_vendors} data vendors...")
+        logger.info("  Tracking %s data vendors...", total_vendors)
 
         for i, (vendor_name, vendor_info) in enumerate(self.watched_vendors.items()):
             tier = vendor_info["tier"]
@@ -273,10 +277,10 @@ class OrgTracker:
         Returns:
             Combined results for labs and vendors.
         """
-        print("Fetching AI lab activity...")
+        logger.info("Fetching AI lab activity...")
         labs = self.fetch_lab_activity(days)
 
-        print("Fetching vendor activity...")
+        logger.info("Fetching vendor activity...")
         vendors = self.fetch_vendor_activity(days)
 
         # Count items
@@ -296,8 +300,8 @@ class OrgTracker:
             for vendor_data in tier.values()
         )
 
-        print(f"  Labs: {lab_datasets} datasets, {lab_models} models")
-        print(f"  Vendors: {vendor_datasets} datasets")
+        logger.info("  Labs: %s datasets, %s models", lab_datasets, lab_models)
+        logger.info("  Vendors: %s datasets", vendor_datasets)
 
         return {
             "labs": labs,
