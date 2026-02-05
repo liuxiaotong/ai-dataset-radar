@@ -2,14 +2,18 @@
 
 import os
 import sqlite3
+import threading
+from contextlib import contextmanager
 from datetime import datetime, timedelta
 from pathlib import Path
 from typing import Optional
 
+from utils.logging_config import get_logger
+
+logger = get_logger("db")
+
 # Valid column names for dynamic SQL (whitelist for security)
 VALID_GROWTH_COLUMNS = {"downloads_7d_growth", "downloads_30d_growth"}
-
-
 def _get_growth_column(days: int) -> str:
     """Get validated growth column name.
 
@@ -26,10 +30,12 @@ def _get_growth_column(days: int) -> str:
         raise ValueError(f"Invalid days value: {days}, must be 7 or 30")
     column = "downloads_7d_growth" if days == 7 else "downloads_30d_growth"
     return column
-
-
 class RadarDatabase:
-    """SQLite database for storing radar data and historical trends."""
+    """SQLite database for storing radar data and historical trends.
+
+    Uses thread-local connections for thread safety and context managers
+    for proper resource cleanup.
+    """
 
     def __init__(self, db_path: str = "data/radar.db"):
         """Initialize database connection.
@@ -38,14 +44,49 @@ class RadarDatabase:
             db_path: Path to SQLite database file.
         """
         self.db_path = db_path
+        self._local = threading.local()
         os.makedirs(os.path.dirname(db_path), exist_ok=True)
         self._init_tables()
 
     def _get_connection(self) -> sqlite3.Connection:
-        """Get a database connection with row factory."""
-        conn = sqlite3.connect(self.db_path)
-        conn.row_factory = sqlite3.Row
-        return conn
+        """Get a thread-local database connection with row factory.
+
+        Reuses existing connection for the current thread if available.
+        """
+        if not hasattr(self._local, 'connection') or self._local.connection is None:
+            self._local.connection = sqlite3.connect(self.db_path)
+            self._local.connection.row_factory = sqlite3.Row
+        return self._local.connection
+
+    @contextmanager
+    def _transaction(self):
+        """Context manager for database transactions.
+
+        Automatically commits on success, rolls back on error.
+        """
+        conn = self._get_connection()
+        try:
+            yield conn
+            conn.commit()
+        except Exception as e:
+            conn.rollback()
+            logger.error("Database transaction failed: %s", e)
+            raise
+
+    def close(self):
+        """Close the thread-local connection if open."""
+        if hasattr(self._local, 'connection') and self._local.connection:
+            self._local.connection.close()
+            self._local.connection = None
+
+    def __enter__(self):
+        """Context manager entry."""
+        return self
+
+    def __exit__(self, exc_type, exc_val, exc_tb):
+        """Context manager exit - close connection."""
+        self.close()
+        return False
 
     def _init_tables(self) -> None:
         """Initialize database tables."""
@@ -180,10 +221,6 @@ class RadarDatabase:
         cursor.execute("CREATE INDEX IF NOT EXISTS idx_models_downloads ON models(downloads DESC)")
         cursor.execute("CREATE INDEX IF NOT EXISTS idx_valuable_datasets_score ON valuable_datasets(value_score DESC)")
         cursor.execute("CREATE INDEX IF NOT EXISTS idx_sota_model_datasets_dataset ON sota_model_datasets(dataset_id)")
-
-        conn.commit()
-        conn.close()
-
     # Dataset operations
     def upsert_dataset(
         self,
@@ -199,31 +236,29 @@ class RadarDatabase:
         Returns:
             The database ID of the dataset.
         """
-        conn = self._get_connection()
-        cursor = conn.cursor()
-        now = datetime.now().isoformat()
+        with self._transaction() as conn:
+            cursor = conn.cursor()
+            now = datetime.now().isoformat()
 
-        cursor.execute(
-            """
-            INSERT INTO datasets (source, dataset_id, name, author, url, created_at, first_seen)
-            VALUES (?, ?, ?, ?, ?, ?, ?)
-            ON CONFLICT(source, dataset_id) DO UPDATE SET
-                name = excluded.name,
-                author = excluded.author,
-                url = excluded.url
-            """,
-            (source, dataset_id, name, author, url, created_at, now),
-        )
+            cursor.execute(
+                """
+                INSERT INTO datasets (source, dataset_id, name, author, url, created_at, first_seen)
+                VALUES (?, ?, ?, ?, ?, ?, ?)
+                ON CONFLICT(source, dataset_id) DO UPDATE SET
+                    name = excluded.name,
+                    author = excluded.author,
+                    url = excluded.url
+                """,
+                (source, dataset_id, name, author, url, created_at, now),
+            )
 
-        # Get the ID of the inserted/updated record
-        cursor.execute(
-            "SELECT id FROM datasets WHERE source = ? AND dataset_id = ?",
-            (source, dataset_id),
-        )
-        result = cursor.fetchone()
-        conn.commit()
-        conn.close()
-        return result["id"]
+            # Get the ID of the inserted/updated record
+            cursor.execute(
+                "SELECT id FROM datasets WHERE source = ? AND dataset_id = ?",
+                (source, dataset_id),
+            )
+            result = cursor.fetchone()
+            return result["id"]
 
     def get_dataset(self, source: str, dataset_id: str) -> Optional[dict]:
         """Get a dataset by source and ID."""
@@ -234,7 +269,6 @@ class RadarDatabase:
             (source, dataset_id),
         )
         row = cursor.fetchone()
-        conn.close()
         return dict(row) if row else None
 
     def get_dataset_by_id(self, db_id: int) -> Optional[dict]:
@@ -243,7 +277,6 @@ class RadarDatabase:
         cursor = conn.cursor()
         cursor.execute("SELECT * FROM datasets WHERE id = ?", (db_id,))
         row = cursor.fetchone()
-        conn.close()
         return dict(row) if row else None
 
     def get_all_datasets(self, source: Optional[str] = None) -> list[dict]:
@@ -255,7 +288,6 @@ class RadarDatabase:
         else:
             cursor.execute("SELECT * FROM datasets")
         rows = cursor.fetchall()
-        conn.close()
         return [dict(row) for row in rows]
 
     # Daily stats operations
@@ -284,8 +316,6 @@ class RadarDatabase:
             """,
             (dataset_db_id, date, downloads, likes, stars),
         )
-        conn.commit()
-        conn.close()
 
     def get_stats_history(
         self,
@@ -306,7 +336,7 @@ class RadarDatabase:
             (dataset_db_id, cutoff),
         )
         rows = cursor.fetchall()
-        conn.close()
+
         return [dict(row) for row in rows]
 
     # Model operations
@@ -343,8 +373,6 @@ class RadarDatabase:
 
         cursor.execute("SELECT id FROM models WHERE model_id = ?", (model_id,))
         result = cursor.fetchone()
-        conn.commit()
-        conn.close()
         return result["id"]
 
     def get_model(self, model_id: str) -> Optional[dict]:
@@ -353,7 +381,7 @@ class RadarDatabase:
         cursor = conn.cursor()
         cursor.execute("SELECT * FROM models WHERE model_id = ?", (model_id,))
         row = cursor.fetchone()
-        conn.close()
+
         return dict(row) if row else None
 
     def get_top_models(self, limit: int = 100) -> list[dict]:
@@ -365,7 +393,7 @@ class RadarDatabase:
             (limit,),
         )
         rows = cursor.fetchall()
-        conn.close()
+
         return [dict(row) for row in rows]
 
     # Model-Dataset relationship operations
@@ -389,8 +417,6 @@ class RadarDatabase:
             """,
             (model_db_id, dataset_db_id, relationship, now),
         )
-        conn.commit()
-        conn.close()
 
     def get_datasets_for_model(self, model_db_id: int) -> list[dict]:
         """Get all datasets linked to a model."""
@@ -406,7 +432,7 @@ class RadarDatabase:
             (model_db_id,),
         )
         rows = cursor.fetchall()
-        conn.close()
+
         return [dict(row) for row in rows]
 
     def get_models_using_dataset(self, dataset_db_id: int) -> list[dict]:
@@ -424,7 +450,7 @@ class RadarDatabase:
             (dataset_db_id,),
         )
         rows = cursor.fetchall()
-        conn.close()
+
         return [dict(row) for row in rows]
 
     def get_most_used_datasets(self, limit: int = 20) -> list[dict]:
@@ -445,7 +471,7 @@ class RadarDatabase:
             (limit,),
         )
         rows = cursor.fetchall()
-        conn.close()
+
         return [dict(row) for row in rows]
 
     # Trend operations
@@ -472,8 +498,6 @@ class RadarDatabase:
             """,
             (dataset_db_id, date, downloads_7d_growth, downloads_30d_growth),
         )
-        conn.commit()
-        conn.close()
 
     def get_rising_datasets(
         self,
@@ -511,7 +535,7 @@ class RadarDatabase:
             (today, today, min_growth, limit),
         )
         rows = cursor.fetchall()
-        conn.close()
+
         return [dict(row) for row in rows]
 
     def get_breakthrough_datasets(
@@ -554,7 +578,7 @@ class RadarDatabase:
             (today, cutoff, threshold, limit),
         )
         rows = cursor.fetchall()
-        conn.close()
+
         return [dict(row) for row in rows]
 
     def get_top_growing_datasets(
@@ -598,7 +622,7 @@ class RadarDatabase:
             (today, today, min_downloads, limit),
         )
         rows = cursor.fetchall()
-        conn.close()
+
         return [dict(row) for row in rows]
 
     def calculate_growth_rate(
@@ -685,8 +709,6 @@ class RadarDatabase:
                 domain, now, now,
             ),
         )
-        conn.commit()
-        conn.close()
 
     def get_valuable_datasets(
         self,
@@ -724,7 +746,7 @@ class RadarDatabase:
 
         cursor.execute(query, params)
         rows = cursor.fetchall()
-        conn.close()
+
         return [dict(row) for row in rows]
 
     def get_top_valuable_datasets(self, limit: int = 20) -> list[dict]:
@@ -761,8 +783,6 @@ class RadarDatabase:
             """,
             (model_name, dataset_id, usage_type, area, metric_name, metric_value, paper_url, now),
         )
-        conn.commit()
-        conn.close()
 
     def get_sota_models_for_dataset(self, dataset_id: str) -> list[dict]:
         """Get all SOTA models that use a dataset."""
@@ -777,7 +797,7 @@ class RadarDatabase:
             (dataset_id,),
         )
         rows = cursor.fetchall()
-        conn.close()
+
         return [dict(row) for row in rows]
 
     def get_datasets_by_sota_count(self, limit: int = 20) -> list[dict]:
@@ -796,7 +816,7 @@ class RadarDatabase:
             (limit,),
         )
         rows = cursor.fetchall()
-        conn.close()
+
         return [dict(row) for row in rows]
 
     # Citation history operations (v3)
@@ -821,8 +841,6 @@ class RadarDatabase:
             """,
             (paper_id, date, citation_count),
         )
-        conn.commit()
-        conn.close()
 
     def get_citation_history(self, paper_id: str, days: int = 30) -> list[dict]:
         """Get citation history for a paper."""
@@ -839,7 +857,7 @@ class RadarDatabase:
             (paper_id, cutoff),
         )
         rows = cursor.fetchall()
-        conn.close()
+
         return [dict(row) for row in rows]
 
     def get_fast_growing_papers(
@@ -869,12 +887,8 @@ class RadarDatabase:
             (month_ago, today, min_growth_per_month, limit),
         )
         rows = cursor.fetchall()
-        conn.close()
-        return [dict(row) for row in rows]
 
-    def close(self) -> None:
-        """Close all database connections (no-op for SQLite with per-call connections)."""
-        pass
+        return [dict(row) for row in rows]
 
 
 def get_database(config: dict) -> RadarDatabase:

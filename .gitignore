@@ -223,3 +223,6 @@ data/reports/
 # OS files
 .DS_Store
 Thumbs.db
+
+# API response cache
+data/cache/
