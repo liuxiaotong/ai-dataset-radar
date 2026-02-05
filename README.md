@@ -268,14 +268,24 @@ Set `GITHUB_TOKEN` environment variable for higher API rate limits.
 ```
 ai-dataset-radar/
 ├── src/
-│   ├── main_intel.py        # Entry point
-│   ├── scrapers/            # HuggingFace, GitHub, arXiv
+│   ├── main_intel.py        # Entry point (parallel fetching)
+│   ├── scrapers/            # 9 scrapers: HuggingFace, GitHub, arXiv...
+│   │   ├── base.py          # BaseScraper abstract class
+│   │   ├── registry.py      # Plugin registry system
+│   │   └── ...              # huggingface, github, arxiv, blog_rss...
 │   ├── trackers/            # Blog tracker (RSS + Playwright)
 │   ├── analyzers/           # Dataset classification
+│   ├── utils/               # Shared utilities
+│   │   ├── cache.py         # File-based caching with TTL
+│   │   ├── http.py          # Retry logic & session management
+│   │   ├── keywords.py      # Keyword matching functions
+│   │   └── logging_config.py # Centralized logging
+│   ├── db.py                # SQLite with connection pooling
 │   └── output_formatter.py  # Markdown + JSON output
 ├── mcp_server/server.py     # Claude Desktop MCP server
 ├── .claude/commands/        # Claude Code skills
 ├── config.yaml              # Monitoring configuration
+├── tests/                   # 198 tests
 └── data/reports/            # Generated reports
 ```
 
@@ -292,6 +302,18 @@ ai-dataset-radar/
 | `radar_papers` | View recent papers |
 | `radar_blogs` | View blog articles from 17 sources |
 | `radar_config` | Show monitoring configuration |
+
+---
+
+## Performance / 性能优化
+
+| Feature | Description |
+|---------|-------------|
+| **Parallel Fetching** | ThreadPoolExecutor for concurrent API calls |
+| **API Caching** | File-based cache with 24h TTL for HuggingFace READMEs |
+| **Connection Pooling** | Thread-local SQLite connections |
+| **HTTP Retry** | Exponential backoff with configurable retries |
+| **Centralized Logging** | Structured logging with configurable levels |
 
 ---
 
@@ -317,6 +339,10 @@ ai-dataset-radar/
 - [x] Playwright support for JS-rendered blogs
 - [x] 17 active blog sources across US/China/Research
 - [x] AI Native workflow with DataRecipe integration
+- [x] Plugin-based scraper architecture (9 scrapers)
+- [x] Performance: parallel fetching, API caching, connection pooling
+- [x] Centralized logging & HTTP retry utilities
+- [x] Comprehensive test suite (198 tests)
 - [ ] Scheduled execution & alerts
 - [ ] Web dashboard
 
