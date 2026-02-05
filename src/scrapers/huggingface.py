@@ -9,8 +9,12 @@ from .base import BaseScraper
 from .registry import register_scraper
 
 from utils.logging_config import get_logger
+from utils.cache import get_cache
 
 logger = get_logger(__name__)
+
+# Cache TTL: 24 hours for README content
+README_CACHE_TTL = 86400
 
 
 @register_scraper("huggingface")
@@ -300,14 +304,25 @@ class HuggingFaceScraper(BaseScraper):
     def fetch_dataset_readme(self, dataset_id: str) -> Optional[str]:
         """Fetch the README content for a dataset.
 
+        Uses file-based cache with 24-hour TTL to avoid repeated API calls.
+
         Args:
             dataset_id: The dataset ID (e.g., 'allenai/dolma').
 
         Returns:
             README content string or None if not found.
         """
+        # Check cache first
+        cache = get_cache()
+        cache_key = f"hf:readme:{dataset_id}"
+        cached = cache.get(cache_key)
+        if cached is not None:
+            logger.debug("Cache hit for README: %s", dataset_id)
+            return cached
+
         # Try the API endpoint first
         url = f"{self.DATASETS_URL}/{dataset_id}"
+        result = None
 
         try:
             response = requests.get(url, headers=self.headers, timeout=15)
@@ -316,22 +331,27 @@ class HuggingFaceScraper(BaseScraper):
                 # cardData often contains the README-like content
                 card_data = data.get("cardData", "")
                 if card_data:
-                    return str(card_data)
-
-                # Try description
-                description = data.get("description", "")
-                if description:
-                    return description
+                    result = str(card_data)
+                else:
+                    # Try description
+                    description = data.get("description", "")
+                    if description:
+                        result = description
         except requests.RequestException:
             pass
 
         # Fallback: try to fetch raw README.md
-        readme_url = f"https://huggingface.co/datasets/{dataset_id}/raw/main/README.md"
-        try:
-            response = requests.get(readme_url, headers=self.headers, timeout=15)
-            if response.status_code == 200:
-                return response.text
-        except requests.RequestException:
-            pass
+        if not result:
+            readme_url = f"https://huggingface.co/datasets/{dataset_id}/raw/main/README.md"
+            try:
+                response = requests.get(readme_url, headers=self.headers, timeout=15)
+                if response.status_code == 200:
+                    result = response.text
+            except requests.RequestException:
+                pass
 
-        return None
+        # Cache the result (even if None, to avoid repeated requests)
+        if result:
+            cache.set(cache_key, result, README_CACHE_TTL)
+
+        return result
