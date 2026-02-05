@@ -483,13 +483,23 @@ def main():
 
     # Output insights prompt for LLM analysis (Claude Code / Claude App)
     if args.insights:
-        print(format_insights_prompt(
+        insights_content = format_insights_prompt(
             all_datasets=all_datasets,
             blog_activity=blog_activity,
             github_activity=github_activity,
             papers=papers,
             datasets_by_type=datasets_by_type
-        ))
+        )
+        print(insights_content)
+
+        # Save insights prompt to file for reference
+        insights_prompt_path = output_dir / "reports" / f"intel_report_{datetime.now().strftime('%Y-%m-%d')}_insights_prompt.md"
+        with open(insights_prompt_path, "w", encoding="utf-8") as f:
+            f.write(insights_content)
+        logger.info("Insights prompt saved to: %s", insights_prompt_path)
+        logger.info("")
+        logger.info(">>> AI 分析完成后，请将分析结果保存到:")
+        logger.info(">>> %s", str(insights_prompt_path).replace("_prompt.md", ".md"))
 
 
 if __name__ == "__main__":
