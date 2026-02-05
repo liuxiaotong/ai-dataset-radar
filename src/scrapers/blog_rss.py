@@ -17,6 +17,10 @@ from bs4 import BeautifulSoup
 from .base import BaseScraper
 from .registry import register_scraper
 
+from utils.logging_config import get_logger
+
+logger = get_logger(__name__)
+
 
 @register_scraper("blog_rss")
 class BlogRSSScraper(BaseScraper):
@@ -61,7 +65,7 @@ class BlogRSSScraper(BaseScraper):
         days = runtime_config.get("days", 7)
 
         if not feeds:
-            print("  No RSS feeds configured")
+            logger.info("  No RSS feeds configured")
             return []
 
         all_articles = []
@@ -92,7 +96,7 @@ class BlogRSSScraper(BaseScraper):
         try:
             feed = feedparser.parse(url)
         except Exception as e:
-            print(f"    RSS parse error for {name}: {e}")
+            logger.info("    RSS parse error for %s: %s", name, e)
             return []
 
         if feed.bozo and feed.bozo_exception:
@@ -164,7 +168,7 @@ class BlogRSSScraper(BaseScraper):
                 "author": entry.get("author", ""),
             }
         except Exception as e:
-            print(f"    Error parsing entry: {e}")
+            logger.info("    Error parsing entry: %s", e)
             return None
 
     def _clean_html(self, text: str) -> str:

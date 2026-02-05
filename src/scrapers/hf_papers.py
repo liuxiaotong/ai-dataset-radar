@@ -6,6 +6,10 @@ from datetime import datetime, timedelta
 from typing import Optional
 from bs4 import BeautifulSoup
 
+from utils.logging_config import get_logger
+
+logger = get_logger(__name__)
+
 
 class HFPapersScraper:
     """Scraper for HuggingFace Daily Papers.
@@ -90,10 +94,10 @@ class HFPapersScraper:
             return papers
 
         except requests.RequestException as e:
-            print(f"Error fetching HF papers API: {e}")
+            logger.info("Error fetching HF papers API: %s", e)
             return []
         except Exception as e:
-            print(f"Error parsing HF papers API response: {e}")
+            logger.info("Error parsing HF papers API response: %s", e)
             return []
 
     def _fetch_from_page(self) -> list[dict]:
@@ -122,7 +126,7 @@ class HFPapersScraper:
             return papers
 
         except requests.RequestException as e:
-            print(f"Error fetching HF papers page: {e}")
+            logger.info("Error fetching HF papers page: %s", e)
             return []
 
     def _parse_api_paper(self, item: dict) -> Optional[dict]:
@@ -159,7 +163,7 @@ class HFPapersScraper:
                 "arxiv_url": f"https://arxiv.org/abs/{arxiv_id}",
             }
         except Exception as e:
-            print(f"Error parsing HF paper: {e}")
+            logger.info("Error parsing HF paper: %s", e)
             return None
 
     def _parse_page_article(self, article) -> Optional[dict]:
@@ -214,7 +218,7 @@ class HFPapersScraper:
                 "arxiv_url": f"https://arxiv.org/abs/{arxiv_id}",
             }
         except Exception as e:
-            print(f"Error parsing HF paper article: {e}")
+            logger.info("Error parsing HF paper article: %s", e)
             return None
 
     def _is_dataset_related(self, paper: dict) -> bool:
@@ -262,7 +266,7 @@ class HFPapersScraper:
                 }
             return None
         except requests.RequestException as e:
-            print(f"Error fetching paper {arxiv_id}: {e}")
+            logger.info("Error fetching paper %s: %s", arxiv_id, e)
             return None
 
     def get_dataset_papers(self) -> list[dict]:

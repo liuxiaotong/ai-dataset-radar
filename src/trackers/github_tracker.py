@@ -14,6 +14,10 @@ from typing import Optional
 
 import requests
 
+from utils.logging_config import get_logger
+
+logger = get_logger(__name__)
+
 
 # Default signal keywords for detecting relevant repos
 DEFAULT_SIGNAL_KEYWORDS = [
@@ -77,7 +81,7 @@ class GitHubTracker:
                 reset_time = resp.headers.get("X-RateLimit-Reset")
                 if reset_time:
                     wait_time = int(reset_time) - int(time.time())
-                    print(f"  GitHub rate limited, reset in {wait_time}s")
+                    logger.info("  GitHub rate limited, reset in %ss", wait_time)
                 return None
 
             if resp.status_code == 404:
@@ -87,7 +91,7 @@ class GitHubTracker:
             return resp.json()
 
         except requests.RequestException as e:
-            print(f"  GitHub API error: {e}")
+            logger.info("  GitHub API error: %s", e)
             return None
 
     def get_org_repos(self, org_name: str, days: int = 7) -> list[dict]:
@@ -287,7 +291,7 @@ class GitHubTracker:
         """
         results = []
 
-        print(f"  Tracking {len(self.vendor_orgs)} vendor GitHub orgs...")
+        logger.info("  Tracking %s vendor GitHub orgs...", len(self.vendor_orgs))
 
         for org in self.vendor_orgs:
             activity = self.get_org_activity(org, days)
@@ -308,7 +312,7 @@ class GitHubTracker:
         """
         results = []
 
-        print(f"  Tracking {len(self.lab_orgs)} lab GitHub orgs...")
+        logger.info("  Tracking %s lab GitHub orgs...", len(self.lab_orgs))
 
         for org in self.lab_orgs:
             activity = self.get_org_activity(org, days)

@@ -14,6 +14,10 @@ from typing import Optional
 from .base import BaseScraper
 from .registry import register_scraper
 
+from utils.logging_config import get_logger
+
+logger = get_logger(__name__)
+
 
 @register_scraper("arxiv")
 class ArxivScraper(BaseScraper):
@@ -98,11 +102,11 @@ class ArxivScraper(BaseScraper):
         try:
             feed = feedparser.parse(url)
         except Exception as e:
-            print(f"Error fetching arXiv papers: {e}")
+            logger.info("Error fetching arXiv papers: %s", e)
             return []
 
         if feed.bozo and feed.bozo_exception:
-            print(f"Warning: Feed parsing issue: {feed.bozo_exception}")
+            logger.info("Warning: Feed parsing issue: %s", feed.bozo_exception)
 
         results = []
         for entry in feed.entries:
@@ -138,7 +142,7 @@ class ArxivScraper(BaseScraper):
         try:
             feed = feedparser.parse(url)
         except Exception as e:
-            print(f"Error fetching arXiv papers: {e}")
+            logger.info("Error fetching arXiv papers: %s", e)
             return []
 
         results = []
@@ -197,5 +201,5 @@ class ArxivScraper(BaseScraper):
                 "pdf_url": pdf_link,
             }
         except Exception as e:
-            print(f"Error parsing arXiv entry: {e}")
+            logger.info("Error parsing arXiv entry: %s", e)
             return None
