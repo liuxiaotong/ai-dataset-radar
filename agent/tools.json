@@ -1,0 +1,206 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "name": "ai-dataset-radar",
+  "description": "AI training data competitive intelligence tools",
+  "version": "1.0.0",
+  "tools": [
+    {
+      "name": "radar_scan",
+      "description": "Run a full intelligence scan to collect datasets, repos, papers, and blog posts from 30+ AI organizations. Returns a structured report.",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "days": {
+            "type": "integer",
+            "description": "Number of days to scan (default: 7)",
+            "default": 7,
+            "minimum": 1,
+            "maximum": 30
+          }
+        }
+      },
+      "returns": {
+        "type": "object",
+        "description": "Scan results with summary and detailed findings",
+        "properties": {
+          "success": { "type": "boolean" },
+          "report_path": { "type": "string" },
+          "summary": {
+            "type": "object",
+            "properties": {
+              "datasets": { "type": "integer" },
+              "repos": { "type": "integer" },
+              "papers": { "type": "integer" },
+              "blogs": { "type": "integer" }
+            }
+          }
+        }
+      }
+    },
+    {
+      "name": "radar_summary",
+      "description": "Get summary of the latest intelligence report without running a new scan. Fast way to check recent findings.",
+      "parameters": {
+        "type": "object",
+        "properties": {}
+      },
+      "returns": {
+        "type": "object",
+        "description": "Latest report summary"
+      }
+    },
+    {
+      "name": "radar_datasets",
+      "description": "List datasets from the latest report, optionally filtered by category. Categories: sft, preference, synthetic, agent, multimodal, code, evaluation.",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "category": {
+            "type": "string",
+            "description": "Filter by dataset category",
+            "enum": ["sft", "preference", "synthetic", "agent", "multimodal", "multilingual", "code", "evaluation", "all"]
+          },
+          "limit": {
+            "type": "integer",
+            "description": "Maximum number of datasets to return",
+            "default": 20
+          }
+        }
+      },
+      "returns": {
+        "type": "array",
+        "items": {
+          "type": "object",
+          "properties": {
+            "id": { "type": "string" },
+            "category": { "type": "string" },
+            "downloads": { "type": "integer" },
+            "url": { "type": "string" }
+          }
+        }
+      }
+    },
+    {
+      "name": "radar_github",
+      "description": "Get GitHub repository activity from watched organizations. Filter by relevance to focus on dataset-related repos.",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "relevance": {
+            "type": "string",
+            "description": "Filter by relevance level",
+            "enum": ["high", "low", "all"],
+            "default": "high"
+          },
+          "limit": {
+            "type": "integer",
+            "description": "Maximum number of repos to return",
+            "default": 20
+          }
+        }
+      },
+      "returns": {
+        "type": "array",
+        "items": {
+          "type": "object",
+          "properties": {
+            "name": { "type": "string" },
+            "stars": { "type": "integer" },
+            "description": { "type": "string" },
+            "relevance": { "type": "string" }
+          }
+        }
+      }
+    },
+    {
+      "name": "radar_papers",
+      "description": "Get recent papers from arXiv and HuggingFace Daily Papers, filtered by dataset relevance.",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "source": {
+            "type": "string",
+            "description": "Paper source filter",
+            "enum": ["arxiv", "huggingface", "all"],
+            "default": "all"
+          },
+          "dataset_only": {
+            "type": "boolean",
+            "description": "Only return papers that introduce new datasets",
+            "default": false
+          },
+          "limit": {
+            "type": "integer",
+            "default": 20
+          }
+        }
+      },
+      "returns": {
+        "type": "array",
+        "items": {
+          "type": "object",
+          "properties": {
+            "title": { "type": "string" },
+            "url": { "type": "string" },
+            "source": { "type": "string" },
+            "is_dataset_paper": { "type": "boolean" }
+          }
+        }
+      }
+    },
+    {
+      "name": "radar_blogs",
+      "description": "Get blog articles from 17 monitored sources including OpenAI, Anthropic, Google, Meta, and Chinese labs.",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "source": {
+            "type": "string",
+            "description": "Filter by specific blog source name"
+          },
+          "category": {
+            "type": "string",
+            "description": "Filter by blog category",
+            "enum": ["us_frontier", "us_emerging", "china", "research", "data_vendor", "all"],
+            "default": "all"
+          },
+          "limit": {
+            "type": "integer",
+            "default": 30
+          }
+        }
+      },
+      "returns": {
+        "type": "array",
+        "items": {
+          "type": "object",
+          "properties": {
+            "source": { "type": "string" },
+            "articles": {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "properties": {
+                  "title": { "type": "string" },
+                  "url": { "type": "string" }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    {
+      "name": "radar_config",
+      "description": "Get current monitoring configuration including watched organizations, blog sources, and classification keywords.",
+      "parameters": {
+        "type": "object",
+        "properties": {}
+      },
+      "returns": {
+        "type": "object",
+        "description": "Current radar configuration"
+      }
+    }
+  ]
+}
