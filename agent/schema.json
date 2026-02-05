@@ -1,0 +1,188 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "AI Dataset Radar Report",
+  "description": "Structured intelligence report on AI training data activity",
+  "type": "object",
+  "required": ["generated_at", "period", "summary"],
+  "properties": {
+    "generated_at": {
+      "type": "string",
+      "format": "date-time",
+      "description": "ISO 8601 timestamp when report was generated"
+    },
+    "period": {
+      "type": "object",
+      "properties": {
+        "start": { "type": "string", "format": "date" },
+        "end": { "type": "string", "format": "date" },
+        "days": { "type": "integer" }
+      }
+    },
+    "summary": {
+      "type": "object",
+      "description": "Quick stats for decision making",
+      "properties": {
+        "total_datasets": { "type": "integer" },
+        "total_github_repos": { "type": "integer" },
+        "total_papers": { "type": "integer" },
+        "total_blog_posts": { "type": "integer" }
+      }
+    },
+    "datasets": {
+      "type": "array",
+      "description": "New datasets from watched organizations",
+      "items": {
+        "$ref": "#/definitions/Dataset"
+      }
+    },
+    "github_repos": {
+      "type": "array",
+      "description": "GitHub repository activity",
+      "items": {
+        "$ref": "#/definitions/GitHubRepo"
+      }
+    },
+    "papers": {
+      "type": "array",
+      "description": "Recent papers from arXiv and HuggingFace",
+      "items": {
+        "$ref": "#/definitions/Paper"
+      }
+    },
+    "blog_posts": {
+      "type": "array",
+      "description": "Blog articles grouped by source",
+      "items": {
+        "$ref": "#/definitions/BlogSource"
+      }
+    }
+  },
+  "definitions": {
+    "Dataset": {
+      "type": "object",
+      "required": ["id", "source"],
+      "properties": {
+        "id": {
+          "type": "string",
+          "description": "HuggingFace dataset ID (e.g., 'allenai/dolma')"
+        },
+        "source": {
+          "type": "string",
+          "enum": ["huggingface"]
+        },
+        "name": { "type": "string" },
+        "author": { "type": "string" },
+        "category": {
+          "type": "string",
+          "enum": ["sft_instruction", "preference", "synthetic", "agent", "multimodal", "multilingual", "code", "evaluation", "other"],
+          "description": "Auto-classified dataset type"
+        },
+        "downloads": { "type": "integer" },
+        "likes": { "type": "integer" },
+        "tags": {
+          "type": "array",
+          "items": { "type": "string" }
+        },
+        "languages": {
+          "type": "array",
+          "items": { "type": "string" }
+        },
+        "license": { "type": "string" },
+        "task_categories": {
+          "type": "array",
+          "items": { "type": "string" }
+        },
+        "created_at": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "url": {
+          "type": "string",
+          "format": "uri"
+        }
+      }
+    },
+    "GitHubRepo": {
+      "type": "object",
+      "required": ["name", "url"],
+      "properties": {
+        "name": { "type": "string" },
+        "full_name": { "type": "string" },
+        "url": { "type": "string", "format": "uri" },
+        "description": { "type": "string" },
+        "stars": { "type": "integer" },
+        "forks": { "type": "integer" },
+        "language": { "type": "string" },
+        "topics": {
+          "type": "array",
+          "items": { "type": "string" }
+        },
+        "relevance": {
+          "type": "string",
+          "enum": ["high", "low"],
+          "description": "Relevance to AI datasets based on keywords"
+        },
+        "updated_at": {
+          "type": "string",
+          "format": "date-time"
+        }
+      }
+    },
+    "Paper": {
+      "type": "object",
+      "required": ["title", "url"],
+      "properties": {
+        "title": { "type": "string" },
+        "url": { "type": "string", "format": "uri" },
+        "source": {
+          "type": "string",
+          "enum": ["arxiv", "huggingface"]
+        },
+        "authors": {
+          "type": "array",
+          "items": { "type": "string" }
+        },
+        "abstract": { "type": "string" },
+        "categories": {
+          "type": "array",
+          "items": { "type": "string" }
+        },
+        "published_at": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "is_dataset_paper": {
+          "type": "boolean",
+          "description": "Whether the paper introduces a new dataset"
+        }
+      }
+    },
+    "BlogSource": {
+      "type": "object",
+      "required": ["source", "articles"],
+      "properties": {
+        "source": {
+          "type": "string",
+          "description": "Blog name (e.g., 'OpenAI Blog')"
+        },
+        "category": {
+          "type": "string",
+          "enum": ["us_frontier", "us_emerging", "china", "research", "data_vendor"]
+        },
+        "articles": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": ["title", "url"],
+            "properties": {
+              "title": { "type": "string" },
+              "url": { "type": "string", "format": "uri" },
+              "published_at": { "type": "string" },
+              "summary": { "type": "string" }
+            }
+          }
+        }
+      }
+    }
+  }
+}
