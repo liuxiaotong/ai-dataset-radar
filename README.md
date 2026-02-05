@@ -31,6 +31,7 @@
 | **多框架兼容** | HTTP API (LangChain)、MCP (Claude)、原生 SDK |
 | **开箱即用** | 预置 System Prompt、完整类型定义 |
 | **人机兼顾** | 同时输出 Markdown (人类) 与 JSON (智能体) |
+| **环境原生 LLM** | `--insights` 模式利用 Claude Code/App 原生能力分析 |
 
 ### 适用场景
 
@@ -70,8 +71,14 @@ pip install fastapi uvicorn
 ### 执行扫描
 
 ```bash
+# 基础扫描
 python src/main_intel.py --days 7
+
+# 带 AI 分析（在 Claude Code / Claude App 中运行）
+python src/main_intel.py --days 7 --insights
 ```
+
+`--insights` 模式会输出数据 + 分析提示，由环境中的 LLM 自动完成竞争情报分析。
 
 ### 启动 API 服务
 

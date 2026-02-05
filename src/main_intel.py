@@ -57,6 +57,109 @@ def load_config(config_path: str = "config.yaml") -> dict:
 
 
 
+def format_insights_prompt(all_datasets: list, blog_activity: list, github_activity: list, papers: list, datasets_by_type: dict) -> str:
+    """Format data with analysis prompt for LLM consumption.
+
+    This output is designed to be read by Claude Code / Claude App,
+    which will then perform the analysis using its native LLM capabilities.
+    """
+    lines = []
+    lines.append("\n" + "=" * 60)
+    lines.append("  AI Dataset Radar - 请分析以下竞争情报数据")
+    lines.append("=" * 60 + "\n")
+
+    # Datasets summary
+    lines.append("## 一、本周数据集动态\n")
+    if all_datasets:
+        # Group by category
+        by_cat = {}
+        for ds in all_datasets:
+            cat = ds.get("category", "other")
+            if cat not in by_cat:
+                by_cat[cat] = []
+            by_cat[cat].append(ds)
+
+        for cat, ds_list in sorted(by_cat.items(), key=lambda x: -len(x[1])):
+            lines.append(f"### {cat} ({len(ds_list)} 个)")
+            for ds in sorted(ds_list, key=lambda x: -x.get("downloads", 0))[:5]:
+                lines.append(f"- **{ds.get('id')}**")
+                lines.append(f"  - 下载量: {ds.get('downloads', 0):,} | 点赞: {ds.get('likes', 0)}")
+                if ds.get('tags'):
+                    lines.append(f"  - 标签: {', '.join(ds.get('tags', [])[:5])}")
+                if ds.get('description'):
+                    lines.append(f"  - 简介: {ds.get('description', '')[:100]}...")
+            lines.append("")
+    else:
+        lines.append("*无新数据集*\n")
+
+    # Blog highlights
+    lines.append("## 二、博客要闻\n")
+    if blog_activity:
+        active_blogs = [b for b in blog_activity if b.get("articles")]
+        for blog in active_blogs[:8]:
+            source = blog.get("source", "未知")
+            articles = blog.get("articles", [])[:3]
+            if articles:
+                lines.append(f"### {source}")
+                for art in articles:
+                    title = art.get("title", "无标题")[:50]
+                    url = art.get("url", "")
+                    lines.append(f"- [{title}]({url})")
+                lines.append("")
+    else:
+        lines.append("*无博客更新*\n")
+
+    # GitHub highlights
+    lines.append("## 三、GitHub 活动\n")
+    if github_activity:
+        high_relevance = []
+        for org in github_activity:
+            for repo in org.get("repos_updated", []):
+                if repo.get("relevance") == "high":
+                    repo["org"] = org.get("org")
+                    high_relevance.append(repo)
+
+        high_relevance = sorted(high_relevance, key=lambda x: -x.get("stars", 0))[:10]
+        if high_relevance:
+            lines.append("### 高相关仓库 (Top 10)")
+            for repo in high_relevance:
+                lines.append(f"- **{repo.get('org')}/{repo.get('name')}** ⭐ {repo.get('stars', 0)}")
+                if repo.get("description"):
+                    lines.append(f"  - {repo.get('description', '')[:80]}")
+            lines.append("")
+    else:
+        lines.append("*无 GitHub 活动*\n")
+
+    # Papers
+    lines.append("## 四、相关论文\n")
+    if papers:
+        for paper in papers[:10]:
+            title = paper.get("title", "无标题")[:60]
+            source = paper.get("source", "")
+            lines.append(f"- **{title}** [{source}]")
+            if paper.get("abstract"):
+                lines.append(f"  - {paper.get('abstract', '')[:100]}...")
+        lines.append("")
+    else:
+        lines.append("*无相关论文*\n")
+
+    # Analysis prompt
+    lines.append("=" * 60)
+    lines.append("  分析要求")
+    lines.append("=" * 60 + "\n")
+    lines.append("""请基于以上数据，提供以下分析：
+
+1. **本周亮点** - 最值得关注的 2-3 个数据集及原因
+2. **组织动向** - 哪些组织本周比较活跃？有什么值得注意的动作？
+3. **趋势信号** - 从数据类型分布、博客内容、论文方向看到什么趋势？
+4. **行动建议** - 对于关注 AI 训练数据的团队，有什么建议？
+
+请用中文回答，保持简洁。
+""")
+
+    return "\n".join(lines)
+
+
 def validate_config(config: dict) -> list[str]:
     """Validate configuration has required sections.
 
@@ -173,6 +276,11 @@ def main():
         "--no-readme",
         action="store_true",
         help="Skip fetching dataset READMEs",
+    )
+    parser.add_argument(
+        "--insights",
+        action="store_true",
+        help="Output data with analysis prompt for LLM (Claude Code / Claude App)",
     )
 
     args = parser.parse_args()
@@ -372,6 +480,16 @@ def main():
     ))
 
     logger.info("Done!")
+
+    # Output insights prompt for LLM analysis (Claude Code / Claude App)
+    if args.insights:
+        print(format_insights_prompt(
+            all_datasets=all_datasets,
+            blog_activity=blog_activity,
+            github_activity=github_activity,
+            papers=papers,
+            datasets_by_type=datasets_by_type
+        ))
 
 
 if __name__ == "__main__":
