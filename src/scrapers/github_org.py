@@ -13,6 +13,10 @@ from typing import Optional
 from .base import BaseScraper
 from .registry import register_scraper
 
+from utils.logging_config import get_logger
+
+logger = get_logger(__name__)
+
 
 @register_scraper("github_org")
 class GitHubOrgScraper(BaseScraper):
@@ -69,7 +73,7 @@ class GitHubOrgScraper(BaseScraper):
         orgs = runtime_config.get("watch_orgs") or self.watch_orgs
 
         if not orgs:
-            print("  No GitHub organizations configured to watch")
+            logger.info("  No GitHub organizations configured to watch")
             return []
 
         all_repos = []
@@ -111,7 +115,7 @@ class GitHubOrgScraper(BaseScraper):
             response.raise_for_status()
             repos_data = response.json()
         except requests.RequestException as e:
-            print(f"    Error fetching repos for {org}: {e}")
+            logger.info("    Error fetching repos for %s: %s", org, e)
             return []
 
         cutoff = datetime.utcnow() - timedelta(days=days)
@@ -171,7 +175,7 @@ class GitHubOrgScraper(BaseScraper):
                 "url": repo.get("html_url", ""),
             }
         except Exception as e:
-            print(f"    Error parsing repo: {e}")
+            logger.info("    Error parsing repo: %s", e)
             return None
 
     def _calculate_relevance(self, repo: dict) -> str:

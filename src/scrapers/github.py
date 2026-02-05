@@ -9,6 +9,10 @@ from bs4 import BeautifulSoup
 from .base import BaseScraper
 from .registry import register_scraper
 
+from utils.logging_config import get_logger
+
+logger = get_logger(__name__)
+
 
 @register_scraper("github")
 class GitHubScraper(BaseScraper):
@@ -202,7 +206,7 @@ class GitHubScraper(BaseScraper):
             return repos
 
         except requests.RequestException as e:
-            print(f"Error searching GitHub for '{keyword}': {e}")
+            logger.info("Error searching GitHub for '{keyword}': {e}")
             return []
 
     def _fetch_trending(self) -> list[dict]:
@@ -233,7 +237,7 @@ class GitHubScraper(BaseScraper):
             return repos
 
         except requests.RequestException as e:
-            print(f"Error fetching GitHub trending: {e}")
+            logger.info("Error fetching GitHub trending: %s", e)
             return []
 
     def _parse_repo(self, item: dict) -> Optional[dict]:
@@ -272,7 +276,7 @@ class GitHubScraper(BaseScraper):
                 }),
             }
         except Exception as e:
-            print(f"Error parsing repo {item.get('full_name', 'unknown')}: {e}")
+            logger.info("Error parsing repo %s: %s", item.get('full_name', 'unknown'), e)
             return None
 
     def _parse_trending_article(self, article) -> Optional[dict]:
@@ -340,7 +344,7 @@ class GitHubScraper(BaseScraper):
                 }),
             }
         except Exception as e:
-            print(f"Error parsing trending article: {e}")
+            logger.info("Error parsing trending article: %s", e)
             return None
 
     def _is_dataset_related(self, repo: dict) -> bool:
@@ -383,7 +387,7 @@ class GitHubScraper(BaseScraper):
             response.raise_for_status()
             return self._parse_repo(response.json())
         except requests.RequestException as e:
-            print(f"Error fetching repo {full_name}: {e}")
+            logger.info("Error fetching repo %s: %s", full_name, e)
             return None
 
     def fetch_readme(self, full_name: str) -> Optional[str]:

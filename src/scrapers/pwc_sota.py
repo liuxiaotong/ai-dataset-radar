@@ -12,6 +12,10 @@ from datetime import datetime
 from typing import Optional
 import requests
 
+from utils.logging_config import get_logger
+
+logger = get_logger(__name__)
+
 
 class PwCSOTAScraper:
     """Scraper for Papers with Code SOTA results and associated datasets."""
@@ -92,7 +96,7 @@ class PwCSOTAScraper:
                 elif response.status_code == 429:
                     wait_time = (2 ** attempt) * 3 + random.uniform(1, 2)
                     if attempt < max_retries:
-                        print(f"  Rate limited, waiting {wait_time:.1f}s...")
+                        logger.info("  Rate limited, waiting %.1fs...", wait_time)
                         time.sleep(wait_time)
                         continue
                     return None
@@ -134,7 +138,7 @@ class PwCSOTAScraper:
         all_results = []
 
         for i, area in enumerate(self.areas):
-            print(f"  Fetching SOTA for: {area} ({i+1}/{len(self.areas)})")
+            logger.info("  Fetching SOTA for: %s (%s/%s)", area, i+1, len(self.areas))
             area_results = self._fetch_area_sota(area)
             all_results.extend(area_results)
 
@@ -348,9 +352,9 @@ class PwCSOTAScraper:
         Returns:
             Analysis results with dataset rankings.
         """
-        print("Fetching SOTA results from Papers with Code...")
+        logger.info("Fetching SOTA results from Papers with Code...")
         results = self.fetch()
-        print(f"  Found {len(results)} dataset-SOTA associations")
+        logger.info("  Found %s dataset-SOTA associations", len(results))
 
         # Aggregate by dataset
         dataset_stats = {}

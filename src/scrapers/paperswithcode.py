@@ -12,6 +12,10 @@ import requests
 from .base import BaseScraper
 from .registry import register_scraper
 
+from utils.logging_config import get_logger
+
+logger = get_logger(__name__)
+
 
 @register_scraper("paperswithcode")
 class PapersWithCodeScraper(BaseScraper):
@@ -77,10 +81,10 @@ class PapersWithCodeScraper(BaseScraper):
                 content_type = response.headers.get("Content-Type", "")
                 if "application/json" not in content_type:
                     if attempt < max_retries:
-                        print(f"  Non-JSON response, retrying... (attempt {attempt + 1})")
+                        logger.info("  Non-JSON response, retrying... (attempt %s)", attempt + 1)
                         time.sleep(2 ** attempt)
                         continue
-                    print(f"  Papers with Code API returned non-JSON: {content_type[:50]}")
+                    logger.info("  Papers with Code API returned non-JSON: %s", content_type[:50])
                     return None
 
                 if response.status_code == 200:
@@ -89,7 +93,7 @@ class PapersWithCodeScraper(BaseScraper):
                 elif response.status_code == 429:
                     wait_time = (2 ** attempt) * 3 + random.uniform(1, 2)
                     if attempt < max_retries:
-                        print(f"  Rate limited, waiting {wait_time:.1f}s...")
+                        logger.info("  Rate limited, waiting %.1fs...", wait_time)
                         time.sleep(wait_time)
                         continue
                     return None
@@ -105,18 +109,18 @@ class PapersWithCodeScraper(BaseScraper):
                 if attempt < max_retries:
                     time.sleep(2 ** attempt)
                     continue
-                print("  Request timeout")
+                logger.info("  Request timeout")
                 return None
 
             except requests.RequestException as e:
                 if attempt < max_retries:
                     time.sleep(2 ** attempt)
                     continue
-                print(f"  Request error: {e}")
+                logger.info("  Request error: %s", e)
                 return None
 
             except ValueError as e:
-                print(f"  JSON parse error: {e}")
+                logger.info("  JSON parse error: %s", e)
                 return None
 
         return None
@@ -190,7 +194,7 @@ class PapersWithCodeScraper(BaseScraper):
                 "url": ds.get("url", ""),
             }
         except Exception as e:
-            print(f"Error parsing dataset {ds.get('name', 'unknown')}: {e}")
+            logger.info("Error parsing dataset %s: %s", ds.get('name', 'unknown'), e)
             return None
 
     def search_datasets(self, query: str, limit: int = 20) -> list[dict]:
