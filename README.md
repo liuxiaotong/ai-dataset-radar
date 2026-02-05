@@ -49,6 +49,7 @@
 |------|------|--------|
 | 情报报告 (JSON) | `data/reports/intel_report_*.json` | AI Agent |
 | 情报报告 (MD) | `data/reports/intel_report_*.md` | 人类 |
+| AI 分析报告 | `data/reports/intel_report_*_insights.md` | 决策层 |
 | 工具定义 | `agent/tools.json` | Function Calling |
 | 输出规范 | `agent/schema.json` | 数据验证 |
 | 系统提示词 | `agent/prompts.md` | Agent 配置 |
@@ -78,7 +79,16 @@ python src/main_intel.py --days 7
 python src/main_intel.py --days 7 --insights
 ```
 
-`--insights` 模式会输出数据 + 分析提示，由环境中的 LLM 自动完成竞争情报分析。
+`--insights` 模式会输出数据 + 分析提示，由环境中的 LLM 自动完成竞争情报分析并保存。
+
+**产出文件：**
+```
+data/reports/
+├── intel_report_2026-02-05.json            # 结构化数据 (Agent)
+├── intel_report_2026-02-05.md              # 原始报告 (人类)
+├── intel_report_2026-02-05_insights_prompt.md  # 分析提示 (LLM 输入)
+└── intel_report_2026-02-05_insights.md     # AI 分析报告 (决策层)
+```
 
 ### 启动 API 服务
 
