@@ -171,6 +171,49 @@ async def list_tools():
             }
         ),
         Tool(
+            name="radar_trend",
+            description="查询数据集增长趋势：上升最快、突破性增长、指定数据集的历史曲线",
+            inputSchema={
+                "type": "object",
+                "properties": {
+                    "mode": {
+                        "type": "string",
+                        "description": "查询模式: top_growing (增长最快), rising (上升中), breakthroughs (突破), dataset (指定数据集)",
+                        "enum": ["top_growing", "rising", "breakthroughs", "dataset"],
+                        "default": "top_growing"
+                    },
+                    "dataset_id": {
+                        "type": "string",
+                        "description": "指定数据集 ID (mode=dataset 时使用，如 'openai/gsm8k')"
+                    },
+                    "days": {
+                        "type": "integer",
+                        "description": "趋势周期: 7 或 30 天",
+                        "default": 7
+                    },
+                    "limit": {
+                        "type": "integer",
+                        "description": "返回数量限制",
+                        "default": 10
+                    }
+                }
+            }
+        ),
+        Tool(
+            name="radar_history",
+            description="查看历史扫描报告时间线，展示各期报告的统计摘要和变化趋势",
+            inputSchema={
+                "type": "object",
+                "properties": {
+                    "limit": {
+                        "type": "integer",
+                        "description": "返回最近几期报告",
+                        "default": 10
+                    }
+                }
+            }
+        ),
+        Tool(
             name="radar_diff",
             description="对比两期报告，自动识别新增/消失的数据集、仓库、论文等变化",
             inputSchema={
@@ -233,6 +276,23 @@ def get_all_reports_sorted() -> list[Path]:
     if not reports_dir.exists():
         return []
     return sorted(reports_dir.glob("intel_report_*.json"), reverse=True)
+
+
+def _fmt_growth(value) -> str:
+    """Format a growth rate value for display.
+
+    Args:
+        value: Growth rate (float, e.g. 0.5 = 50%) or None.
+
+    Returns:
+        Formatted string like "+50.0%" or "N/A".
+    """
+    if value is None:
+        return "N/A"
+    if value == float("inf"):
+        return "New ∞"
+    sign = "+" if value > 0 else ""
+    return f"{sign}{value * 100:.1f}%"
 
 
 def search_in_report(report: dict, query: str, sources: list[str], limit: int) -> dict:
@@ -752,6 +812,131 @@ async def call_tool(name: str, arguments: dict):
         # Add summary
         active_sources = len([b for b in blog_posts if b.get("articles")])
         lines.insert(1, f"*共 {active_sources} 个活跃博客源，{total_articles} 篇文章*\n")
+
+        return [TextContent(type="text", text="\n".join(lines))]
+
+    elif name == "radar_trend":
+        db_path = PROJECT_ROOT / "data" / "radar.db"
+        if not db_path.exists():
+            return [TextContent(type="text", text="数据库不存在。请先运行 `radar_scan` 积累数据。")]
+
+        try:
+            from db import RadarDatabase
+            from analyzers.trend import TrendAnalyzer
+
+            db = RadarDatabase(str(db_path))
+            analyzer = TrendAnalyzer(db)
+
+            mode = arguments.get("mode", "top_growing")
+            days = arguments.get("days", 7)
+            limit = arguments.get("limit", 10)
+            dataset_id = arguments.get("dataset_id", "")
+
+            if mode == "dataset" and dataset_id:
+                result = analyzer.get_dataset_trend(dataset_id)
+                if not result:
+                    return [TextContent(type="text", text=f"未找到数据集 '{dataset_id}' 的趋势数据。")]
+
+                ds = result["dataset"]
+                history = result["history"]
+                lines = [f"**数据集趋势: {ds.get('dataset_id', dataset_id)}**\n"]
+                lines.append(f"- 7 天增长: {_fmt_growth(result.get('growth_7d'))}")
+                lines.append(f"- 30 天增长: {_fmt_growth(result.get('growth_30d'))}")
+                if history:
+                    lines.append(f"\n**最近 {len(history)} 天下载量:**")
+                    for h in history[-10:]:
+                        lines.append(f"- {h.get('date', '')}: {h.get('downloads', 0):,}")
+                db.close()
+                return [TextContent(type="text", text="\n".join(lines))]
+
+            elif mode == "top_growing":
+                datasets = analyzer.get_top_growing_datasets(days=days, limit=limit)
+                lines = [f"**增长最快数据集 ({days} 天):**\n"]
+                if not datasets:
+                    lines.append("暂无趋势数据。需要多天扫描数据积累后才能计算。")
+                for i, ds in enumerate(datasets, 1):
+                    growth = _fmt_growth(ds.get("growth"))
+                    downloads = ds.get("current_downloads", 0)
+                    lines.append(f"{i}. **{ds.get('name', ds.get('dataset_id', '?'))}**")
+                    lines.append(f"   增长: {growth} | 下载: {downloads:,}")
+                db.close()
+                return [TextContent(type="text", text="\n".join(lines))]
+
+            elif mode == "rising":
+                datasets = analyzer.get_rising_datasets(days=days, limit=limit)
+                lines = [f"**上升中数据集 ({days} 天, 增长 ≥50%):**\n"]
+                if not datasets:
+                    lines.append("暂无上升数据集。")
+                for ds in datasets:
+                    growth = _fmt_growth(ds.get("growth"))
+                    lines.append(f"- **{ds.get('name', ds.get('dataset_id', '?'))}** — {growth}")
+                db.close()
+                return [TextContent(type="text", text="\n".join(lines))]
+
+            elif mode == "breakthroughs":
+                datasets = analyzer.get_breakthrough_datasets(days=days, limit=limit)
+                lines = [f"**突破性增长数据集 ({days} 天):**\n"]
+                if not datasets:
+                    lines.append("暂无突破性增长。")
+                for ds in datasets:
+                    old = ds.get("old_downloads", 0) or 0
+                    current = ds.get("current_downloads", 0)
+                    lines.append(f"- **{ds.get('name', ds.get('dataset_id', '?'))}**: {old:,} → {current:,}")
+                db.close()
+                return [TextContent(type="text", text="\n".join(lines))]
+
+            db.close()
+            return [TextContent(type="text", text=f"未知模式: {mode}")]
+
+        except Exception as e:
+            return [TextContent(type="text", text=f"趋势查询失败: {e}")]
+
+    elif name == "radar_history":
+        all_reports = get_all_reports_sorted()
+        limit = arguments.get("limit", 10)
+        reports_to_show = all_reports[:limit]
+
+        if not reports_to_show:
+            return [TextContent(type="text", text="没有找到历史报告。请先运行 `radar_scan`。")]
+
+        lines = [f"**历史扫描报告 (最近 {len(reports_to_show)} 期):**\n"]
+        lines.append("| 日期 | 数据集 | GitHub 仓库 | 高相关 | 论文 | 博客 |")
+        lines.append("|------|--------|-------------|--------|------|------|")
+
+        for rp in reports_to_show:
+            try:
+                with open(rp, "r", encoding="utf-8") as f:
+                    r = json.load(f)
+                s = r.get("summary", {})
+                date = r.get("generated_at", "")[:10]
+                lines.append(
+                    f"| {date} "
+                    f"| {s.get('total_datasets', 0)} "
+                    f"| {s.get('total_github_repos', 0)} "
+                    f"| {s.get('total_github_repos_high_relevance', 0)} "
+                    f"| {s.get('total_papers', 0)} "
+                    f"| {s.get('total_blog_posts', 0)} |"
+                )
+            except (json.JSONDecodeError, OSError):
+                continue
+
+        # Add trend line if multiple reports
+        if len(reports_to_show) >= 2:
+            try:
+                with open(reports_to_show[0], "r") as f:
+                    latest = json.load(f)
+                with open(reports_to_show[-1], "r") as f:
+                    oldest = json.load(f)
+                s_new = latest.get("summary", {})
+                s_old = oldest.get("summary", {})
+                lines.append("")
+                lines.append(f"**趋势 ({oldest.get('generated_at', '')[:10]} → {latest.get('generated_at', '')[:10]}):**")
+                for key, label in [("total_datasets", "数据集"), ("total_github_repos", "GitHub 仓库"), ("total_papers", "论文"), ("total_blog_posts", "博客")]:
+                    delta = s_new.get(key, 0) - s_old.get(key, 0)
+                    sign = "+" if delta > 0 else ""
+                    lines.append(f"- {label}: {sign}{delta}")
+            except (json.JSONDecodeError, OSError):
+                pass
 
         return [TextContent(type="text", text="\n".join(lines))]
 
