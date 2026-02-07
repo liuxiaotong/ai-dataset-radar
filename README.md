@@ -18,7 +18,7 @@
 
 **GitHub Topics**: `ai-agent`, `competitive-intelligence`, `dataset-monitoring`, `mcp`, `function-calling`
 
-监控 29 家 AI Labs、19 家数据供应商、38 个博客源、13 个 GitHub 组织、~100 个 X/Twitter 账户的训练数据动态，提供结构化输出供智能体消费。支持 Function Calling、MCP、REST API 多种接入方式。
+监控 50 家 AI Labs、27 家数据供应商、62 个博客源、37 个 GitHub 组织、98 个 X/Twitter 账户的训练数据动态，提供结构化输出供智能体消费。支持 Function Calling、MCP、REST API 多种接入方式。
 
 ## 系统概述 / System Overview
 
@@ -30,9 +30,11 @@
 
 ```mermaid
 graph LR
-    A["数据源监控<br/>48+ orgs, ~100 X accounts"] --> B["语义分类<br/>LLM+规则"]
+    A["数据源监控<br/>77 orgs, 62 blogs, 98 X accounts"] --> B["语义分类<br/>LLM+规则"]
     B --> C["报告生成<br/>JSON+MD"]
     C --> D["Agent / 人类<br/>消费/决策"]
+    C --> E["趋势分析<br/>SQLite daily_stats"]
+    E --> D
 ```
 
 ### 设计目标 / Design Goals
@@ -64,6 +66,7 @@ graph LR
 | AI 分析报告 | `data/reports/intel_report_*_insights.md` | 决策层 |
 | 分析提示词 | `data/reports/intel_report_*_insights_prompt.md` | LLM 输入 |
 | 异常排查报告 | `data/reports/intel_report_*_anomalies.md` | 运维 |
+| 趋势数据库 | `data/radar.db` | 增长分析 (SQLite) |
 | 工具定义 | `agent/tools.json` | Function Calling |
 | 输出规范 | `agent/schema.json` | 数据验证 |
 | 系统提示词 | `agent/prompts.md` | Agent 配置 |
@@ -287,25 +290,26 @@ tools = [
 
 | 来源 | 覆盖范围 |
 |------|----------|
-| **HuggingFace** | 36+ AI Labs + 19 数据供应商：OpenAI, DeepMind, Meta, Anthropic, Qwen, DeepSeek, NVIDIA, Cerebras, Arcee AI, Gretel, Scale AI, BAAI 等 |
-| **博客** | 46+ 来源：OpenAI, Anthropic, Google AI, DeepMind, Mistral 等实验室 + Lil'Log, fast.ai, Interconnects, LessWrong, Alignment Forum 等研究者博客 |
-| **GitHub** | 31 组织：openai, anthropics, deepseek-ai, NousResearch, NVIDIA, databricks, argilla-io 等 |
+| **HuggingFace** | 50 AI Labs + 27 数据供应商：OpenAI, Anthropic, DeepMind, Meta, xAI, Qwen, DeepSeek, NVIDIA, Cerebras, Arcee AI, Gretel, Scale AI, BAAI 等 |
+| **博客** | 62 来源：OpenAI, Anthropic, Google AI, DeepMind, Mistral 等实验室 + Lil'Log, fast.ai, Interconnects, LessWrong, Alignment Forum 等研究者博客 |
+| **GitHub** | 37 组织：openai, anthropics, deepseek-ai, NousResearch, NVIDIA, databricks, argilla-io, apple, microsoft 等 |
 | **论文** | arXiv (cs.CL/AI/LG) + HuggingFace Daily Papers |
-| **X/Twitter** | ~100 账户：前沿实验室、开源社区、评估基准、数据供应商、安全/对齐、亚太/欧洲、研究者与影响者 |
+| **X/Twitter** | 98 账户：前沿实验室、开源社区、评估基准、数据供应商、安全/对齐、亚太/欧洲、研究者与影响者 |
 
-### 数据供应商分类
+### 数据供应商分类 (27 家)
 
 | 类别 | 覆盖 |
 |------|------|
-| **Premium（海外）** | Scale AI, Appen, Mercor, Invisible Technologies, TELUS Digital |
-| **Specialized（海外）** | Surge AI, Snorkel AI, Labelbox, Turing, Prolific, Cohere for AI |
-| **China Premium（中国）** | 海天瑞声, 整数智能 MolarData, 云测数据 Testin |
+| **Premium（海外）** | Scale AI, Surge AI, Appen, Sama, Mercor, Invisible Technologies, TELUS Digital |
+| **Specialized（海外）** | Argilla, Snorkel AI, Labelbox, Humanloop, Turing, Prolific |
+| **Global Vendors** | Toloka, iMerit, CloudFactory, Defined.ai, SuperAnnotate, Shaip, Welocalize, Coactive AI |
+| **China Premium（中国）** | 海天瑞声 SpeechOcean, 整数智能 MolarData, 云测数据 Testin |
 | **China Specialized（中国）** | 标贝科技 DataBaker, 数据堂 Datatang |
 | **China Research（中国）** | 智源研究院 BAAI |
 
 ### X/Twitter 监控账户
 
-通过 RSSHub（免费）或 X API v2 监控 ~100 个账户的数据集相关动态：
+通过 RSSHub（免费）或 X API v2 监控 98 个账户的数据集相关动态：
 
 | 类别 | 账户 | 数量 |
 |------|------|------|
@@ -416,24 +420,37 @@ priority_data_types:
 
 ```
 ai-dataset-radar/
-├── src/                        # 核心模块
-│   ├── main_intel.py           # 主入口（扫描 + insights 提示生成）
+├── src/                        # 核心模块 (43 文件)
+│   ├── main_intel.py           # 主入口（扫描 + 趋势记录 + insights 提示生成）
+│   ├── db.py                   # SQLite 数据库 (8 表: datasets/daily_stats/trends/models...)
 │   ├── trackers/               # 数据追踪器
-│   │   ├── org_tracker.py      # HuggingFace 组织追踪
-│   │   ├── blog_tracker.py     # 博客监控（RSS/HTML/Playwright）
-│   │   ├── github_tracker.py   # GitHub 组织活动
-│   │   ├── x_tracker.py        # X/Twitter 账户监控（RSSHub / API）
-│   │   └── paper_tracker.py    # arXiv + HF Papers
-│   ├── analyzers/              # 分类器
+│   │   ├── org_tracker.py      # HuggingFace 组织追踪 (50 Labs + 27 Vendors)
+│   │   ├── blog_tracker.py     # 博客监控 (RSS → HTML → Playwright 三级降级)
+│   │   ├── github_tracker.py   # GitHub 组织活动 (加权相关性评分)
+│   │   └── x_tracker.py        # X/Twitter 监控 (98 账户, RSSHub/API 双后端)
+│   ├── scrapers/               # 数据采集器 (13 文件)
+│   │   ├── huggingface.py      # HuggingFace API
+│   │   ├── arxiv.py            # arXiv 论文
+│   │   ├── hf_papers.py        # HF Daily Papers
+│   │   ├── github.py           # GitHub API
+│   │   └── ...                 # semantic_scholar, modelscope, pwc_sota 等
+│   ├── analyzers/              # 分析器 (11 文件)
+│   │   ├── data_type_classifier.py  # 数据集分类 (9 类)
+│   │   ├── trend.py            # 趋势分析 (7/30 天增长率, 上升/突破检测)
+│   │   ├── paper_filter.py     # 论文过滤
+│   │   └── ...                 # value_scorer, quality_scorer, opportunities 等
 │   └── utils/                  # 工具库
 ├── agent/                      # Agent 集成层
-│   ├── api.py                  # REST API
-│   ├── tools.json              # 工具定义
+│   ├── api.py                  # REST API (8 端点)
+│   ├── tools.json              # 工具定义 (v3.0, 11 工具)
 │   ├── schema.json             # 输出规范
-│   └── prompts.md              # 系统提示词
-├── mcp_server/                 # MCP 服务
-├── config.yaml                 # 监控配置（组织/供应商/博客/关键词）
-└── data/reports/               # 输出目录
+│   └── prompts.md              # 系统提示词 (4 角色)
+├── mcp_server/server.py        # MCP 服务 (11 工具)
+├── tests/                      # 测试 (17 文件, 386 用例)
+├── config.yaml                 # 监控配置 (组织/供应商/博客/关键词)
+└── data/
+    ├── reports/                # 报告输出 (JSON + MD)
+    └── radar.db                # 趋势数据库 (SQLite)
 ```
 
 ---
@@ -463,9 +480,9 @@ Radar (情报采集) → DataRecipe (逆向分析) → 复刻生产
 - [x] 双格式输出 (Markdown + JSON)
 - [x] Agent 集成层 (HTTP API, Function Calling, Schema)
 - [x] MCP Server (11 工具: scan/summary/datasets/github/papers/blogs/config/search/diff/trend/history)
-- [x] 插件化采集器 (9 个)
+- [x] 插件化采集器 (13 个: huggingface/arxiv/hf_papers/github/github_org/blog_rss/modelscope/semantic_scholar/pwc_sota/paperswithcode 等)
 - [x] 性能优化 (并行采集、缓存、连接池)
-- [x] 测试覆盖 (390+ 用例: MCP 工具 86 + GitHub tracker 40 + Org tracker 27 + X tracker 27 + 既有 210)
+- [x] 测试覆盖 (386 用例 / 17 文件: MCP 工具 81 + GitHub tracker 40 + Org tracker 27 + X tracker 27 + 既有 211)
 - [x] 博客抓取多策略降级 (RSS → HTML → Playwright, networkidle → domcontentloaded)
 - [x] 中国数据供应商监控 (海天瑞声、整数智能、数据堂、智源 BAAI)
 - [x] X/Twitter 监控 (~100 账户，12 类别，RSSHub/API 双后端，信号关键词过滤)
