@@ -88,10 +88,9 @@ cp .env.example .env
 
 # 关键变量
 DATA_SOURCES=github,huggingface,arxiv
-ANTHROPIC_API_KEY=sk-ant-...
+ANTHROPIC_API_KEY=sk-ant-...        # 用于自动生成 insights 报告（可选）
 OPENAI_API_KEY=sk-oai-...
-REPORT_DAYS=7                     # 默认扫描区间
-INSIGHTS_MODEL=claude-3-5-sonnet  # `--insights` 使用的模型
+REPORT_DAYS=7                       # 默认扫描区间
 ```
 
 - GitHub/HF Token：用于访问私有数据源或提升 API 限额。
@@ -103,14 +102,20 @@ INSIGHTS_MODEL=claude-3-5-sonnet  # `--insights` 使用的模型
 ### 执行扫描 / Run a Scan
 
 ```bash
-# 基础扫描
+# 基础扫描（默认自动生成 AI 分析报告）
 python src/main_intel.py --days 7
 
-# 带 AI 分析（在 Claude Code / Claude App 中运行）
-python src/main_intel.py --days 7 --insights
+# 跳过 AI 分析
+python src/main_intel.py --days 7 --no-insights
 ```
 
-`--insights` 模式会输出数据 + 分析提示，由环境中的 LLM 自动完成竞争情报分析并保存。
+**AI 分析报告自动生成**：扫描完成后自动调用 Anthropic API 生成竞争情报分析报告。
+
+| 环境 | 行为 |
+|------|------|
+| 设置了 `ANTHROPIC_API_KEY` | 自动调用 API 生成 `_insights.md` |
+| 未设置 API Key（如 Claude Code 中）| 打印分析提示到终端，由环境 LLM 处理 |
+| `--no-insights` | 跳过所有 insights 逻辑 |
 
 **产出文件：**
 ```
