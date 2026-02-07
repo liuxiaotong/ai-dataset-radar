@@ -943,8 +943,9 @@ x_tracker:
   bearer_token: ""
 
   # Monitored accounts - AI labs, researchers, data vendors
+  # Total: ~100 accounts across 12 categories
   accounts:
-    # US Frontier Labs
+    # ── US Frontier Labs (8) ──
     - OpenAI
     - AnthropicAI
     - GoogleDeepMind
@@ -953,7 +954,7 @@ x_tracker:
     - AIatMeta
     - xai
     - NVIDIAAI
-    # Emerging Labs
+    # ── Emerging / Open-Source Labs (12) ──
     - MistralAI
     - CohereForAI
     - AI21Labs
@@ -963,13 +964,16 @@ x_tracker:
     - NousResearch
     - UnslothAI
     - LiquidAI_
-    # Research / Open Source
+    - cohere
+    - RekaAILabs
+    - upstageai
+    # ── Research / Open Source (5) ──
     - EleutherAI
     - huggingface
     - allen_ai
     - lmsys_org
     - EpochAIResearch
-    # China Labs
+    # ── China Labs (14) ──
     - Alibaba_Qwen
     - deepseek_ai
     - ZhipuAI
@@ -979,7 +983,25 @@ x_tracker:
     - MiniMax__AI
     - intern_lm
     - StepFun_ai
-    # Data Vendors
+    - BAAIBeijing
+    - SenseTime_AI
+    - iflytek1999
+    - Baidu_Inc
+    - ByteDanceOSS
+    # ── Asia-Pacific Labs (6) ──
+    - SakanaAILabs
+    - hardmaru
+    - samsungresearch
+    - NAVER_AI_Lab
+    - kakaocorpglobal
+    - cyberagent_ai
+    # ── European AI (5) ──
+    - laion_ai
+    - Aleph__Alpha
+    - LightOnIO
+    - LG_AI_Research
+    - StanfordHAI
+    # ── Data Vendors & Platforms (9) ──
     - scale_AI
     - surge_ai
     - ArgillaIO
@@ -987,12 +1009,23 @@ x_tracker:
     - LabelBox
     - weights_biases
     - EvidentlyAI
-    # Evaluation / Benchmarks
+    - TolokaMI
+    - ProlificAc
+    # ── Infrastructure / MLOps (3) ──
+    - modal_labs
+    - datologyai
+    - kaggle
+    # ── Evaluation / Benchmarks (4) ──
     - lmarena_ai
     - ArtificialAnlys
     - livebench_ai
     - arcprize
-    # Researchers & Influencers
+    # ── AI Safety / Alignment / Policy (4) ──
+    - ai_risks
+    - ShayneRedford
+    - sayashk
+    - JaredKaplan
+    # ── Researchers & Influencers (28) ──
     - karpathy
     - ylecun
     - jimfan
@@ -1008,6 +1041,19 @@ x_tracker:
     - mmitchell_ai
     - _jasonwei
     - rohanpaul_ai
+    - rm_rafailov
+    - _philschmid
+    - YiTayML
+    - lilianweng
+    - hendrycks
+    - cwolferesearch
+    - _lewtun
+    - Thom_Wolf
+    - drfeifei
+    - osanseviero
+    - markchen90
+    - karlcobbe
+    - aidangomez
 
   # Search keywords (API backend only)
   search_keywords:
