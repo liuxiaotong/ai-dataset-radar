@@ -948,34 +948,66 @@ x_tracker:
     - OpenAI
     - AnthropicAI
     - GoogleDeepMind
+    - GoogleAI
     - MetaAI
+    - AIatMeta
     - xai
+    - NVIDIAAI
     # Emerging Labs
     - MistralAI
     - CohereForAI
     - AI21Labs
     - togethercompute
+    - StabilityAI
+    - databricks
+    - NousResearch
+    - UnslothAI
+    - LiquidAI_
     # Research / Open Source
     - EleutherAI
     - huggingface
     - allen_ai
     - lmsys_org
+    - EpochAIResearch
     # China Labs
     - Alibaba_Qwen
     - deepseek_ai
     - ZhipuAI
     - Baichuan_Inc
     - 01AI_Yi
+    - Kimi_Moonshot
+    - MiniMax__AI
+    - intern_lm
+    - StepFun_ai
     # Data Vendors
     - scale_AI
     - surge_ai
     - ArgillaIO
     - SnorkelAI
     - LabelBox
+    - weights_biases
+    - EvidentlyAI
+    # Evaluation / Benchmarks
+    - lmarena_ai
+    - ArtificialAnlys
+    - livebench_ai
+    - arcprize
     # Researchers & Influencers
     - karpathy
     - ylecun
     - jimfan
+    - natolambert
+    - lvwerra
+    - ClementDelangue
+    - percyliang
+    - Teknium1
+    - maximelabonne
+    - danielhanchen
+    - rasbt
+    - AndrewYNg
+    - mmitchell_ai
+    - _jasonwei
+    - rohanpaul_ai
 
   # Search keywords (API backend only)
   search_keywords:
