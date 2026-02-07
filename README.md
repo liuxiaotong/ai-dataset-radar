@@ -463,7 +463,7 @@ Radar (情报采集) → DataRecipe (逆向分析) → 复刻生产
 - [x] MCP Server (9 工具: scan/summary/datasets/github/papers/blogs/config/search/diff)
 - [x] 插件化采集器 (9 个)
 - [x] 性能优化 (并行采集、缓存、连接池)
-- [x] 测试覆盖 (198 用例)
+- [x] 测试覆盖 (357 用例: MCP 工具 53 + GitHub tracker 40 + Org tracker 27 + X tracker 27 + 既有 210)
 - [x] 博客抓取多策略降级 (RSS → HTML → Playwright, networkidle → domcontentloaded)
 - [x] 中国数据供应商监控 (海天瑞声、整数智能、数据堂、智源 BAAI)
 - [x] X/Twitter 监控 (~100 账户，12 类别，RSSHub/API 双后端，信号关键词过滤)
