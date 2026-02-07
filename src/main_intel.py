@@ -27,6 +27,7 @@ logger = get_logger("main_intel")
 from trackers.org_tracker import OrgTracker
 from trackers.github_tracker import GitHubTracker
 from trackers.blog_tracker import BlogTracker
+from trackers.x_tracker import XTracker
 from analyzers.data_type_classifier import DataTypeClassifier, DataType
 from analyzers.paper_filter import PaperFilter
 from intel_report import IntelReportGenerator
@@ -66,6 +67,7 @@ def format_insights_prompt(
     datasets_by_type: dict,
     lab_activity: dict = None,
     vendor_activity: dict = None,
+    x_activity: dict = None,
 ) -> str:
     """Format data with analysis prompt for LLM consumption.
 
@@ -299,6 +301,38 @@ def format_insights_prompt(
     else:
         lines.append("*无 GitHub 活动*\n")
 
+    # ── Section 5.5: X/Twitter Activity ──
+    lines.append("## 5.5、X/Twitter 动态\n")
+    x_data = x_activity or {}
+    x_accounts = x_data.get("accounts", [])
+    x_search = x_data.get("search_results", [])
+    if x_accounts:
+        for acct in x_accounts:
+            username = acct.get("username", "")
+            tweets = acct.get("relevant_tweets", [])
+            if tweets:
+                lines.append(f"### @{username} ({len(tweets)} 条相关推文)")
+                for tweet in tweets[:5]:
+                    text = tweet.get("text", "")[:200]
+                    url = tweet.get("url", "")
+                    date = tweet.get("date", "")
+                    signals = tweet.get("signals", [])
+                    lines.append(f"- [{date}] {text}")
+                    if url:
+                        lines.append(f"  链接: {url}")
+                    if signals:
+                        lines.append(f"  信号: {', '.join(signals)}")
+                lines.append("")
+    if x_search:
+        lines.append("### 关键词搜索结果")
+        for tweet in x_search[:10]:
+            text = tweet.get("text", "")[:200]
+            query = tweet.get("query", "")
+            lines.append(f"- [{query}] {text}")
+        lines.append("")
+    if not x_accounts and not x_search:
+        lines.append("*无 X/Twitter 动态*\n")
+
     # ── Section 6: Papers (full titles, longer abstracts) ──
     lines.append("## 六、相关论文\n")
     if papers:
@@ -501,6 +535,11 @@ def main():
         help="Skip fetching dataset READMEs",
     )
     parser.add_argument(
+        "--no-x",
+        action="store_true",
+        help="Skip X/Twitter tracking",
+    )
+    parser.add_argument(
         "--no-insights",
         action="store_true",
         help="Skip LLM analysis prompt output (enabled by default)",
@@ -523,6 +562,7 @@ def main():
     org_tracker = OrgTracker(config)
     github_tracker = GitHubTracker(config)
     blog_tracker = BlogTracker(config)
+    x_tracker = XTracker(config) if not args.no_x and config.get("x_tracker", {}).get("enabled", False) else None
     data_classifier = DataTypeClassifier(config)
     paper_filter = PaperFilter(config)
     report_generator = IntelReportGenerator(config)
@@ -533,6 +573,7 @@ def main():
     vendor_activity = {"vendors": {}}
     github_activity = []
     blog_activity = []
+    x_activity = {"accounts": [], "search_results": []}
     papers = []
 
     # Pre-build paper scrapers so they're ready for parallel submission
@@ -567,6 +608,10 @@ def main():
             logger.info("Tracking company blogs...")
             futures["blogs"] = executor.submit(blog_tracker.fetch_all_blogs, days=args.days)
 
+        if x_tracker:
+            logger.info("Tracking X/Twitter accounts...")
+            futures["x"] = executor.submit(x_tracker.fetch_all, days=args.days)
+
         if arxiv_scraper:
             logger.info("Fetching from arXiv...")
             futures["arxiv"] = executor.submit(arxiv_scraper.fetch)
@@ -593,6 +638,11 @@ def main():
                     active_count = sum(1 for a in blog_activity if a.get("articles"))
                     article_count = sum(len(a.get("articles", [])) for a in blog_activity)
                     logger.info("Found %d active blogs with %d relevant articles", active_count, article_count)
+                elif key == "x":
+                    x_activity = result
+                    x_accounts = len(result.get("accounts", []))
+                    x_tweets = sum(len(a.get("relevant_tweets", [])) for a in result.get("accounts", []))
+                    logger.info("Found %d active X accounts with %d relevant tweets", x_accounts, x_tweets)
                 elif key == "arxiv":
                     logger.info("Found %d arXiv papers", len(result))
                     papers.extend(paper_filter.filter_papers(result))
@@ -668,6 +718,7 @@ def main():
         "vendor_activity": vendor_activity,
         "github_activity": github_activity,
         "blog_posts": blog_activity,
+        "x_activity": x_activity,
         "datasets": all_datasets,
         "datasets_by_type": datasets_json,
         "papers": papers,
@@ -723,6 +774,7 @@ def main():
             datasets_by_type=datasets_by_type,
             lab_activity=lab_activity,
             vendor_activity=vendor_activity,
+            x_activity=x_activity,
         )
         print(insights_content)
 
