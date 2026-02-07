@@ -825,16 +825,30 @@ def main():
             vendor_activity=vendor_activity,
             x_activity=x_activity,
         )
-        print(insights_content)
 
         # Save insights prompt to file for reference
-        insights_prompt_path = output_dir / "reports" / f"intel_report_{datetime.now().strftime('%Y-%m-%d')}_insights_prompt.md"
+        date_str = datetime.now().strftime('%Y-%m-%d')
+        insights_prompt_path = output_dir / "reports" / f"intel_report_{date_str}_insights_prompt.md"
         with open(insights_prompt_path, "w", encoding="utf-8") as f:
             f.write(insights_content)
         logger.info("Insights prompt saved to: %s", insights_prompt_path)
-        logger.info("")
-        logger.info(">>> AI 分析完成后，请将分析结果保存到:")
-        logger.info(">>> %s", str(insights_prompt_path).replace("_prompt.md", ".md"))
+
+        # Try auto-generating insights via LLM API
+        from utils.llm_client import generate_insights
+        insights_result = generate_insights(insights_content)
+
+        insights_path = output_dir / "reports" / f"intel_report_{date_str}_insights.md"
+        if insights_result:
+            # API succeeded — save the report
+            with open(insights_path, "w", encoding="utf-8") as f:
+                f.write(insights_result)
+            logger.info("Insights report saved to: %s", insights_path)
+        else:
+            # No API key — fall back to printing prompt for environment LLM
+            print(insights_content)
+            logger.info("")
+            logger.info(">>> AI 分析完成后，请将分析结果保存到:")
+            logger.info(">>> %s", insights_path)
 
 
 if __name__ == "__main__":
