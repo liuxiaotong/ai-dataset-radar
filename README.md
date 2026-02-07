@@ -2,7 +2,8 @@
 
 # AI Dataset Radar
 
-**面向 AI Agent 的训练数据竞争情报系统**
+**面向 AI Agent 的训练数据竞争情报系统**  
+**Competitive intelligence feed for AI training datasets (Agent-ready)**
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-green.svg)](LICENSE)
 [![Python 3.10+](https://img.shields.io/badge/python-3.10+-blue.svg)](https://www.python.org/downloads/)
@@ -15,15 +16,28 @@
 
 ---
 
-监控 30+ 机构的训练数据动态，提供结构化输出供智能体消费。支持 Function Calling、MCP、REST API 多种接入方式。
+**GitHub Topics**: `ai-agent`, `competitive-intelligence`, `dataset-monitoring`, `mcp`, `function-calling`
 
-## 系统概述
+监控 29 家 AI Labs、19 家数据供应商、38 个博客源、13 个 GitHub 组织的训练数据动态，提供结构化输出供智能体消费。支持 Function Calling、MCP、REST API 多种接入方式。
+
+## 系统概述 / System Overview
 
 ```
 多源采集 → 智能分类 → 结构化输出 → 智能体消费
 ```
 
-### 设计目标
+### 运行全景 / End-to-end Flow
+
+```
+┌────────────┐    ┌────────────┐    ┌────────────┐    ┌─────────────┐
+│ 数据源监控 │──▶│ 语义分类   │──▶│ 报告生成   │──▶│ Agent / 人类 │
+│ (48+ orgs) │    │ (LLM+规则) │    │ (JSON+MD)  │    │ 消费/决策    │
+└────────────┘    └────────────┘    └────────────┘    └─────────────┘
+
+示例报告: `data/screenshots/intel_report.png`
+```
+
+### 设计目标 / Design Goals
 
 | 目标 | 实现方式 |
 |------|----------|
@@ -33,7 +47,7 @@
 | **人机兼顾** | 同时输出 Markdown (人类) 与 JSON (智能体) |
 | **环境原生 LLM** | `--insights` 模式利用 Claude Code/App 原生能力分析 |
 
-### 适用场景
+### 适用场景 / Use Cases
 
 | 使用者 | 接入方式 | 应用场景 |
 |--------|----------|----------|
@@ -43,20 +57,22 @@
 | 🔧 **自定义系统** | REST API | 集成至现有工作流 |
 | 👔 **决策者** | Markdown 报告 | 周报阅读、趋势把握 |
 
-### 输出产物
+### 输出产物 / Deliverables
 
 | 产物 | 路径 | 消费者 |
 |------|------|--------|
 | 情报报告 (JSON) | `data/reports/intel_report_*.json` | AI Agent |
 | 情报报告 (MD) | `data/reports/intel_report_*.md` | 人类 |
 | AI 分析报告 | `data/reports/intel_report_*_insights.md` | 决策层 |
+| 分析提示词 | `data/reports/intel_report_*_insights_prompt.md` | LLM 输入 |
+| 异常排查报告 | `data/reports/intel_report_*_anomalies.md` | 运维 |
 | 工具定义 | `agent/tools.json` | Function Calling |
 | 输出规范 | `agent/schema.json` | 数据验证 |
 | 系统提示词 | `agent/prompts.md` | Agent 配置 |
 
 ---
 
-## 安装部署
+## 安装部署 / Installation
 
 ```bash
 git clone https://github.com/liuxiaotong/ai-dataset-radar.git
@@ -67,9 +83,26 @@ pip install -r requirements.txt
 pip install fastapi uvicorn
 ```
 
-## 快速开始
+### 配置与调度 / Configuration & Scheduling
 
-### 执行扫描
+```bash
+cp .env.example .env
+
+# 关键变量
+DATA_SOURCES=github,huggingface,arxiv
+ANTHROPIC_API_KEY=sk-ant-...
+OPENAI_API_KEY=sk-oai-...
+REPORT_DAYS=7                     # 默认扫描区间
+INSIGHTS_MODEL=claude-3-5-sonnet  # `--insights` 使用的模型
+```
+
+- GitHub/HF Token：用于访问私有数据源或提升 API 限额。
+- `DATA_SOURCES`：逗号分隔控制采集范围，禁用特定源时也能减少速率限制。
+- 调度建议：`crontab -e` 中加入 `0 */6 * * * /usr/bin/python src/main_intel.py --days 7`，即可每 6 小时刷新一次。
+
+## 快速开始 / Quick Start
+
+### 执行扫描 / Run a Scan
 
 ```bash
 # 基础扫描
@@ -84,20 +117,21 @@ python src/main_intel.py --days 7 --insights
 **产出文件：**
 ```
 data/reports/
-├── intel_report_2026-02-05.json            # 结构化数据 (Agent)
-├── intel_report_2026-02-05.md              # 原始报告 (人类)
-├── intel_report_2026-02-05_insights_prompt.md  # 分析提示 (LLM 输入)
-└── intel_report_2026-02-05_insights.md     # AI 分析报告 (决策层)
+├── intel_report_2026-02-07.json                # 结构化数据 (Agent)
+├── intel_report_2026-02-07.md                  # 原始报告 (人类)
+├── intel_report_2026-02-07_insights_prompt.md  # 分析提示 (LLM 输入)
+├── intel_report_2026-02-07_insights.md         # AI 分析报告 (决策层)
+└── intel_report_2026-02-07_anomalies.md        # 异常排查报告 (运维)
 ```
 
-### 启动 API 服务
+### 启动 API 服务 / Start API Service
 
 ```bash
 uvicorn agent.api:app --port 8080
 # 接口文档: http://localhost:8080/docs
 ```
 
-### 智能体调用
+### 智能体调用 / Agent Usage
 
 ```python
 import requests
@@ -107,9 +141,9 @@ datasets = response.json()
 
 ---
 
-## Agent 集成
+## Agent 集成 / Agent Integrations
 
-### 接入方式
+### 接入方式 / Integration Options
 
 | 方式 | 适用框架 | 配置文件 |
 |------|----------|----------|
@@ -118,7 +152,7 @@ datasets = response.json()
 | **MCP Server** | Claude Desktop | `mcp_server/server.py` |
 | **JSON Schema** | 类型生成、数据验证 | `agent/schema.json` |
 
-### HTTP API 端点
+### HTTP API 端点 / Endpoints
 
 ```bash
 uvicorn agent.api:app --port 8080
@@ -134,6 +168,30 @@ uvicorn agent.api:app --port 8080
 | `/scan` | POST | 执行新扫描 |
 | `/schema` | GET | 输出规范 |
 | `/tools` | GET | 工具定义 |
+
+#### Claude MCP 配置示例 / Claude MCP Config
+
+`~/Library/Application Support/Claude/claude_desktop_config.json`
+
+```json
+{
+  "mcpServers": {
+    "radar": {
+      "command": "uv",
+      "args": ["--directory", "/path/to/ai-dataset-radar", "run", "python", "mcp_server/server.py"],
+      "env": {
+        "RADAR_DATA_SOURCES": "github,huggingface",
+        "RADAR_REPORT_DAYS": "7"
+      }
+    }
+  }
+}
+```
+
+> 常见问题：
+> - `Tool invocation timed out` → 增大 `MCP_TIMEOUT` 或减小 `--days`。
+> - `No insights model configured` → `.env` 中未设置 `INSIGHTS_MODEL` 或 `ANTHROPIC_API_KEY`。
+> - `Permission denied writing data/reports` → 确保在项目根目录运行或设置 `RADAR_OUTPUT_DIR`。
 
 ### OpenAI Function Calling
 
@@ -227,10 +285,20 @@ tools = [
 
 | 来源 | 覆盖范围 |
 |------|----------|
-| **HuggingFace** | 30+ 机构：OpenAI, DeepMind, Meta, Anthropic, Qwen, DeepSeek 等 |
-| **博客** | 17 来源：OpenAI, Anthropic, Google AI, Mistral, Scale AI, Qwen 等 |
-| **GitHub** | 15+ 组织：openai, anthropics, deepseek-ai, argilla-io 等 |
+| **HuggingFace** | 29 AI Labs + 19 数据供应商：OpenAI, DeepMind, Meta, Anthropic, Qwen, DeepSeek, NVIDIA, Scale AI, BAAI 等 |
+| **博客** | 38 来源：OpenAI, Anthropic (Research/News/Alignment/Red Team/API), Google AI, DeepMind, Mistral, Scale AI, Mercor, Surge AI, 海天瑞声, 整数智能, 智源 BAAI 等 |
+| **GitHub** | 13 组织：openai, anthropics, deepseek-ai, argilla-io, scaleapi, meta-llama 等 |
 | **论文** | arXiv (cs.CL/AI/LG) + HuggingFace Daily Papers |
+
+### 数据供应商分类
+
+| 类别 | 覆盖 |
+|------|------|
+| **Premium（海外）** | Scale AI, Appen, Mercor, Invisible Technologies, TELUS Digital |
+| **Specialized（海外）** | Surge AI, Snorkel AI, Labelbox, Turing, Prolific, Cohere for AI |
+| **China Premium（中国）** | 海天瑞声, 整数智能 MolarData, 云测数据 Testin |
+| **China Specialized（中国）** | 标贝科技 DataBaker, 数据堂 Datatang |
+| **China Research（中国）** | 智源研究院 BAAI |
 
 ### 数据集分类体系
 
@@ -238,9 +306,12 @@ tools = [
 |------|--------|-----------|
 | **sft** | instruction, chat | Alpaca, ShareGPT |
 | **preference** | rlhf, dpo | UltraFeedback, HelpSteer |
+| **reward_model** | reward, rationale | RationaleRM |
 | **synthetic** | synthetic, generated | Magpie, Sera |
 | **agent** | tool, function | SWE-bench, WebArena |
 | **multimodal** | image, video | LLaVA, Action100M |
+| **multilingual** | multilingual, speech | WaxalNLP, EuroLLM |
+| **rl_environment** | reinforcement, simulation | ToucHD, RoboCasa |
 | **code** | code, programming | StarCoder |
 
 ---
@@ -253,12 +324,12 @@ tools = [
 
 ```json
 {
-  "generated_at": "2026-02-05T12:59:46",
+  "generated_at": "2026-02-07T14:22:03",
   "summary": {
-    "total_datasets": 15,
-    "total_github_repos": 134,
-    "total_papers": 23,
-    "total_blog_posts": 25
+    "total_datasets": 14,
+    "total_github_repos": 136,
+    "total_papers": 22,
+    "total_blog_posts": 93
   },
   "datasets": [{
     "id": "allenai/Dolci-Instruct-SFT",
@@ -294,11 +365,22 @@ watched_orgs:
   frontier_labs:
     openai: { hf_ids: ["openai"] }
     google_deepmind: { hf_ids: ["google", "deepmind"] }
+  # emerging_labs, research_labs, china_labs...
 
 watched_vendors:
+  premium:
+    scale_ai: { name: "Scale AI", hf_ids: ["ScaleAI"] }
+    mercor: { name: "Mercor", hf_ids: ["mercor"] }
+  # specialized, china_premium, china_specialized, china_research...
+
   blogs:
     - name: "OpenAI Blog"
       url: "https://openai.com/blog"
+    - name: "Anthropic Research"
+      url: "https://www.anthropic.com/research"
+    - name: "海天瑞声 SpeechOcean"
+      url: "https://www.haitianruisheng.com/aboutus/news/catid-23.htm"
+    # ... 38 sources total
 
 priority_data_types:
   preference: { keywords: ["rlhf", "dpo"] }
@@ -312,8 +394,12 @@ priority_data_types:
 ```
 ai-dataset-radar/
 ├── src/                        # 核心模块
-│   ├── main_intel.py           # 主入口
-│   ├── scrapers/               # 数据采集器 (9 个)
+│   ├── main_intel.py           # 主入口（扫描 + insights 提示生成）
+│   ├── trackers/               # 数据追踪器
+│   │   ├── org_tracker.py      # HuggingFace 组织追踪
+│   │   ├── blog_tracker.py     # 博客监控（RSS/HTML/Playwright）
+│   │   ├── github_tracker.py   # GitHub 组织活动
+│   │   └── paper_tracker.py    # arXiv + HF Papers
 │   ├── analyzers/              # 分类器
 │   └── utils/                  # 工具库
 ├── agent/                      # Agent 集成层
@@ -322,7 +408,7 @@ ai-dataset-radar/
 │   ├── schema.json             # 输出规范
 │   └── prompts.md              # 系统提示词
 ├── mcp_server/                 # MCP 服务
-├── config.yaml                 # 配置文件
+├── config.yaml                 # 监控配置（组织/供应商/博客/关键词）
 └── data/reports/               # 输出目录
 ```
 
@@ -356,6 +442,10 @@ Radar (情报采集) → DataRecipe (逆向分析) → 复刻生产
 - [x] 插件化采集器 (9 个)
 - [x] 性能优化 (并行采集、缓存、连接池)
 - [x] 测试覆盖 (198 用例)
+- [x] 博客抓取多策略降级 (RSS → HTML → Playwright, networkidle → domcontentloaded)
+- [x] 中国数据供应商监控 (海天瑞声、整数智能、数据堂、智源 BAAI)
+- [x] Insights 分析提示生成 (`--insights` 模式)
+- [x] 异常报告独立输出
 - [ ] 定时任务与告警
 - [ ] Web 可视化界面
 
