@@ -283,9 +283,9 @@ tools = [
 
 | 来源 | 覆盖范围 |
 |------|----------|
-| **HuggingFace** | 29 AI Labs + 19 数据供应商：OpenAI, DeepMind, Meta, Anthropic, Qwen, DeepSeek, NVIDIA, Scale AI, BAAI 等 |
-| **博客** | 38 来源：OpenAI, Anthropic (Research/News/Alignment/Red Team/API), Google AI, DeepMind, Mistral, Scale AI, Mercor, Surge AI, 海天瑞声, 整数智能, 智源 BAAI 等 |
-| **GitHub** | 13 组织：openai, anthropics, deepseek-ai, argilla-io, scaleapi, meta-llama 等 |
+| **HuggingFace** | 36+ AI Labs + 19 数据供应商：OpenAI, DeepMind, Meta, Anthropic, Qwen, DeepSeek, NVIDIA, Cerebras, Arcee AI, Gretel, Scale AI, BAAI 等 |
+| **博客** | 46+ 来源：OpenAI, Anthropic, Google AI, DeepMind, Mistral 等实验室 + Lil'Log, fast.ai, Interconnects, LessWrong, Alignment Forum 等研究者博客 |
+| **GitHub** | 31 组织：openai, anthropics, deepseek-ai, NousResearch, NVIDIA, databricks, argilla-io 等 |
 | **论文** | arXiv (cs.CL/AI/LG) + HuggingFace Daily Papers |
 | **X/Twitter** | ~100 账户：前沿实验室、开源社区、评估基准、数据供应商、安全/对齐、亚太/欧洲、研究者与影响者 |
 
@@ -467,6 +467,11 @@ Radar (情报采集) → DataRecipe (逆向分析) → 复刻生产
 - [x] X/Twitter 监控 (~100 账户，12 类别，RSSHub/API 双后端，信号关键词过滤)
 - [x] Insights 分析提示生成 (`--insights` 模式)
 - [x] 异常报告独立输出
+- [x] 全链路指数退避重试 (3次, HF/GitHub/RSSHub 5xx 自动恢复)
+- [x] 数据质量校验 (各源 0 结果自动告警, JSON 输出 data_quality_warnings)
+- [x] 博客噪声过滤 (nav/sidebar/footer 自动排除, 浏览器每 5 页重启)
+- [x] GitHub 加权相关性评分 (keyword×10 + stars/100 + 近 3 天活跃加成 - 噪声惩罚)
+- [x] 研究者博客监控 (Lil'Log, fast.ai, Interconnects, LessWrong, Alignment Forum, The Gradient, Epoch AI)
 - [ ] 定时任务与告警
 - [ ] Web 可视化界面
 
