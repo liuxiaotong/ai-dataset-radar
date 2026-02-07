@@ -7,7 +7,9 @@ Monitors company blogs for:
 
 import re
 import time
+from concurrent.futures import ThreadPoolExecutor
 from datetime import datetime, timedelta
+from threading import Lock
 from typing import Optional
 from urllib.parse import urljoin, urlparse, urlunparse, parse_qs, urlencode
 
@@ -70,9 +72,14 @@ class BlogTracker:
         self.headers = {
             "User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
         }
+        self.session = requests.Session()
+        self.session.headers.update(self.headers)
+        self._rss_cache = {}  # Cache: base_url -> discovered feed URL (or None)
 
     def _discover_rss_feed(self, base_url: str) -> Optional[str]:
-        """Try to discover RSS feed URL for a blog.
+        """Try to discover RSS feed URL for a blog (parallelized, cached).
+
+        Probes multiple RSS paths concurrently and caches the result.
 
         Args:
             base_url: Blog base URL.
@@ -80,31 +87,46 @@ class BlogTracker:
         Returns:
             RSS feed URL if found, None otherwise.
         """
+        # Return cached result if available
+        if base_url in self._rss_cache:
+            return self._rss_cache[base_url]
+
         parsed = urlparse(base_url)
         base = f"{parsed.scheme}://{parsed.netloc}"
 
-        # Try common RSS paths
-        for path in RSS_PATHS:
+        def _probe_path(path):
+            """Probe a single RSS path, return URL if valid feed."""
             feed_url = base + path
             try:
-                resp = requests.head(feed_url, headers=self.headers, timeout=5, allow_redirects=True)
+                resp = self.session.head(feed_url, timeout=5, allow_redirects=True)
                 if resp.status_code == 200:
                     content_type = resp.headers.get("Content-Type", "")
                     if any(t in content_type for t in ["xml", "rss", "atom", "feed"]):
                         return feed_url
-                    # Try GET to check content
-                    resp = requests.get(feed_url, headers=self.headers, timeout=5)
+                    resp = self.session.get(feed_url, timeout=5)
                     if resp.status_code == 200 and ("<?xml" in resp.text[:100] or "<rss" in resp.text[:200] or "<feed" in resp.text[:200]):
                         return feed_url
             except requests.RequestException:
-                continue
+                pass
+            return None
+
+        # Probe all RSS paths concurrently
+        with ThreadPoolExecutor(max_workers=5) as executor:
+            future_to_path = {executor.submit(_probe_path, p): p for p in RSS_PATHS}
+            for future in future_to_path:
+                result = future.result()
+                if result:
+                    # Cancel remaining futures and return first hit
+                    for f in future_to_path:
+                        f.cancel()
+                    self._rss_cache[base_url] = result
+                    return result
 
         # Try to find feed link in HTML
         try:
-            resp = requests.get(base_url, headers=self.headers, timeout=10)
+            resp = self.session.get(base_url, timeout=10)
             if resp.status_code == 200:
                 soup = BeautifulSoup(resp.text, "html.parser")
-                # Look for RSS/Atom link tags
                 for link in soup.find_all("link", rel=["alternate", "feed"]):
                     link_type = link.get("type", "")
                     if "rss" in link_type or "atom" in link_type or "xml" in link_type:
@@ -112,10 +134,12 @@ class BlogTracker:
                         if href:
                             if not href.startswith("http"):
                                 href = urljoin(base_url, href)
+                            self._rss_cache[base_url] = href
                             return href
         except requests.RequestException:
             pass
 
+        self._rss_cache[base_url] = None
         return None
 
     def fetch_rss(self, url: str, days: int = 7) -> tuple[list[dict], Optional[str]]:
@@ -244,7 +268,7 @@ class BlogTracker:
             Tuple of (articles list, error message or None).
         """
         try:
-            resp = requests.get(url, headers=self.headers, timeout=30)
+            resp = self.session.get(url, timeout=30)
             resp.raise_for_status()
         except requests.RequestException as e:
             return [], f"HTTP error: {e}"
@@ -327,7 +351,7 @@ class BlogTracker:
         return articles, None
 
     def scrape_with_browser(
-        self, url: str, selector: str, days: int = 7
+        self, url: str, selector: str, days: int = 7, browser=None
     ) -> tuple[list[dict], Optional[str]]:
         """Scrape JavaScript-rendered page using Playwright.
 
@@ -335,6 +359,7 @@ class BlogTracker:
             url: Page URL.
             selector: CSS selector for article elements.
             days: Look back period in days.
+            browser: Optional shared Playwright browser instance to reuse.
 
         Returns:
             Tuple of (articles list, error message or None).
@@ -346,10 +371,16 @@ class BlogTracker:
 
         articles = []
         cutoff = datetime.utcnow() - timedelta(days=days)
+        own_browser = browser is None
 
         try:
-            with sync_playwright() as p:
-                browser = p.chromium.launch(headless=True)
+            pw_context = None
+            if own_browser:
+                from playwright.sync_api import sync_playwright
+                pw_context = sync_playwright().start()
+                browser = pw_context.chromium.launch(headless=True)
+
+            try:
                 page = browser.new_page()
                 page.set_default_timeout(30000)
 
@@ -466,7 +497,7 @@ class BlogTracker:
                         except Exception:
                             item["link"] = url
 
-                browser.close()
+                page.close()
 
                 # Build article list
                 for item in items_data:
@@ -478,6 +509,12 @@ class BlogTracker:
                     }
                     article["signals"] = self._extract_signals(article)
                     articles.append(article)
+
+            finally:
+                if own_browser:
+                    browser.close()
+                    if pw_context:
+                        pw_context.stop()
 
             if not articles:
                 return [], "No valid articles extracted from browser render"
@@ -551,12 +588,13 @@ class BlogTracker:
 
         return list(set(signals))
 
-    def fetch_blog(self, blog_config: dict, days: int = 7) -> dict:
+    def fetch_blog(self, blog_config: dict, days: int = 7, browser=None) -> dict:
         """Fetch articles from a single blog.
 
         Args:
             blog_config: Blog configuration dict.
             days: Look back period in days.
+            browser: Optional shared Playwright browser instance.
 
         Returns:
             Blog activity dict with status.
@@ -616,7 +654,7 @@ class BlogTracker:
         # Strategy 5: Use Playwright for JavaScript-rendered pages
         if not articles and blog_type in ("auto", "scrape", "browser"):
             selector = blog_config.get("selector", "article, [class*='post'], [class*='blog']")
-            articles, error = self.scrape_with_browser(url, selector, days)
+            articles, error = self.scrape_with_browser(url, selector, days, browser=browser)
             if articles:
                 result["render_method"] = "browser"
 
@@ -636,7 +674,10 @@ class BlogTracker:
         return result
 
     def fetch_all_blogs(self, days: int = 7) -> list[dict]:
-        """Fetch articles from all configured blogs.
+        """Fetch articles from all configured blogs (parallelized).
+
+        Uses ThreadPoolExecutor to fetch multiple blogs concurrently.
+        Browser-based scraping is serialized to avoid resource contention.
 
         Args:
             days: Look back period in days.
@@ -644,16 +685,66 @@ class BlogTracker:
         Returns:
             List of blog activity dicts, deduplicated by URL.
         """
-        results = []
-        seen_urls = set()
-
         logger.info("Tracking %d company blogs...", len(self.blogs))
 
+        # Separate browser blogs (heavy) from auto/RSS blogs (light)
+        auto_blogs = []
+        browser_blogs = []
         for blog_config in self.blogs:
-            logger.debug("Checking %s...", blog_config.get('name', 'Unknown'))
-            activity = self.fetch_blog(blog_config, days)
+            if blog_config.get("type") == "browser":
+                browser_blogs.append(blog_config)
+            else:
+                auto_blogs.append(blog_config)
 
-            # Deduplicate articles by normalized URL
+        all_activities = []
+
+        # Fetch auto/RSS blogs in parallel (I/O-bound, safe to parallelize)
+        if auto_blogs:
+            with ThreadPoolExecutor(max_workers=8) as executor:
+                futures = {
+                    executor.submit(self.fetch_blog, cfg, days): cfg
+                    for cfg in auto_blogs
+                }
+                for future in futures:
+                    try:
+                        all_activities.append(future.result())
+                    except Exception as e:
+                        cfg = futures[future]
+                        logger.warning("Error fetching %s: %s", cfg.get("name", "?"), e)
+
+        # Fetch browser blogs with shared browser instance (avoid repeated launch)
+        if browser_blogs:
+            shared_browser = None
+            pw_context = None
+            try:
+                from playwright.sync_api import sync_playwright
+                pw_context = sync_playwright().start()
+                shared_browser = pw_context.chromium.launch(headless=True)
+            except Exception as e:
+                logger.warning("Failed to launch shared browser: %s", e)
+
+            if shared_browser:
+                # Browser scraping is not thread-safe, run sequentially with shared browser
+                for cfg in browser_blogs:
+                    try:
+                        all_activities.append(self.fetch_blog(cfg, days, browser=shared_browser))
+                    except Exception as e:
+                        logger.warning("Error fetching %s: %s", cfg.get("name", "?"), e)
+                shared_browser.close()
+                if pw_context:
+                    pw_context.stop()
+            else:
+                # Fallback: each blog launches its own browser
+                for cfg in browser_blogs:
+                    try:
+                        all_activities.append(self.fetch_blog(cfg, days))
+                    except Exception as e:
+                        logger.warning("Error fetching %s: %s", cfg.get("name", "?"), e)
+
+        # Deduplicate articles by normalized URL
+        seen_urls = set()
+        results = []
+        for activity in all_activities:
             unique_articles = []
             for article in activity.get("articles", []):
                 normalized_url = self._normalize_url(article.get("url", ""))
@@ -664,10 +755,7 @@ class BlogTracker:
             activity["articles"] = unique_articles
             if unique_articles:
                 activity["has_activity"] = True
-
-            # Always include in results (even failures for transparency)
             results.append(activity)
-            time.sleep(1)  # Politeness delay
 
         return results
 
