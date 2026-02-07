@@ -26,7 +26,17 @@ DEFAULT_SIGNAL_KEYWORDS = [
     "evaluation", "benchmark", "human-feedback", "sft", "instruction",
     "fine-tuning", "fine-tune", "data-quality", "dataset", "training-data",
     "llm", "language-model", "crowdsourcing", "human-in-the-loop",
-    "active-learning", "data-collection", "synthetic-data"
+    "active-learning", "data-collection", "synthetic-data",
+    # Scaling & Data Quality
+    "scaling-law", "data-curation", "data-filtering", "decontamination",
+    "deduplication", "data-pipeline",
+    # Methods & Techniques
+    "dpo", "direct-preference", "chain-of-thought", "distillation",
+    "curriculum-learning", "contrastive-learning", "data-augmentation",
+    # Modalities & Use Cases
+    "function-calling", "tool-use", "code-generation",
+    "multimodal", "vision-language", "embodied", "robotics",
+    "reward-model", "alignment",
 ]
 
 

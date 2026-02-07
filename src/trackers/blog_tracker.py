@@ -31,10 +31,20 @@ SIGNAL_KEYWORDS = [
     "synthetic data", "reward model", "alignment", "llm", "language model",
     # Research announcements
     "product launch", "release", "announcing", "introducing",
+    # Scaling & Data Quality
+    "scaling law", "data scaling", "data curation", "data filtering",
+    "decontamination", "deduplication", "data pipeline",
+    # Methods & Techniques
+    "dpo", "direct preference", "chain-of-thought", "distillation",
+    "curriculum learning", "active learning", "contrastive learning",
+    "synthetic generation", "data augmentation",
     # AI Research topics (Chinese labs)
     "reasoning", "context", "learning", "model", "multimodal", "vision",
     "agent", "tool", "code", "math", "science", "knowledge",
+    "function calling", "tool use", "code generation",
+    "video understanding", "speech data", "embodied", "robotics",
     "open source", "开源", "发布", "数据集", "训练", "模型",
+    "合成数据", "数据质量", "标注", "蒸馏", "推理", "对齐",
 ]
 
 # Common RSS feed paths to try
