@@ -9,6 +9,7 @@ import argparse
 import json
 import sys
 import time
+from concurrent.futures import ThreadPoolExecutor, as_completed
 from datetime import datetime
 from pathlib import Path
 
@@ -404,6 +405,8 @@ def validate_config(config: dict) -> list[str]:
 def fetch_dataset_readmes(datasets: list[dict], hf_scraper: HuggingFaceScraper) -> list[dict]:
     """Fetch README content for datasets to improve classification.
 
+    Uses parallel fetching with rate-limited workers for speed.
+
     Args:
         datasets: List of datasets.
         hf_scraper: HuggingFace scraper instance.
@@ -412,18 +415,30 @@ def fetch_dataset_readmes(datasets: list[dict], hf_scraper: HuggingFaceScraper) 
         Datasets with card_data populated.
     """
     logger.info("Fetching dataset READMEs for better classification...")
-    count = 0
-    for ds in datasets[:30]:  # Limit to avoid rate limiting
+    to_fetch = [
+        (i, ds) for i, ds in enumerate(datasets[:30])
+        if ds.get("id") and not ds.get("card_data")
+    ]
+
+    if not to_fetch:
+        return datasets
+
+    def _fetch_one(idx_ds):
+        idx, ds = idx_ds
         ds_id = ds.get("id", "")
-        if ds_id and not ds.get("card_data"):
-            try:
-                card_data = hf_scraper.fetch_dataset_readme(ds_id)
-                if card_data:
-                    ds["card_data"] = card_data[:5000]  # Limit length
-                    count += 1
-                time.sleep(0.3)  # Rate limiting
-            except Exception as e:
-                logger.warning("Could not fetch README for %s: %s", ds_id, e)
+        try:
+            card_data = hf_scraper.fetch_dataset_readme(ds_id)
+            return idx, card_data
+        except Exception as e:
+            logger.warning("Could not fetch README for %s: %s", ds_id, e)
+            return idx, None
+
+    count = 0
+    with ThreadPoolExecutor(max_workers=5) as executor:
+        for idx, card_data in executor.map(_fetch_one, to_fetch):
+            if card_data:
+                datasets[idx]["card_data"] = card_data[:5000]
+                count += 1
 
     logger.info("Fetched %d READMEs", count)
     return datasets
@@ -513,41 +528,50 @@ def main():
     report_generator = IntelReportGenerator(config)
     hf_scraper = HuggingFaceScraper(config)
 
-    # 1. Track AI Labs on HuggingFace
+    # 1-3. Fetch all data sources in parallel for maximum speed
     lab_activity = {"labs": {}}
     vendor_activity = {"vendors": {}}
+    github_activity = []
+    blog_activity = []
 
-    if not args.no_labs or not args.no_vendors:
-        logger.info("Tracking organizations on HuggingFace...")
-
+    futures = {}
+    with ThreadPoolExecutor(max_workers=4, thread_name_prefix="radar") as executor:
         if not args.no_labs:
-            lab_activity = {
-                "labs": org_tracker.fetch_lab_activity(days=args.days)
-            }
+            logger.info("Tracking AI labs on HuggingFace...")
+            futures["labs"] = executor.submit(org_tracker.fetch_lab_activity, days=args.days)
 
         if not args.no_vendors:
-            vendor_activity = {
-                "vendors": org_tracker.fetch_vendor_activity(days=args.days)
-            }
+            logger.info("Tracking data vendors on HuggingFace...")
+            futures["vendors"] = executor.submit(org_tracker.fetch_vendor_activity, days=args.days)
 
-    # 2. Track GitHub organizations
-    github_activity = []
-    if not args.no_github:
-        logger.info("Tracking GitHub organizations...")
-        github_data = github_tracker.fetch_all_orgs(days=args.days)
-        github_activity = github_data.get("vendors", []) + github_data.get("labs", [])
-        active_count = sum(1 for a in github_activity if a.get("repos_updated"))
-        repo_count = sum(len(a.get("repos_updated", [])) for a in github_activity)
-        logger.info("Found %d active orgs with %d updated repos", active_count, repo_count)
+        if not args.no_github:
+            logger.info("Tracking GitHub organizations...")
+            futures["github"] = executor.submit(github_tracker.fetch_all_orgs, days=args.days)
 
-    # 3. Track company blogs
-    blog_activity = []
-    if not args.no_blogs:
-        logger.info("Tracking company blogs...")
-        blog_activity = blog_tracker.fetch_all_blogs(days=args.days)
-        active_count = sum(1 for a in blog_activity if a.get("articles"))
-        article_count = sum(len(a.get("articles", [])) for a in blog_activity)
-        logger.info("Found %d active blogs with %d relevant articles", active_count, article_count)
+        if not args.no_blogs:
+            logger.info("Tracking company blogs...")
+            futures["blogs"] = executor.submit(blog_tracker.fetch_all_blogs, days=args.days)
+
+        # Collect results as they complete
+        for key, future in futures.items():
+            try:
+                result = future.result()
+                if key == "labs":
+                    lab_activity = {"labs": result}
+                elif key == "vendors":
+                    vendor_activity = {"vendors": result}
+                elif key == "github":
+                    github_activity = result.get("vendors", []) + result.get("labs", [])
+                    active_count = sum(1 for a in github_activity if a.get("repos_updated"))
+                    repo_count = sum(len(a.get("repos_updated", [])) for a in github_activity)
+                    logger.info("Found %d active orgs with %d updated repos", active_count, repo_count)
+                elif key == "blogs":
+                    blog_activity = result
+                    active_count = sum(1 for a in blog_activity if a.get("articles"))
+                    article_count = sum(len(a.get("articles", [])) for a in blog_activity)
+                    logger.info("Found %d active blogs with %d relevant articles", active_count, article_count)
+            except Exception as e:
+                logger.warning("Error fetching %s: %s", key, e)
 
     # 4. Collect all datasets for classification
     all_datasets = []

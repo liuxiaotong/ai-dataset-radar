@@ -5,11 +5,14 @@ from HuggingFace API.
 """
 
 import time
+from concurrent.futures import ThreadPoolExecutor
+from threading import Lock
 import requests
 from datetime import datetime, timedelta
 from typing import Optional
 
 from utils.logging_config import get_logger
+from utils.cache import get_cache
 
 logger = get_logger(__name__)
 
@@ -38,9 +41,11 @@ class OrgTracker:
         self.watched_orgs = self._parse_orgs(config.get("watched_orgs", {}))
         self.watched_vendors = self._parse_vendors(config.get("watched_vendors", {}))
 
-        # Rate limiting
+        # Thread-safe rate limiting
         self._last_request = 0
-        self._request_delay = 0.5  # seconds
+        self._request_delay = 0.3  # seconds (reduced from 0.5)
+        self._rate_lock = Lock()
+        self._cache = get_cache()
 
     def _parse_orgs(self, orgs_config: dict) -> dict:
         """Parse organization configuration into flat structure.
@@ -85,14 +90,15 @@ class OrgTracker:
         return result
 
     def _rate_limit(self):
-        """Apply rate limiting between requests."""
-        elapsed = time.time() - self._last_request
-        if elapsed < self._request_delay:
-            time.sleep(self._request_delay - elapsed)
-        self._last_request = time.time()
+        """Apply thread-safe rate limiting between requests."""
+        with self._rate_lock:
+            elapsed = time.time() - self._last_request
+            if elapsed < self._request_delay:
+                time.sleep(self._request_delay - elapsed)
+            self._last_request = time.time()
 
     def _fetch_org_datasets(self, org_id: str, limit: int = 100) -> list[dict]:
-        """Fetch datasets from a specific organization.
+        """Fetch datasets from a specific organization (with caching).
 
         Args:
             org_id: HuggingFace organization ID.
@@ -101,6 +107,11 @@ class OrgTracker:
         Returns:
             List of dataset dictionaries.
         """
+        cache_key = f"hf:datasets:{org_id}:{limit}"
+        cached = self._cache.get(cache_key)
+        if cached is not None:
+            return cached
+
         self._rate_limit()
 
         url = f"{self.HF_API_URL}/datasets"
@@ -114,14 +125,16 @@ class OrgTracker:
         try:
             response = self.session.get(url, params=params, timeout=30)
             if response.status_code == 200:
-                return response.json()
+                result = response.json()
+                self._cache.set(cache_key, result, ttl=3600)
+                return result
             else:
                 return []
         except requests.RequestException:
             return []
 
     def _fetch_org_models(self, org_id: str, limit: int = 50) -> list[dict]:
-        """Fetch models from a specific organization.
+        """Fetch models from a specific organization (with caching).
 
         Args:
             org_id: HuggingFace organization ID.
@@ -130,6 +143,11 @@ class OrgTracker:
         Returns:
             List of model dictionaries.
         """
+        cache_key = f"hf:models:{org_id}:{limit}"
+        cached = self._cache.get(cache_key)
+        if cached is not None:
+            return cached
+
         self._rate_limit()
 
         url = f"{self.HF_API_URL}/models"
@@ -143,14 +161,67 @@ class OrgTracker:
         try:
             response = self.session.get(url, params=params, timeout=30)
             if response.status_code == 200:
-                return response.json()
+                result = response.json()
+                self._cache.set(cache_key, result, ttl=3600)
+                return result
             else:
                 return []
         except requests.RequestException:
             return []
 
+    def _fetch_single_org(self, org_name: str, org_info: dict, cutoff: datetime) -> Optional[tuple]:
+        """Fetch datasets and models for a single org.
+
+        Args:
+            org_name: Organization name.
+            org_info: Organization config info.
+            cutoff: Cutoff datetime for recency filtering.
+
+        Returns:
+            Tuple of (category, org_name, org_data) or None.
+        """
+        category = org_info["category"]
+        org_data = {
+            "datasets": [],
+            "models": [],
+            "priority": org_info["priority"],
+        }
+
+        for hf_id in org_info["hf_ids"]:
+            datasets = self._fetch_org_datasets(hf_id)
+            for ds in datasets:
+                ds["_org"] = org_name
+                ds["_hf_id"] = hf_id
+                modified = ds.get("lastModified", "")
+                if modified:
+                    try:
+                        mod_date = datetime.fromisoformat(modified.replace("Z", "+00:00"))
+                        if mod_date.replace(tzinfo=None) >= cutoff:
+                            org_data["datasets"].append(ds)
+                    except (ValueError, TypeError):
+                        org_data["datasets"].append(ds)
+                else:
+                    org_data["datasets"].append(ds)
+
+            models = self._fetch_org_models(hf_id)
+            for model in models:
+                model["_org"] = org_name
+                model["_hf_id"] = hf_id
+                modified = model.get("lastModified", "")
+                if modified:
+                    try:
+                        mod_date = datetime.fromisoformat(modified.replace("Z", "+00:00"))
+                        if mod_date.replace(tzinfo=None) >= cutoff:
+                            org_data["models"].append(model)
+                    except (ValueError, TypeError):
+                        org_data["models"].append(model)
+
+        if org_data["datasets"] or org_data["models"]:
+            return (category, org_name, org_data)
+        return None
+
     def fetch_lab_activity(self, days: int = 7) -> dict:
-        """Fetch recent activity from all watched AI labs.
+        """Fetch recent activity from all watched AI labs (parallelized).
 
         Args:
             days: Look back period in days.
@@ -168,60 +239,28 @@ class OrgTracker:
         total_orgs = len(self.watched_orgs)
         logger.info("  Tracking %s AI labs...", total_orgs)
 
-        for i, (org_name, org_info) in enumerate(self.watched_orgs.items()):
-            category = org_info["category"]
-            if category not in results:
-                results[category] = {}
-
-            org_data = {
-                "datasets": [],
-                "models": [],
-                "priority": org_info["priority"],
+        with ThreadPoolExecutor(max_workers=6) as executor:
+            futures = {
+                executor.submit(self._fetch_single_org, name, info, cutoff): name
+                for name, info in self.watched_orgs.items()
             }
 
-            # Fetch from all HF IDs for this org
-            for hf_id in org_info["hf_ids"]:
-                # Fetch datasets
-                datasets = self._fetch_org_datasets(hf_id)
-                for ds in datasets:
-                    ds["_org"] = org_name
-                    ds["_hf_id"] = hf_id
-                    # Check if recent
-                    modified = ds.get("lastModified", "")
-                    if modified:
-                        try:
-                            mod_date = datetime.fromisoformat(modified.replace("Z", "+00:00"))
-                            if mod_date.replace(tzinfo=None) >= cutoff:
-                                org_data["datasets"].append(ds)
-                        except (ValueError, TypeError):
-                            org_data["datasets"].append(ds)
-                    else:
-                        org_data["datasets"].append(ds)
-
-                # Fetch models (to analyze training data)
-                models = self._fetch_org_models(hf_id)
-                for model in models:
-                    model["_org"] = org_name
-                    model["_hf_id"] = hf_id
-                    modified = model.get("lastModified", "")
-                    if modified:
-                        try:
-                            mod_date = datetime.fromisoformat(modified.replace("Z", "+00:00"))
-                            if mod_date.replace(tzinfo=None) >= cutoff:
-                                org_data["models"].append(model)
-                        except (ValueError, TypeError):
-                            org_data["models"].append(model)
-
-            if org_data["datasets"] or org_data["models"]:
-                results[category][org_name] = org_data
-
-            if (i + 1) % 5 == 0:
-                logger.info("    Processed %s/%s orgs...", i + 1, total_orgs)
+            done_count = 0
+            for future in futures:
+                result = future.result()
+                done_count += 1
+                if result:
+                    category, org_name, org_data = result
+                    if category not in results:
+                        results[category] = {}
+                    results[category][org_name] = org_data
+                if done_count % 10 == 0:
+                    logger.info("    Processed %s/%s orgs...", done_count, total_orgs)
 
         return results
 
     def fetch_vendor_activity(self, days: int = 7) -> dict:
-        """Fetch recent activity from watched data vendors.
+        """Fetch recent activity from watched data vendors (parallelized).
 
         Args:
             days: Look back period in days.
@@ -238,17 +277,11 @@ class OrgTracker:
         total_vendors = len(self.watched_vendors)
         logger.info("  Tracking %s data vendors...", total_vendors)
 
-        for i, (vendor_name, vendor_info) in enumerate(self.watched_vendors.items()):
-            tier = vendor_info["tier"]
-            if tier not in results:
-                results[tier] = {}
-
+        def _fetch_vendor(vendor_name, vendor_info):
             vendor_data = {
                 "datasets": [],
                 "blog_url": vendor_info.get("blog_url"),
             }
-
-            # Fetch from HF
             for hf_id in vendor_info["hf_ids"]:
                 datasets = self._fetch_org_datasets(hf_id)
                 for ds in datasets:
@@ -262,9 +295,19 @@ class OrgTracker:
                                 vendor_data["datasets"].append(ds)
                         except (ValueError, TypeError):
                             vendor_data["datasets"].append(ds)
+            return vendor_info["tier"], vendor_name, vendor_data
 
-            if vendor_data["datasets"]:
-                results[tier][vendor_name] = vendor_data
+        with ThreadPoolExecutor(max_workers=6) as executor:
+            futures = [
+                executor.submit(_fetch_vendor, name, info)
+                for name, info in self.watched_vendors.items()
+            ]
+            for future in futures:
+                tier, vendor_name, vendor_data = future.result()
+                if vendor_data["datasets"]:
+                    if tier not in results:
+                        results[tier] = {}
+                    results[tier][vendor_name] = vendor_data
 
         return results
 
