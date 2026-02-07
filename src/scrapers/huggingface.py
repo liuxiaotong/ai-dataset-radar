@@ -31,9 +31,7 @@ class HuggingFaceScraper(BaseScraper):
     def __init__(self, config: dict = None, limit: int = 50):
         super().__init__(config)
         self.limit = limit
-        self.headers = {
-            "User-Agent": "AI-Dataset-Radar/1.0"
-        }
+        self.headers = {"User-Agent": "AI-Dataset-Radar/1.0"}
 
     def scrape(self, config: dict = None) -> list[dict]:
         """Scrape datasets from Hugging Face Hub.
@@ -93,9 +91,7 @@ class HuggingFaceScraper(BaseScraper):
 
             last_modified = ds.get("lastModified", "")
             if last_modified:
-                last_modified = datetime.fromisoformat(
-                    last_modified.replace("Z", "+00:00")
-                )
+                last_modified = datetime.fromisoformat(last_modified.replace("Z", "+00:00"))
             else:
                 last_modified = None
 
@@ -122,7 +118,7 @@ class HuggingFaceScraper(BaseScraper):
                 "source_url": dataset_url,
             }
         except Exception as e:
-            logger.info("Error parsing dataset %s: %s", ds.get('id', 'unknown'), e)
+            logger.info("Error parsing dataset %s: %s", ds.get("id", "unknown"), e)
             return None
 
     def fetch_trending_models(
@@ -191,7 +187,7 @@ class HuggingFaceScraper(BaseScraper):
                 "url": f"https://huggingface.co/{model.get('id', '')}",
             }
         except Exception as e:
-            logger.info("Error parsing model %s: %s", model.get('id', 'unknown'), e)
+            logger.info("Error parsing model %s: %s", model.get("id", "unknown"), e)
             return None
 
     def fetch_model_card(self, model_id: str) -> Optional[dict]:
@@ -271,7 +267,9 @@ class HuggingFaceScraper(BaseScraper):
                 datasets.add(match.group(1))
 
             # Pattern: Trained on XXX dataset (common phrasing)
-            trained_pattern = r"[Tt]rained\s+on\s+(?:the\s+)?([A-Za-z0-9_-]+(?:/[A-Za-z0-9_-]+)?)\s+dataset"
+            trained_pattern = (
+                r"[Tt]rained\s+on\s+(?:the\s+)?([A-Za-z0-9_-]+(?:/[A-Za-z0-9_-]+)?)\s+dataset"
+            )
             for match in re.finditer(trained_pattern, readme):
                 candidate = match.group(1)
                 # Filter out common false positives

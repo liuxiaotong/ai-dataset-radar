@@ -12,9 +12,7 @@ Or run directly:
 """
 
 import json
-import os
 import sys
-from datetime import datetime
 from pathlib import Path
 from typing import Optional
 
@@ -43,6 +41,7 @@ app = FastAPI(
 # Models
 # ============================================================
 
+
 class ScanRequest(BaseModel):
     days: int = 7
 
@@ -63,6 +62,7 @@ class DatasetFilter(BaseModel):
 # ============================================================
 # Helpers
 # ============================================================
+
 
 def get_reports_dir() -> Path:
     """Get the reports directory path."""
@@ -96,6 +96,7 @@ def get_latest_report_path() -> Optional[Path]:
 # ============================================================
 # Endpoints
 # ============================================================
+
 
 @app.get("/")
 async def root():
@@ -169,7 +170,10 @@ async def get_summary():
 
 @app.get("/datasets")
 async def list_datasets(
-    category: Optional[str] = Query(None, description="Filter by category: sft, preference, synthetic, agent, multimodal, code, evaluation"),
+    category: Optional[str] = Query(
+        None,
+        description="Filter by category: sft, preference, synthetic, agent, multimodal, code, evaluation",
+    ),
     min_downloads: Optional[int] = Query(None, description="Minimum download count"),
     limit: int = Query(50, description="Maximum results to return"),
 ):
@@ -273,7 +277,9 @@ async def list_papers(
 @app.get("/blogs")
 async def list_blogs(
     source: Optional[str] = Query(None, description="Filter by blog name"),
-    category: str = Query("all", description="Filter: us_frontier, us_emerging, china, research, data_vendor, all"),
+    category: str = Query(
+        "all", description="Filter: us_frontier, us_emerging, china, research, data_vendor, all"
+    ),
     limit: int = Query(50, description="Maximum articles"),
 ):
     """
@@ -298,11 +304,13 @@ async def list_blogs(
     all_articles = []
     for blog in blog_posts:
         for article in blog.get("articles", [])[:limit]:
-            all_articles.append({
-                "source": blog.get("source"),
-                "category": blog.get("category"),
-                **article,
-            })
+            all_articles.append(
+                {
+                    "source": blog.get("source"),
+                    "category": blog.get("category"),
+                    **article,
+                }
+            )
 
     return {
         "count": len(all_articles[:limit]),
@@ -325,6 +333,7 @@ async def get_config():
 
     try:
         import yaml
+
         with open(config_path) as f:
             config = yaml.safe_load(f)
         return config
@@ -372,4 +381,5 @@ async def get_tools():
 
 if __name__ == "__main__":
     import uvicorn
+
     uvicorn.run(app, host="0.0.0.0", port=8080)

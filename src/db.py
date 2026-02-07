@@ -5,7 +5,6 @@ import sqlite3
 import threading
 from contextlib import contextmanager
 from datetime import datetime, timedelta
-from pathlib import Path
 from typing import Optional
 
 from utils.logging_config import get_logger
@@ -14,6 +13,8 @@ logger = get_logger("db")
 
 # Valid column names for dynamic SQL (whitelist for security)
 VALID_GROWTH_COLUMNS = {"downloads_7d_growth", "downloads_30d_growth"}
+
+
 def _get_growth_column(days: int) -> str:
     """Get validated growth column name.
 
@@ -30,6 +31,8 @@ def _get_growth_column(days: int) -> str:
         raise ValueError(f"Invalid days value: {days}, must be 7 or 30")
     column = "downloads_7d_growth" if days == 7 else "downloads_30d_growth"
     return column
+
+
 class RadarDatabase:
     """SQLite database for storing radar data and historical trends.
 
@@ -53,7 +56,7 @@ class RadarDatabase:
 
         Reuses existing connection for the current thread if available.
         """
-        if not hasattr(self._local, 'connection') or self._local.connection is None:
+        if not hasattr(self._local, "connection") or self._local.connection is None:
             self._local.connection = sqlite3.connect(self.db_path)
             self._local.connection.row_factory = sqlite3.Row
         return self._local.connection
@@ -75,7 +78,7 @@ class RadarDatabase:
 
     def close(self):
         """Close the thread-local connection if open."""
-        if hasattr(self._local, 'connection') and self._local.connection:
+        if hasattr(self._local, "connection") and self._local.connection:
             self._local.connection.close()
             self._local.connection = None
 
@@ -216,11 +219,18 @@ class RadarDatabase:
 
         # Create indices for better query performance
         cursor.execute("CREATE INDEX IF NOT EXISTS idx_daily_stats_date ON daily_stats(date)")
-        cursor.execute("CREATE INDEX IF NOT EXISTS idx_daily_stats_dataset ON daily_stats(dataset_id)")
+        cursor.execute(
+            "CREATE INDEX IF NOT EXISTS idx_daily_stats_dataset ON daily_stats(dataset_id)"
+        )
         cursor.execute("CREATE INDEX IF NOT EXISTS idx_trends_date ON trends(date)")
         cursor.execute("CREATE INDEX IF NOT EXISTS idx_models_downloads ON models(downloads DESC)")
-        cursor.execute("CREATE INDEX IF NOT EXISTS idx_valuable_datasets_score ON valuable_datasets(value_score DESC)")
-        cursor.execute("CREATE INDEX IF NOT EXISTS idx_sota_model_datasets_dataset ON sota_model_datasets(dataset_id)")
+        cursor.execute(
+            "CREATE INDEX IF NOT EXISTS idx_valuable_datasets_score ON valuable_datasets(value_score DESC)"
+        )
+        cursor.execute(
+            "CREATE INDEX IF NOT EXISTS idx_sota_model_datasets_dataset ON sota_model_datasets(dataset_id)"
+        )
+
     # Dataset operations
     def upsert_dataset(
         self,
@@ -703,10 +713,22 @@ class RadarDatabase:
                 last_updated = excluded.last_updated
             """,
             (
-                dataset_id, name, source, url, value_score, sota_model_count,
-                citation_count, citation_growth_rate, model_usage_count,
-                institution, is_top_institution, paper_url, code_url,
-                domain, now, now,
+                dataset_id,
+                name,
+                source,
+                url,
+                value_score,
+                sota_model_count,
+                citation_count,
+                citation_growth_rate,
+                model_usage_count,
+                institution,
+                is_top_institution,
+                paper_url,
+                code_url,
+                domain,
+                now,
+                now,
             ),
         )
 

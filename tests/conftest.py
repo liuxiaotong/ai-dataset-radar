@@ -33,8 +33,18 @@ def sample_report():
             "total_blog_posts": 4,
         },
         "datasets": [
-            {"id": "test/dataset1", "category": "synthetic", "downloads": 100, "description": "Test synthetic data"},
-            {"id": "test/dataset2", "category": "sft", "downloads": 200, "description": "Test SFT data"},
+            {
+                "id": "test/dataset1",
+                "category": "synthetic",
+                "downloads": 100,
+                "description": "Test synthetic data",
+            },
+            {
+                "id": "test/dataset2",
+                "category": "sft",
+                "downloads": 200,
+                "description": "Test SFT data",
+            },
         ],
         "datasets_by_type": {"synthetic": ["test/dataset1"], "sft": ["test/dataset2"]},
         "github_activity": [
@@ -58,13 +68,25 @@ def sample_report():
             }
         ],
         "papers": [
-            {"title": "Test Paper", "url": "https://arxiv.org/abs/1234", "abstract": "Test abstract", "source": "arxiv", "categories": ["cs.CL"]},
+            {
+                "title": "Test Paper",
+                "url": "https://arxiv.org/abs/1234",
+                "abstract": "Test abstract",
+                "source": "arxiv",
+                "categories": ["cs.CL"],
+            },
         ],
         "blog_posts": [
             {
                 "source": "Test Blog",
                 "articles": [
-                    {"title": "Test Article", "url": "https://example.com/article", "date": "2024-01-15", "signals": ["rlhf"], "snippet": "Test content"},
+                    {
+                        "title": "Test Article",
+                        "url": "https://example.com/article",
+                        "date": "2024-01-15",
+                        "signals": ["rlhf"],
+                        "snippet": "Test content",
+                    },
                 ],
             }
         ],
@@ -80,7 +102,5 @@ def reports_dir(tmp_path, sample_report):
     """Create a temporary reports directory with a sample report."""
     reports = tmp_path / "data" / "reports"
     reports.mkdir(parents=True)
-    (reports / "intel_report_2024-01-15.json").write_text(
-        json.dumps(sample_report)
-    )
+    (reports / "intel_report_2024-01-15.json").write_text(json.dumps(sample_report))
     return reports

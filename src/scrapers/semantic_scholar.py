@@ -91,9 +91,14 @@ class SemanticScholarScraper:
 
                 elif response.status_code == 429:
                     # Rate limited - exponential backoff
-                    wait_time = (2 ** attempt) * 5 + random.uniform(1, 3)
+                    wait_time = (2**attempt) * 5 + random.uniform(1, 3)
                     if attempt < max_retries:
-                        logger.info("  Rate limited, waiting %.1fs (attempt %s/%s)", wait_time, attempt + 1, max_retries + 1)
+                        logger.info(
+                            "  Rate limited, waiting %.1fs (attempt %s/%s)",
+                            wait_time,
+                            attempt + 1,
+                            max_retries + 1,
+                        )
                         time.sleep(wait_time)
                         continue
                     else:
@@ -102,7 +107,7 @@ class SemanticScholarScraper:
 
                 elif response.status_code == 504:
                     # Gateway timeout - retry with backoff
-                    wait_time = (2 ** attempt) * 2
+                    wait_time = (2**attempt) * 2
                     if attempt < max_retries:
                         logger.info("  Gateway timeout, retrying in %.1fs...", wait_time)
                         time.sleep(wait_time)
@@ -114,14 +119,14 @@ class SemanticScholarScraper:
             except requests.exceptions.Timeout:
                 if attempt < max_retries:
                     logger.info("  Request timeout, retrying...")
-                    time.sleep(2 ** attempt)
+                    time.sleep(2**attempt)
                     continue
                 logger.info("  Request timeout after all retries")
                 return None
 
             except requests.RequestException as e:
                 if attempt < max_retries:
-                    time.sleep(2 ** attempt)
+                    time.sleep(2**attempt)
                     continue
                 logger.info("  Request error: %s", e)
                 return None
@@ -146,7 +151,7 @@ class SemanticScholarScraper:
         ]
 
         for i, query in enumerate(search_queries):
-            logger.info("  Searching: %s... (%s/%s)", query[:40], i+1, len(search_queries))
+            logger.info("  Searching: %s... (%s/%s)", query[:40], i + 1, len(search_queries))
             papers = self._search_papers(query)
             all_papers.extend(papers)
 
@@ -166,7 +171,7 @@ class SemanticScholarScraper:
 
         # Sort by value (citation count + growth)
         filtered.sort(
-            key=lambda p: (p.get("citation_count", 0) + p.get("citation_monthly_growth", 0) * 10),
+            key=lambda p: p.get("citation_count", 0) + p.get("citation_monthly_growth", 0) * 10,
             reverse=True,
         )
 

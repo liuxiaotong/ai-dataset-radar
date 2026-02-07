@@ -126,6 +126,7 @@ class TestGitHubScraper:
     def test_search_repos_error(self, mock_get, scraper):
         """Test handling API errors."""
         import requests
+
         mock_get.side_effect = requests.RequestException("API Error")
 
         repos = scraper._search_repos("dataset")

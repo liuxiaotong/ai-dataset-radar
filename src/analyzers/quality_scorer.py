@@ -24,17 +24,48 @@ class QualityScorer:
     # Known institutions for bonus scoring
     KNOWN_INSTITUTIONS = [
         # Tech companies
-        "alibaba", "bytedance", "baidu", "tencent", "huawei",
-        "google", "meta", "microsoft", "openai", "anthropic",
-        "nvidia", "apple", "amazon", "aws",
+        "alibaba",
+        "bytedance",
+        "baidu",
+        "tencent",
+        "huawei",
+        "google",
+        "meta",
+        "microsoft",
+        "openai",
+        "anthropic",
+        "nvidia",
+        "apple",
+        "amazon",
+        "aws",
         # AI labs
-        "deepseek", "yi", "zhipu", "moonshot", "01-ai", "minimax",
-        "huggingface", "stability", "cohere", "mistral",
+        "deepseek",
+        "yi",
+        "zhipu",
+        "moonshot",
+        "01-ai",
+        "minimax",
+        "huggingface",
+        "stability",
+        "cohere",
+        "mistral",
         # Research institutions
-        "thudm", "fudan", "sjtu", "pku", "thu", "nju",
-        "stanford", "berkeley", "mit", "cmu", "princeton",
+        "thudm",
+        "fudan",
+        "sjtu",
+        "pku",
+        "thu",
+        "nju",
+        "stanford",
+        "berkeley",
+        "mit",
+        "cmu",
+        "princeton",
         # Organizations
-        "fair", "deepmind", "brain", "research",
+        "fair",
+        "deepmind",
+        "brain",
+        "research",
     ]
 
     def __init__(self, config: Optional[dict] = None):
@@ -64,8 +95,7 @@ class QualityScorer:
 
         # Build institution patterns
         self._institution_patterns = [
-            re.compile(rf'\b{inst}\b', re.IGNORECASE)
-            for inst in self.KNOWN_INSTITUTIONS
+            re.compile(rf"\b{inst}\b", re.IGNORECASE) for inst in self.KNOWN_INSTITUTIONS
         ]
 
     def score_dataset(self, dataset: dict) -> dict:
@@ -161,12 +191,14 @@ class QualityScorer:
 
         # Filter out generic tags
         meaningful_tags = [
-            t for t in tags
-            if isinstance(t, str) and (
-                t.startswith("task_categories:") or
-                t.startswith("task_ids:") or
-                t.startswith("language:") or
-                t.startswith("size_categories:")
+            t
+            for t in tags
+            if isinstance(t, str)
+            and (
+                t.startswith("task_categories:")
+                or t.startswith("task_ids:")
+                or t.startswith("language:")
+                or t.startswith("size_categories:")
             )
         ]
 

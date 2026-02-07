@@ -24,12 +24,14 @@ def register_scraper(name: str) -> Callable:
     Returns:
         Decorator function.
     """
+
     def decorator(cls: type["BaseScraper"]) -> type["BaseScraper"]:
         if name in _SCRAPER_REGISTRY:
             raise ValueError(f"Scraper '{name}' is already registered")
         cls.name = name
         _SCRAPER_REGISTRY[name] = cls
         return cls
+
     return decorator
 
 
@@ -58,10 +60,7 @@ def get_all_scrapers(config: dict = None) -> dict[str, "BaseScraper"]:
     Returns:
         Dictionary mapping scraper names to instances.
     """
-    return {
-        name: cls(config=config)
-        for name, cls in _SCRAPER_REGISTRY.items()
-    }
+    return {name: cls(config=config) for name, cls in _SCRAPER_REGISTRY.items()}
 
 
 def list_scrapers() -> list[str]:

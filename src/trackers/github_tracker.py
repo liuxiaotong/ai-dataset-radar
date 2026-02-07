@@ -22,21 +22,54 @@ logger = get_logger(__name__)
 
 # Default signal keywords for detecting relevant repos
 DEFAULT_SIGNAL_KEYWORDS = [
-    "rlhf", "reward", "preference", "annotation", "labeling", "label",
-    "evaluation", "benchmark", "human-feedback", "sft", "instruction",
-    "fine-tuning", "fine-tune", "data-quality", "dataset", "training-data",
-    "llm", "language-model", "crowdsourcing", "human-in-the-loop",
-    "active-learning", "data-collection", "synthetic-data",
+    "rlhf",
+    "reward",
+    "preference",
+    "annotation",
+    "labeling",
+    "label",
+    "evaluation",
+    "benchmark",
+    "human-feedback",
+    "sft",
+    "instruction",
+    "fine-tuning",
+    "fine-tune",
+    "data-quality",
+    "dataset",
+    "training-data",
+    "llm",
+    "language-model",
+    "crowdsourcing",
+    "human-in-the-loop",
+    "active-learning",
+    "data-collection",
+    "synthetic-data",
     # Scaling & Data Quality
-    "scaling-law", "data-curation", "data-filtering", "decontamination",
-    "deduplication", "data-pipeline",
+    "scaling-law",
+    "data-curation",
+    "data-filtering",
+    "decontamination",
+    "deduplication",
+    "data-pipeline",
     # Methods & Techniques
-    "dpo", "direct-preference", "chain-of-thought", "distillation",
-    "curriculum-learning", "contrastive-learning", "data-augmentation",
+    "dpo",
+    "direct-preference",
+    "chain-of-thought",
+    "distillation",
+    "curriculum-learning",
+    "contrastive-learning",
+    "data-augmentation",
     # Modalities & Use Cases
-    "function-calling", "tool-use", "code-generation",
-    "multimodal", "vision-language", "embodied", "robotics",
-    "reward-model", "alignment",
+    "function-calling",
+    "tool-use",
+    "code-generation",
+    "multimodal",
+    "vision-language",
+    "embodied",
+    "robotics",
+    "reward-model",
+    "alignment",
 ]
 
 
@@ -66,7 +99,7 @@ class GitHubTracker:
 
         self.headers = {
             "Accept": "application/vnd.github.v3+json",
-            "User-Agent": "AI-Dataset-Radar/1.0"
+            "User-Agent": "AI-Dataset-Radar/1.0",
         }
         # Only add Authorization header if we have a valid token
         if self.token and not self.token.startswith("${"):
@@ -82,8 +115,7 @@ class GitHubTracker:
 
         # Get relevance keywords from config (sources.github.relevance_keywords)
         self.relevance_keywords = (
-            sources_github.get("relevance_keywords") or
-            DEFAULT_SIGNAL_KEYWORDS
+            sources_github.get("relevance_keywords") or DEFAULT_SIGNAL_KEYWORDS
         )
 
     def _make_request(self, url: str, params: dict = None, max_retries: int = 3) -> Optional[dict]:
@@ -136,11 +168,7 @@ class GitHubTracker:
             List of repo dicts with activity info.
         """
         url = f"{self.BASE_URL}/orgs/{org_name}/repos"
-        params = {
-            "sort": "updated",
-            "direction": "desc",
-            "per_page": 30
-        }
+        params = {"sort": "updated", "direction": "desc", "per_page": 30}
 
         data = self._make_request(url, params)
         if not data:
@@ -150,9 +178,7 @@ class GitHubTracker:
         recent_repos = []
 
         for repo in data:
-            updated_at = datetime.strptime(
-                repo["updated_at"], "%Y-%m-%dT%H:%M:%SZ"
-            )
+            updated_at = datetime.strptime(repo["updated_at"], "%Y-%m-%dT%H:%M:%SZ")
 
             if updated_at < cutoff:
                 continue
@@ -189,11 +215,9 @@ class GitHubTracker:
         Returns:
             List of matched signal keywords.
         """
-        text = " ".join([
-            repo.get("name", ""),
-            repo.get("description", ""),
-            " ".join(repo.get("topics", []))
-        ]).lower()
+        text = " ".join(
+            [repo.get("name", ""), repo.get("description", ""), " ".join(repo.get("topics", []))]
+        ).lower()
 
         signals = []
         for keyword in DEFAULT_SIGNAL_KEYWORDS:
@@ -247,8 +271,14 @@ class GitHubTracker:
 
     # Negative patterns — repos matching these are likely noise
     NEGATIVE_PATTERNS = [
-        "example", "tutorial", "template", "demo", "starter",
-        "awesome-", "mirror", "fork-of",
+        "example",
+        "tutorial",
+        "template",
+        "demo",
+        "starter",
+        "awesome-",
+        "mirror",
+        "fork-of",
     ]
 
     def _calculate_relevance(self, signals: list[str], repo: dict = None) -> str:
@@ -309,7 +339,9 @@ class GitHubTracker:
 
         # Request raw content - use direct request with overridden Accept header
         try:
-            resp = self.session.get(url, headers={"Accept": "application/vnd.github.v3.raw"}, timeout=30)
+            resp = self.session.get(
+                url, headers={"Accept": "application/vnd.github.v3.raw"}, timeout=30
+            )
             if resp.status_code == 200:
                 return resp.text[:5000]  # Limit length
         except requests.RequestException:
@@ -330,16 +362,13 @@ class GitHubTracker:
         repos = self.get_org_repos(org_name, days)
 
         # Filter to repos with signals or high stars
-        relevant_repos = [
-            r for r in repos
-            if r["signals"] or r["stars"] >= 100
-        ]
+        relevant_repos = [r for r in repos if r["signals"] or r["stars"] >= 100]
 
         return {
             "org": org_name,
             "repos_count": len(repos),
             "repos_updated": relevant_repos,
-            "has_activity": len(relevant_repos) > 0
+            "has_activity": len(relevant_repos) > 0,
         }
 
     def _fetch_orgs_parallel(self, orgs: list[str], days: int) -> list[dict]:
@@ -354,10 +383,7 @@ class GitHubTracker:
         """
         results = []
         with ThreadPoolExecutor(max_workers=4) as executor:
-            futures = {
-                executor.submit(self.get_org_activity, org, days): org
-                for org in orgs
-            }
+            futures = {executor.submit(self.get_org_activity, org, days): org for org in orgs}
             for future in futures:
                 try:
                     activity = future.result()

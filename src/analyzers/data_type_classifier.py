@@ -8,22 +8,21 @@ Enhanced v5 classifier with:
 
 import re
 from enum import Enum
-from typing import Optional
 
 
 class DataType(Enum):
     """Dataset type categories for post-training data."""
 
-    RLHF_PREFERENCE = "rlhf_preference"      # Preference/comparison data
-    REWARD_MODEL = "reward_model"            # Reward model training data
-    SFT_INSTRUCTION = "sft_instruction"      # Instruction fine-tuning data
-    CODE = "code"                            # Code generation/execution
-    AGENT_TOOL = "agent_tool"                # Agent/tool use
-    RL_ENVIRONMENT = "rl_environment"        # RL environment/trajectory
-    SYNTHETIC = "synthetic"                  # Synthetic/distilled data
-    MULTIMODAL = "multimodal"                # Multimodal
-    MULTILINGUAL = "multilingual"            # Multilingual
-    EVALUATION = "evaluation"                # Evaluation/benchmark
+    RLHF_PREFERENCE = "rlhf_preference"  # Preference/comparison data
+    REWARD_MODEL = "reward_model"  # Reward model training data
+    SFT_INSTRUCTION = "sft_instruction"  # Instruction fine-tuning data
+    CODE = "code"  # Code generation/execution
+    AGENT_TOOL = "agent_tool"  # Agent/tool use
+    RL_ENVIRONMENT = "rl_environment"  # RL environment/trajectory
+    SYNTHETIC = "synthetic"  # Synthetic/distilled data
+    MULTIMODAL = "multimodal"  # Multimodal
+    MULTILINGUAL = "multilingual"  # Multilingual
+    EVALUATION = "evaluation"  # Evaluation/benchmark
     OTHER = "other"
 
 
@@ -31,119 +30,200 @@ class DataType(Enum):
 CLASSIFICATION_RULES = {
     DataType.RLHF_PREFERENCE: {
         "keywords": [
-            "preference", "comparison", "ranking", "chosen", "rejected",
-            "human feedback", "dpo", "rlhf", "rlaif", "pairwise",
-            "better", "worse", "preferred", "human preference",
-            "preference learning", "preference data"
+            "preference",
+            "comparison",
+            "ranking",
+            "chosen",
+            "rejected",
+            "human feedback",
+            "dpo",
+            "rlhf",
+            "rlaif",
+            "pairwise",
+            "better",
+            "worse",
+            "preferred",
+            "human preference",
+            "preference learning",
+            "preference data",
         ],
         "field_patterns": ["chosen", "rejected", "preference", "rating", "score"],
         "name_patterns": [r"pref", r"dpo", r"rlhf", r"comparison", r"ranking"],
-        "tags": ["dpo", "rlhf", "preference", "human-feedback"]
+        "tags": ["dpo", "rlhf", "preference", "human-feedback"],
     },
-
     DataType.REWARD_MODEL: {
         "keywords": [
-            "reward model", "reward learning", "ppo", "reinforcement",
-            "scalar reward", "reward signal", "reward function",
-            "reward modeling", "reward training"
+            "reward model",
+            "reward learning",
+            "ppo",
+            "reinforcement",
+            "scalar reward",
+            "reward signal",
+            "reward function",
+            "reward modeling",
+            "reward training",
         ],
         "field_patterns": ["reward", "score"],
         "name_patterns": [r"reward", r"rm[-_]", r"ppo"],
-        "tags": ["reward-model", "ppo", "reinforcement-learning"]
+        "tags": ["reward-model", "ppo", "reinforcement-learning"],
     },
-
     DataType.SFT_INSTRUCTION: {
         "keywords": [
-            "instruction", "sft", "fine-tuning", "supervised",
-            "chat", "conversation", "dialogue", "multi-turn",
-            "assistant", "prompt", "response", "instruct",
-            "question answering", "qa pairs"
+            "instruction",
+            "sft",
+            "fine-tuning",
+            "supervised",
+            "chat",
+            "conversation",
+            "dialogue",
+            "multi-turn",
+            "assistant",
+            "prompt",
+            "response",
+            "instruct",
+            "question answering",
+            "qa pairs",
         ],
         "field_patterns": ["instruction", "input", "output", "response", "answer", "question"],
         "name_patterns": [r"instruct", r"sft", r"chat", r"conv", r"dialog"],
-        "tags": ["instruction-tuning", "sft", "chat", "conversational"]
+        "tags": ["instruction-tuning", "sft", "chat", "conversational"],
     },
-
     DataType.CODE: {
         "keywords": [
-            "code generation", "programming", "execution", "sandbox",
-            "coding", "code completion", "repository", "github",
-            "python", "javascript", "code review", "debugging"
+            "code generation",
+            "programming",
+            "execution",
+            "sandbox",
+            "coding",
+            "code completion",
+            "repository",
+            "github",
+            "python",
+            "javascript",
+            "code review",
+            "debugging",
         ],
         "field_patterns": ["code", "program", "function", "solution"],
         "name_patterns": [r"code", r"prog", r"exec", r"python", r"coding"],
-        "tags": ["code", "programming", "code-generation"]
+        "tags": ["code", "programming", "code-generation"],
     },
-
     DataType.AGENT_TOOL: {
         "keywords": [
-            "agent", "tool use", "function call", "api call",
-            "web browsing", "browser", "navigation", "action",
-            "trajectory", "environment", "task completion",
-            "tool calling", "function calling", "web agent"
+            "agent",
+            "tool use",
+            "function call",
+            "api call",
+            "web browsing",
+            "browser",
+            "navigation",
+            "action",
+            "trajectory",
+            "environment",
+            "task completion",
+            "tool calling",
+            "function calling",
+            "web agent",
         ],
         "field_patterns": ["action", "tool", "function", "api", "step"],
         "name_patterns": [r"agent", r"tool", r"action", r"web", r"browser", r"function[-_]?call"],
-        "tags": ["agent", "tool-use", "function-calling"]
+        "tags": ["agent", "tool-use", "function-calling"],
     },
-
     DataType.RL_ENVIRONMENT: {
         "keywords": [
-            "environment", "trajectory", "episode", "state",
-            "observation", "simulation", "gym", "rl environment",
-            "reinforcement learning environment", "game"
+            "environment",
+            "trajectory",
+            "episode",
+            "state",
+            "observation",
+            "simulation",
+            "gym",
+            "rl environment",
+            "reinforcement learning environment",
+            "game",
         ],
         "field_patterns": ["state", "observation", "action", "reward", "done", "episode"],
         "name_patterns": [r"env", r"traj", r"episode", r"sim", r"gym"],
-        "tags": ["reinforcement-learning", "simulation", "environment"]
+        "tags": ["reinforcement-learning", "simulation", "environment"],
     },
-
     DataType.SYNTHETIC: {
         "keywords": [
-            "synthetic", "generated", "distill", "distillation",
-            "teacher", "student", "augmented", "artificial",
-            "self-instruct", "evol-instruct", "gpt-generated"
+            "synthetic",
+            "generated",
+            "distill",
+            "distillation",
+            "teacher",
+            "student",
+            "augmented",
+            "artificial",
+            "self-instruct",
+            "evol-instruct",
+            "gpt-generated",
         ],
         "field_patterns": [],
         # Name patterns for versioned/synthetic data
         "name_patterns": [
-            r"[-_]v\d+", r"[-_]T\d+", r"synthetic", r"distill",
-            r"generated", r"[-_]\d+[kmb]$", r"[-_]full[-_]", r"[-_]lite[-_]"
+            r"[-_]v\d+",
+            r"[-_]T\d+",
+            r"synthetic",
+            r"distill",
+            r"generated",
+            r"[-_]\d+[kmb]$",
+            r"[-_]full[-_]",
+            r"[-_]lite[-_]",
         ],
-        "tags": ["synthetic", "generated", "distillation"]
+        "tags": ["synthetic", "generated", "distillation"],
     },
-
     DataType.MULTIMODAL: {
         "keywords": [
-            "vision", "image", "video", "audio", "multimodal",
-            "vlm", "vqa", "visual", "caption", "ocr",
-            "image-text", "visual question", "image understanding"
+            "vision",
+            "image",
+            "video",
+            "audio",
+            "multimodal",
+            "vlm",
+            "vqa",
+            "visual",
+            "caption",
+            "ocr",
+            "image-text",
+            "visual question",
+            "image understanding",
         ],
         "field_patterns": ["image", "video", "audio", "visual"],
         "name_patterns": [r"vision", r"image", r"video", r"vlm", r"vqa", r"visual", r"molmo"],
-        "tags": ["multimodal", "vision", "image", "video", "vqa"]
+        "tags": ["multimodal", "vision", "image", "video", "vqa"],
     },
-
     DataType.MULTILINGUAL: {
         "keywords": [
-            "multilingual", "translation", "cross-lingual",
-            "language", "languages", "parallel corpus",
-            "machine translation", "bilingual", "polyglot"
+            "multilingual",
+            "translation",
+            "cross-lingual",
+            "language",
+            "languages",
+            "parallel corpus",
+            "machine translation",
+            "bilingual",
+            "polyglot",
         ],
         "field_patterns": ["source_lang", "target_lang", "translation"],
         "name_patterns": [r"multi.*lingual", r"translation", r"parallel", r"nlp", r"lang"],
-        "tags": ["multilingual", "translation", "cross-lingual"]
+        "tags": ["multilingual", "translation", "cross-lingual"],
     },
-
     DataType.EVALUATION: {
         "keywords": [
-            "benchmark", "evaluation", "test set", "leaderboard",
-            "assessment", "metric", "eval", "test suite"
+            "benchmark",
+            "evaluation",
+            "test set",
+            "leaderboard",
+            "assessment",
+            "metric",
+            "eval",
+            "test suite",
         ],
         "field_patterns": ["gold", "label", "ground_truth"],
         "name_patterns": [r"bench", r"eval", r"test", r"assess"],
-        "tags": ["benchmark", "evaluation", "test"]
-    }
+        "tags": ["benchmark", "evaluation", "test"],
+    },
 }
 
 

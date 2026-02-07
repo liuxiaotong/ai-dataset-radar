@@ -2,7 +2,7 @@
 
 import re
 import requests
-from datetime import datetime, timedelta
+from datetime import datetime
 from typing import Optional
 from bs4 import BeautifulSoup
 
@@ -23,10 +23,21 @@ class HFPapersScraper:
 
     # Keywords indicating dataset-related papers
     DATASET_KEYWORDS = [
-        "dataset", "benchmark", "corpus", "annotation",
-        "training data", "evaluation", "instruction",
-        "fine-tuning", "labeled", "labelled", "data collection",
-        "human feedback", "rlhf", "preference", "alignment",
+        "dataset",
+        "benchmark",
+        "corpus",
+        "annotation",
+        "training data",
+        "evaluation",
+        "instruction",
+        "fine-tuning",
+        "labeled",
+        "labelled",
+        "data collection",
+        "human feedback",
+        "rlhf",
+        "preference",
+        "alignment",
     ]
 
     def __init__(self, limit: int = 50, days: int = 7):
@@ -66,7 +77,7 @@ class HFPapersScraper:
         for paper in papers:
             paper["is_dataset_paper"] = self._is_dataset_related(paper)
 
-        return papers[:self.limit]
+        return papers[: self.limit]
 
     def _fetch_from_api(self) -> list[dict]:
         """Fetch papers from HuggingFace API.
@@ -75,10 +86,7 @@ class HFPapersScraper:
             List of parsed paper dictionaries.
         """
         try:
-            response = requests.get(
-                self.PAPERS_API,
-                timeout=30
-            )
+            response = requests.get(self.PAPERS_API, timeout=30)
 
             if response.status_code != 200:
                 return []
@@ -108,9 +116,7 @@ class HFPapersScraper:
         """
         try:
             response = requests.get(
-                self.PAPERS_PAGE,
-                headers={"User-Agent": "Mozilla/5.0"},
-                timeout=30
+                self.PAPERS_PAGE, headers={"User-Agent": "Mozilla/5.0"}, timeout=30
             )
             response.raise_for_status()
 

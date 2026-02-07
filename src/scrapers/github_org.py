@@ -29,8 +29,15 @@ class GitHubOrgScraper(BaseScraper):
 
     # Default relevance keywords
     DEFAULT_RELEVANCE_KEYWORDS = [
-        "dataset", "annotation", "benchmark", "rlhf", "evaluation",
-        "preference", "instruction", "fine-tuning", "training",
+        "dataset",
+        "annotation",
+        "benchmark",
+        "rlhf",
+        "evaluation",
+        "preference",
+        "instruction",
+        "fine-tuning",
+        "training",
     ]
 
     def __init__(self, config: dict = None, token: Optional[str] = None):
@@ -83,12 +90,7 @@ class GitHubOrgScraper(BaseScraper):
 
         return self.deduplicate(all_repos)
 
-    def fetch_org_repos(
-        self,
-        org: str,
-        days: int = 7,
-        limit: int = 30
-    ) -> list[dict]:
+    def fetch_org_repos(self, org: str, days: int = 7, limit: int = 30) -> list[dict]:
         """Fetch recently updated repos from an organization.
 
         Args:
@@ -109,9 +111,7 @@ class GitHubOrgScraper(BaseScraper):
         }
 
         try:
-            response = requests.get(
-                url, params=params, headers=self.headers, timeout=30
-            )
+            response = requests.get(url, params=params, headers=self.headers, timeout=30)
             response.raise_for_status()
             repos_data = response.json()
         except requests.RequestException as e:
@@ -130,9 +130,7 @@ class GitHubOrgScraper(BaseScraper):
             updated_at = parsed.get("last_updated")
             if updated_at:
                 try:
-                    updated_dt = datetime.fromisoformat(
-                        updated_at.replace("Z", "+00:00")
-                    )
+                    updated_dt = datetime.fromisoformat(updated_at.replace("Z", "+00:00"))
                     if updated_dt.replace(tzinfo=None) < cutoff:
                         continue
                 except (ValueError, AttributeError):

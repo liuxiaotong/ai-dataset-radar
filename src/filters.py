@@ -302,8 +302,7 @@ class OrganizationFilter:
         """
         self.tracked_orgs = tracked_orgs
         self._compiled_orgs = {
-            org: [alias.lower() for alias in aliases]
-            for org, aliases in tracked_orgs.items()
+            org: [alias.lower() for alias in aliases] for org, aliases in tracked_orgs.items()
         }
 
     def detect_org(self, item: dict) -> Optional[str]:

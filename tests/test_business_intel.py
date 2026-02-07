@@ -1,9 +1,9 @@
 """Tests for business intelligence features."""
 
 import sys
-from datetime import datetime, timedelta
+from datetime import datetime
 from pathlib import Path
-from unittest.mock import MagicMock, patch
+from unittest.mock import MagicMock
 
 import pytest
 
@@ -251,9 +251,24 @@ class TestOpportunityAnalyzer:
         """Test data factory detection."""
         now = datetime.now().isoformat()
         datasets = [
-            {"author": "google-research", "name": "high-quality-ds1", "created_at": now, "description": "A high quality dataset for research purposes with detailed documentation"},
-            {"author": "google-research", "name": "high-quality-ds2", "created_at": now, "description": "Another high quality dataset with proper metadata"},
-            {"author": "google-research", "name": "high-quality-ds3", "created_at": now, "description": "Third dataset with comprehensive description"},
+            {
+                "author": "google-research",
+                "name": "high-quality-ds1",
+                "created_at": now,
+                "description": "A high quality dataset for research purposes with detailed documentation",
+            },
+            {
+                "author": "google-research",
+                "name": "high-quality-ds2",
+                "created_at": now,
+                "description": "Another high quality dataset with proper metadata",
+            },
+            {
+                "author": "google-research",
+                "name": "high-quality-ds3",
+                "created_at": now,
+                "description": "Third dataset with comprehensive description",
+            },
             {"author": "normal-author", "name": "ds4", "created_at": now},
         ]
         result = analyzer.detect_data_factories(datasets)
@@ -270,15 +285,27 @@ class TestOpportunityAnalyzer:
         """Test data factory detection respects threshold."""
         now = datetime.now().isoformat()
         datasets = [
-            {"author": "quality-author", "name": "real-dataset-v1", "created_at": now, "description": "A real dataset with proper documentation and metadata"},
-            {"author": "quality-author", "name": "real-dataset-v2", "created_at": now, "description": "Another legitimate dataset for research"},
+            {
+                "author": "quality-author",
+                "name": "real-dataset-v1",
+                "created_at": now,
+                "description": "A real dataset with proper documentation and metadata",
+            },
+            {
+                "author": "quality-author",
+                "name": "real-dataset-v2",
+                "created_at": now,
+                "description": "Another legitimate dataset for research",
+            },
         ]
         # Our config has min_datasets=2, so this should be detected
         result = analyzer.detect_data_factories(datasets)
         # Check that result is the new dict format
         assert isinstance(result, dict)
         # With min_datasets=2 and quality descriptions, should be in individual_factories
-        total_factories = len(result.get("org_factories", [])) + len(result.get("individual_factories", []))
+        total_factories = len(result.get("org_factories", [])) + len(
+            result.get("individual_factories", [])
+        )
         assert total_factories >= 0  # May or may not pass quality filter
 
     def test_extract_annotation_signals(self, analyzer):

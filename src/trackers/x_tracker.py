@@ -15,7 +15,6 @@ import re
 import time
 from concurrent.futures import ThreadPoolExecutor
 from datetime import datetime, timedelta
-from typing import Optional
 
 import feedparser
 import requests
@@ -27,29 +26,77 @@ logger = get_logger("x_tracker")
 # Signal keywords for detecting relevant tweets
 SIGNAL_KEYWORDS = [
     # Dataset & Training
-    "dataset", "training data", "benchmark", "evaluation",
-    "open source", "open-source", "releasing", "we release",
-    "announcing", "introducing", "new paper", "new model",
+    "dataset",
+    "training data",
+    "benchmark",
+    "evaluation",
+    "open source",
+    "open-source",
+    "releasing",
+    "we release",
+    "announcing",
+    "introducing",
+    "new paper",
+    "new model",
     # AI Research
-    "fine-tuning", "fine-tune", "rlhf", "human feedback",
-    "instruction tuning", "alignment", "synthetic data",
-    "pre-training", "pretraining", "language model", "llm",
-    "multimodal", "vision-language", "reasoning",
+    "fine-tuning",
+    "fine-tune",
+    "rlhf",
+    "human feedback",
+    "instruction tuning",
+    "alignment",
+    "synthetic data",
+    "pre-training",
+    "pretraining",
+    "language model",
+    "llm",
+    "multimodal",
+    "vision-language",
+    "reasoning",
     # Scaling & Data Quality
-    "scaling law", "data scaling", "data quality", "data curation",
-    "data filtering", "decontamination", "deduplication",
+    "scaling law",
+    "data scaling",
+    "data quality",
+    "data curation",
+    "data filtering",
+    "decontamination",
+    "deduplication",
     # Methods & Techniques
-    "dpo", "direct preference", "reward model", "reward modeling",
-    "chain-of-thought", "distillation", "knowledge distillation",
-    "curriculum learning", "active learning", "contrastive learning",
-    "synthetic generation", "data augmentation",
+    "dpo",
+    "direct preference",
+    "reward model",
+    "reward modeling",
+    "chain-of-thought",
+    "distillation",
+    "knowledge distillation",
+    "curriculum learning",
+    "active learning",
+    "contrastive learning",
+    "synthetic generation",
+    "data augmentation",
     # Modalities & Use Cases
-    "function calling", "tool use", "code generation",
-    "video understanding", "image-text", "speech data",
-    "embodied", "robotics data", "agent data",
+    "function calling",
+    "tool use",
+    "code generation",
+    "video understanding",
+    "image-text",
+    "speech data",
+    "embodied",
+    "robotics data",
+    "agent data",
     # Chinese keywords
-    "开源", "发布", "数据集", "模型", "论文", "训练",
-    "合成数据", "数据质量", "标注", "蒸馏", "推理", "对齐",
+    "开源",
+    "发布",
+    "数据集",
+    "模型",
+    "论文",
+    "训练",
+    "合成数据",
+    "数据质量",
+    "标注",
+    "蒸馏",
+    "推理",
+    "对齐",
 ]
 
 
@@ -105,7 +152,11 @@ class XTracker:
                     wait = 2 ** (attempt + 1)
                     logger.warning(
                         "Retry %d/%d for %s (wait %ds): %s",
-                        attempt + 1, max_retries, description, wait, e,
+                        attempt + 1,
+                        max_retries,
+                        description,
+                        wait,
+                        e,
                     )
                     time.sleep(wait)
                 else:
@@ -368,8 +419,7 @@ class XTracker:
         if self.accounts:
             with ThreadPoolExecutor(max_workers=4) as executor:
                 futures = {
-                    executor.submit(self.fetch_account, acct, days): acct
-                    for acct in self.accounts
+                    executor.submit(self.fetch_account, acct, days): acct for acct in self.accounts
                 }
                 for future in futures:
                     try:

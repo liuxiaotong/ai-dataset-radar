@@ -2,7 +2,6 @@
 
 import hashlib
 import json
-import os
 import time
 from pathlib import Path
 from typing import Any, Optional
@@ -168,6 +167,7 @@ def cached(key_prefix: str, ttl: int = 3600):
     Returns:
         Decorator function.
     """
+
     def decorator(func):
         def wrapper(*args, **kwargs):
             # Build cache key from function name and arguments
@@ -190,5 +190,7 @@ def cached(key_prefix: str, ttl: int = 3600):
                 cache.set(cache_key, result, ttl)
 
             return result
+
         return wrapper
+
     return decorator

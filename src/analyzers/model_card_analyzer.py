@@ -62,15 +62,17 @@ class ModelCardAnalyzer:
         for model in models:
             downloads = model.get("downloads", 0)
             if downloads >= self.min_model_downloads:
-                filtered.append({
-                    "id": model.get("id", ""),
-                    "author": model.get("author", ""),
-                    "downloads": downloads,
-                    "likes": model.get("likes", 0),
-                    "pipeline_tag": model.get("pipeline_tag", ""),
-                    "tags": model.get("tags", []),
-                    "created_at": model.get("createdAt", ""),
-                })
+                filtered.append(
+                    {
+                        "id": model.get("id", ""),
+                        "author": model.get("author", ""),
+                        "downloads": downloads,
+                        "likes": model.get("likes", 0),
+                        "pipeline_tag": model.get("pipeline_tag", ""),
+                        "tags": model.get("tags", []),
+                        "created_at": model.get("createdAt", ""),
+                    }
+                )
 
         return filtered
 
@@ -121,11 +123,13 @@ class ModelCardAnalyzer:
                     if line.startswith("-"):
                         ds_name = line[1:].strip()
                         if ds_name:
-                            datasets.append({
-                                "name": ds_name,
-                                "source": "yaml_metadata",
-                                "model_id": model_id,
-                            })
+                            datasets.append(
+                                {
+                                    "name": ds_name,
+                                    "source": "yaml_metadata",
+                                    "model_id": model_id,
+                                }
+                            )
 
         # Pattern 2: "trained on" mentions
         trained_patterns = [
@@ -141,40 +145,67 @@ class ModelCardAnalyzer:
                 # Clean up common suffixes
                 ds_name = re.sub(r"\s+dataset$", "", ds_name)
                 if ds_name and len(ds_name) > 2:
-                    datasets.append({
-                        "name": ds_name,
-                        "source": "text_mention",
-                        "model_id": model_id,
-                    })
+                    datasets.append(
+                        {
+                            "name": ds_name,
+                            "source": "text_mention",
+                            "model_id": model_id,
+                        }
+                    )
 
         # Pattern 3: HuggingFace dataset links
         hf_dataset_pattern = r"huggingface\.co/datasets/([A-Za-z0-9\-_/]+)"
         matches = re.findall(hf_dataset_pattern, card_content)
         for match in matches:
-            datasets.append({
-                "name": match,
-                "source": "hf_link",
-                "model_id": model_id,
-            })
+            datasets.append(
+                {
+                    "name": match,
+                    "source": "hf_link",
+                    "model_id": model_id,
+                }
+            )
 
         # Pattern 4: Known dataset names
         known_datasets = [
-            "openwebtext", "c4", "the pile", "redpajama", "dolma",
-            "wikipedia", "bookcorpus", "common crawl", "laion",
-            "squad", "glue", "superglue", "mmlu", "hellaswag",
-            "alpaca", "sharegpt", "wizardlm", "evol-instruct",
-            "coco", "imagenet", "vqa", "visual genome",
-            "code_search_net", "the stack", "starcoderdata",
-            "openassistant", "anthropic-hh", "ultrachat",
+            "openwebtext",
+            "c4",
+            "the pile",
+            "redpajama",
+            "dolma",
+            "wikipedia",
+            "bookcorpus",
+            "common crawl",
+            "laion",
+            "squad",
+            "glue",
+            "superglue",
+            "mmlu",
+            "hellaswag",
+            "alpaca",
+            "sharegpt",
+            "wizardlm",
+            "evol-instruct",
+            "coco",
+            "imagenet",
+            "vqa",
+            "visual genome",
+            "code_search_net",
+            "the stack",
+            "starcoderdata",
+            "openassistant",
+            "anthropic-hh",
+            "ultrachat",
         ]
 
         for ds in known_datasets:
             if ds in content_lower:
-                datasets.append({
-                    "name": ds,
-                    "source": "known_dataset",
-                    "model_id": model_id,
-                })
+                datasets.append(
+                    {
+                        "name": ds,
+                        "source": "known_dataset",
+                        "model_id": model_id,
+                    }
+                )
 
         # Deduplicate
         seen = set()
@@ -198,11 +229,13 @@ class ModelCardAnalyzer:
         print(f"  Found {len(models)} models with >={self.min_model_downloads} downloads")
 
         # Track dataset usage
-        dataset_usage = defaultdict(lambda: {
-            "count": 0,
-            "models": [],
-            "total_model_downloads": 0,
-        })
+        dataset_usage = defaultdict(
+            lambda: {
+                "count": 0,
+                "models": [],
+                "total_model_downloads": 0,
+            }
+        )
 
         analyzed = 0
         for model in models:
@@ -222,11 +255,13 @@ class ModelCardAnalyzer:
             for ds in datasets:
                 ds_name = ds["name"].lower()
                 dataset_usage[ds_name]["count"] += 1
-                dataset_usage[ds_name]["models"].append({
-                    "id": model_id,
-                    "downloads": model["downloads"],
-                    "pipeline_tag": model.get("pipeline_tag", ""),
-                })
+                dataset_usage[ds_name]["models"].append(
+                    {
+                        "id": model_id,
+                        "downloads": model["downloads"],
+                        "pipeline_tag": model.get("pipeline_tag", ""),
+                    }
+                )
                 dataset_usage[ds_name]["total_model_downloads"] += model["downloads"]
 
             analyzed += 1
@@ -236,13 +271,15 @@ class ModelCardAnalyzer:
         valuable_datasets = []
         for ds_name, usage in dataset_usage.items():
             if usage["count"] >= self.min_dataset_usage:
-                valuable_datasets.append({
-                    "name": ds_name,
-                    "usage_count": usage["count"],
-                    "total_model_downloads": usage["total_model_downloads"],
-                    "models": usage["models"][:10],  # Top 10 models
-                    "top_model": usage["models"][0]["id"] if usage["models"] else None,
-                })
+                valuable_datasets.append(
+                    {
+                        "name": ds_name,
+                        "usage_count": usage["count"],
+                        "total_model_downloads": usage["total_model_downloads"],
+                        "models": usage["models"][:10],  # Top 10 models
+                        "top_model": usage["models"][0]["id"] if usage["models"] else None,
+                    }
+                )
 
         # Sort by usage count
         valuable_datasets.sort(key=lambda x: x["usage_count"], reverse=True)
@@ -284,12 +321,14 @@ class ModelCardAnalyzer:
 
                 # Basic check - could be enhanced with model card analysis
                 if any(dataset_name.lower() in str(tag).lower() for tag in tags):
-                    result.append({
-                        "id": model_id,
-                        "downloads": model.get("downloads", 0),
-                        "likes": model.get("likes", 0),
-                        "pipeline_tag": model.get("pipeline_tag", ""),
-                    })
+                    result.append(
+                        {
+                            "id": model_id,
+                            "downloads": model.get("downloads", 0),
+                            "likes": model.get("likes", 0),
+                            "pipeline_tag": model.get("pipeline_tag", ""),
+                        }
+                    )
 
             return result
         except requests.RequestException as e:

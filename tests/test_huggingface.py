@@ -70,9 +70,7 @@ class TestHuggingFaceScraper:
     def test_extract_datasets_from_model_card_data(self, scraper):
         """Test extracting datasets from model card_data."""
         model_data = {
-            "card_data": {
-                "datasets": ["squad", "glue", "test-user/custom-dataset"]
-            },
+            "card_data": {"datasets": ["squad", "glue", "test-user/custom-dataset"]},
             "tags": [],
             "readme": "",
         }
@@ -173,6 +171,7 @@ Trained on the imdb dataset for sentiment analysis.
     def test_fetch_trending_models_error(self, mock_get, scraper):
         """Test handling API errors when fetching models."""
         import requests
+
         mock_get.side_effect = requests.RequestException("API Error")
 
         models = scraper.fetch_trending_models()

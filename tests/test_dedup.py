@@ -17,6 +17,7 @@ class TestBaseScraper:
 
     def test_deduplicate_by_id(self):
         """Test deduplication using ID field."""
+
         class TestScraper(BaseScraper):
             def scrape(self, config=None):
                 return []
@@ -39,6 +40,7 @@ class TestBaseScraper:
 
     def test_deduplicate_by_url_fallback(self):
         """Test deduplication falls back to URL when no ID."""
+
         class TestScraper(BaseScraper):
             def scrape(self, config=None):
                 return []
@@ -59,6 +61,7 @@ class TestBaseScraper:
 
     def test_deduplicate_empty_list(self):
         """Test deduplication with empty list."""
+
         class TestScraper(BaseScraper):
             def scrape(self, config=None):
                 return []
@@ -69,6 +72,7 @@ class TestBaseScraper:
 
     def test_deduplicate_preserves_order(self):
         """Test that deduplication preserves original order."""
+
         class TestScraper(BaseScraper):
             def scrape(self, config=None):
                 return []

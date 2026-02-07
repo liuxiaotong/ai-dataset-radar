@@ -81,10 +81,7 @@ class BaseScraper(ABC):
         return all(item.get(field) for field in required_fields)
 
     def filter_items(
-        self,
-        items: list[dict],
-        keywords: Optional[list[str]] = None,
-        min_score: int = 0
+        self, items: list[dict], keywords: Optional[list[str]] = None, min_score: int = 0
     ) -> list[dict]:
         """Filter items by keywords or score.
 
@@ -101,19 +98,18 @@ class BaseScraper(ABC):
         if keywords:
             filtered = []
             for item in result:
-                text = " ".join([
-                    str(item.get("name", "")),
-                    str(item.get("description", "")),
-                    " ".join(item.get("tags", []))
-                ]).lower()
+                text = " ".join(
+                    [
+                        str(item.get("name", "")),
+                        str(item.get("description", "")),
+                        " ".join(item.get("tags", [])),
+                    ]
+                ).lower()
                 if any(kw.lower() in text for kw in keywords):
                     filtered.append(item)
             result = filtered
 
         if min_score > 0:
-            result = [
-                item for item in result
-                if item.get("score", 0) >= min_score
-            ]
+            result = [item for item in result if item.get("score", 0) >= min_score]
 
         return result

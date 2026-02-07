@@ -46,10 +46,12 @@ class PwCSOTAScraper:
         self.areas = areas or self.PRIORITY_AREAS
         self.top_n = top_n
         self.session = requests.Session()
-        self.session.headers.update({
-            "Accept": "application/json",
-            "User-Agent": "AI-Dataset-Radar/3.0 (https://github.com/liuxiaotong/ai-dataset-radar)",
-        })
+        self.session.headers.update(
+            {
+                "Accept": "application/json",
+                "User-Agent": "AI-Dataset-Radar/3.0 (https://github.com/liuxiaotong/ai-dataset-radar)",
+            }
+        )
         self._last_request_time = 0
         self._base_delay = 1.5
 
@@ -86,7 +88,7 @@ class PwCSOTAScraper:
                 content_type = response.headers.get("Content-Type", "")
                 if "application/json" not in content_type:
                     if attempt < max_retries:
-                        time.sleep(2 ** attempt)
+                        time.sleep(2**attempt)
                         continue
                     return None
 
@@ -94,7 +96,7 @@ class PwCSOTAScraper:
                     return response.json()
 
                 elif response.status_code == 429:
-                    wait_time = (2 ** attempt) * 3 + random.uniform(1, 2)
+                    wait_time = (2**attempt) * 3 + random.uniform(1, 2)
                     if attempt < max_retries:
                         logger.info("  Rate limited, waiting %.1fs...", wait_time)
                         time.sleep(wait_time)
@@ -107,20 +109,20 @@ class PwCSOTAScraper:
 
                 elif response.status_code >= 500:
                     if attempt < max_retries:
-                        time.sleep(2 ** attempt)
+                        time.sleep(2**attempt)
                         continue
 
                 response.raise_for_status()
 
             except requests.exceptions.Timeout:
                 if attempt < max_retries:
-                    time.sleep(2 ** attempt)
+                    time.sleep(2**attempt)
                     continue
                 return None
 
-            except requests.RequestException as e:
+            except requests.RequestException:
                 if attempt < max_retries:
-                    time.sleep(2 ** attempt)
+                    time.sleep(2**attempt)
                     continue
                 return None
 
@@ -138,7 +140,7 @@ class PwCSOTAScraper:
         all_results = []
 
         for i, area in enumerate(self.areas):
-            logger.info("  Fetching SOTA for: %s (%s/%s)", area, i+1, len(self.areas))
+            logger.info("  Fetching SOTA for: %s (%s/%s)", area, i + 1, len(self.areas))
             area_results = self._fetch_area_sota(area)
             all_results.extend(area_results)
 
@@ -267,9 +269,7 @@ class PwCSOTAScraper:
                     "paper_title": item.get("paper", {}).get("title", "")
                     if item.get("paper")
                     else "",
-                    "paper_url": item.get("paper", {}).get("url", "")
-                    if item.get("paper")
-                    else "",
+                    "paper_url": item.get("paper", {}).get("url", "") if item.get("paper") else "",
                     "dataset": item.get("dataset", {}).get("name", "")
                     if item.get("dataset")
                     else "",
@@ -424,9 +424,7 @@ class PwCSOTAScraper:
 
         for i, ds in enumerate(results["ranked_datasets"][:20], 1):
             areas_str = ", ".join(ds["areas"][:3])
-            lines.append(
-                f"{i:2}. {ds['name']:<30} " f"({ds['sota_model_count']} SOTA models)"
-            )
+            lines.append(f"{i:2}. {ds['name']:<30} ({ds['sota_model_count']} SOTA models)")
             lines.append(f"      Areas: {areas_str}")
             if ds["sota_models"]:
                 top_model = ds["sota_models"][0].get("model_name", "N/A")

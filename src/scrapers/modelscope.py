@@ -160,9 +160,7 @@ class ModelScopeScraper(BaseScraper):
             created_at = ds.get("GmtCreate", ds.get("gmt_create", ""))
             if created_at and isinstance(created_at, str):
                 try:
-                    created_at = datetime.fromisoformat(
-                        created_at.replace("Z", "+00:00")
-                    )
+                    created_at = datetime.fromisoformat(created_at.replace("Z", "+00:00"))
                 except ValueError:
                     created_at = None
             else:
@@ -171,9 +169,7 @@ class ModelScopeScraper(BaseScraper):
             last_modified = ds.get("GmtModified", ds.get("gmt_modified", ""))
             if last_modified and isinstance(last_modified, str):
                 try:
-                    last_modified = datetime.fromisoformat(
-                        last_modified.replace("Z", "+00:00")
-                    )
+                    last_modified = datetime.fromisoformat(last_modified.replace("Z", "+00:00"))
                 except ValueError:
                     last_modified = None
             else:
@@ -189,9 +185,9 @@ class ModelScopeScraper(BaseScraper):
                 "downloads": ds.get("Downloads", ds.get("downloads", 0)),
                 "likes": ds.get("Likes", ds.get("likes", 0)),
                 "tags": ds.get("Tags", ds.get("tags", [])) or [],
-                "description": ds.get("ChineseDescription",
-                               ds.get("Description",
-                               ds.get("description", ""))),
+                "description": ds.get(
+                    "ChineseDescription", ds.get("Description", ds.get("description", ""))
+                ),
                 "license": ds.get("License", ds.get("license", "")),
                 "created_at": created_at.isoformat() if created_at else None,
                 "last_modified": last_modified.isoformat() if last_modified else None,
@@ -199,8 +195,5 @@ class ModelScopeScraper(BaseScraper):
                 "source_url": dataset_url,
             }
         except Exception as e:
-            logger.info(
-                "Error parsing ModelScope dataset %s: %s",
-                ds.get("Name", "unknown"), e
-            )
+            logger.info("Error parsing ModelScope dataset %s: %s", ds.get("Name", "unknown"), e)
             return None

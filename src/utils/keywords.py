@@ -1,6 +1,5 @@
 """Keyword matching utilities for AI Dataset Radar."""
 
-import re
 from typing import Iterable
 
 
@@ -45,11 +44,7 @@ def count_keyword_matches(text: str, keywords: Iterable[str], case_sensitive: bo
 
 
 def calculate_relevance(
-    name: str,
-    description: str,
-    topics: list[str],
-    keywords: Iterable[str],
-    high_threshold: int = 2
+    name: str, description: str, topics: list[str], keywords: Iterable[str], high_threshold: int = 2
 ) -> tuple[str, list[str]]:
     """Calculate relevance score based on keyword matches.
 

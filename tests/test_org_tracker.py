@@ -138,14 +138,16 @@ class TestParseOrgs:
 
     def test_parse_default_priority(self):
         tracker = OrgTracker({})
-        result = tracker._parse_orgs({
-            "test_category": {
-                "TestOrg": {
-                    "hf_ids": ["test"],
-                    "keywords": [],
+        result = tracker._parse_orgs(
+            {
+                "test_category": {
+                    "TestOrg": {
+                        "hf_ids": ["test"],
+                        "keywords": [],
+                    }
                 }
             }
-        })
+        )
         assert result["TestOrg"]["priority"] == "medium"
 
 
@@ -159,16 +161,18 @@ class TestParseVendors:
 
     def test_parse_vendor_fields(self):
         tracker = OrgTracker({})
-        result = tracker._parse_vendors({
-            "premium": {
-                "TestVendor": {
-                    "hf_ids": ["test-vendor"],
-                    "github": ["test-vendor-gh"],
-                    "keywords": ["test"],
-                    "blog_url": "https://test.com/blog",
+        result = tracker._parse_vendors(
+            {
+                "premium": {
+                    "TestVendor": {
+                        "hf_ids": ["test-vendor"],
+                        "github": ["test-vendor-gh"],
+                        "keywords": ["test"],
+                        "blog_url": "https://test.com/blog",
+                    }
                 }
             }
-        })
+        )
         assert "TestVendor" in result
         assert result["TestVendor"]["tier"] == "premium"
         assert result["TestVendor"]["blog_url"] == "https://test.com/blog"
@@ -235,7 +239,9 @@ class TestRequestWithRetry:
             description="test",
         )
         assert result == [{"id": "cached"}]
-        tracker.session.get.assert_not_called() if hasattr(tracker.session.get, 'assert_not_called') else None
+        tracker.session.get.assert_not_called() if hasattr(
+            tracker.session.get, "assert_not_called"
+        ) else None
 
     @patch("time.sleep")
     def test_server_error_retries(self, mock_sleep, tracker):
@@ -278,13 +284,12 @@ class TestRequestWithRetry:
     def test_connection_error_retries(self, mock_sleep, tracker):
         """Test network error triggers retry."""
         import requests
+
         mock_ok = MagicMock()
         mock_ok.status_code = 200
         mock_ok.json.return_value = []
 
-        tracker.session.get = MagicMock(
-            side_effect=[requests.ConnectionError("timeout"), mock_ok]
-        )
+        tracker.session.get = MagicMock(side_effect=[requests.ConnectionError("timeout"), mock_ok])
         tracker._cache = MagicMock()
         tracker._cache.get.return_value = None
 
@@ -377,9 +382,11 @@ class TestFetchSingleOrg:
     def test_returns_data_when_recent(self, tracker):
         """Test returns data when org has recent datasets."""
         recent_date = datetime.utcnow().isoformat() + "Z"
-        tracker._fetch_org_datasets = MagicMock(return_value=[
-            {"id": "openai/new-dataset", "lastModified": recent_date},
-        ])
+        tracker._fetch_org_datasets = MagicMock(
+            return_value=[
+                {"id": "openai/new-dataset", "lastModified": recent_date},
+            ]
+        )
         tracker._fetch_org_models = MagicMock(return_value=[])
 
         cutoff = datetime.now() - timedelta(days=7)
@@ -395,9 +402,11 @@ class TestFetchSingleOrg:
     def test_filters_old_datasets(self, tracker):
         """Test old datasets are filtered out."""
         old_date = (datetime.utcnow() - timedelta(days=30)).isoformat() + "Z"
-        tracker._fetch_org_datasets = MagicMock(return_value=[
-            {"id": "openai/old-dataset", "lastModified": old_date},
-        ])
+        tracker._fetch_org_datasets = MagicMock(
+            return_value=[
+                {"id": "openai/old-dataset", "lastModified": old_date},
+            ]
+        )
         tracker._fetch_org_models = MagicMock(return_value=[])
 
         cutoff = datetime.now() - timedelta(days=7)

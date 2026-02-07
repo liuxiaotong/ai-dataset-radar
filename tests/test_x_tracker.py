@@ -3,7 +3,7 @@
 import sys
 from datetime import datetime, timedelta
 from pathlib import Path
-from unittest.mock import patch, MagicMock, PropertyMock
+from unittest.mock import patch, MagicMock
 
 import pytest
 
@@ -126,12 +126,14 @@ class TestFetchRSSHubFeed:
 
     @pytest.fixture
     def tracker(self):
-        return XTracker({
-            "x_tracker": {
-                "backend": "rsshub",
-                "rsshub_url": "https://rsshub.app",
+        return XTracker(
+            {
+                "x_tracker": {
+                    "backend": "rsshub",
+                    "rsshub_url": "https://rsshub.app",
+                }
             }
-        })
+        )
 
     @patch("trackers.x_tracker.feedparser.parse")
     def test_fetch_rsshub_feed_success(self, mock_parse, tracker):
@@ -221,12 +223,14 @@ class TestFetchAPIUserTweets:
 
     @pytest.fixture
     def tracker(self):
-        return XTracker({
-            "x_tracker": {
-                "backend": "api",
-                "bearer_token": "test_bearer_token",
+        return XTracker(
+            {
+                "x_tracker": {
+                    "backend": "api",
+                    "bearer_token": "test_bearer_token",
+                }
             }
-        })
+        )
 
     def test_no_bearer_token_returns_empty(self):
         """Test that missing bearer token returns empty list."""
@@ -293,6 +297,7 @@ class TestFetchAPIUserTweets:
     def test_fetch_api_network_error(self, mock_get, tracker):
         """Test handling of network errors."""
         import requests as req
+
         mock_get.side_effect = req.RequestException("Network error")
 
         tweets = tracker._fetch_api_user_tweets("testuser")
@@ -304,12 +309,14 @@ class TestFetchAPISearch:
 
     @pytest.fixture
     def tracker(self):
-        return XTracker({
-            "x_tracker": {
-                "backend": "api",
-                "bearer_token": "test_token",
+        return XTracker(
+            {
+                "x_tracker": {
+                    "backend": "api",
+                    "bearer_token": "test_token",
+                }
             }
-        })
+        )
 
     def test_no_bearer_token_returns_empty(self):
         """Test that missing bearer token returns empty list."""
@@ -355,12 +362,14 @@ class TestFetchAccount:
 
     @pytest.fixture
     def tracker(self):
-        return XTracker({
-            "x_tracker": {
-                "backend": "rsshub",
-                "rsshub_url": "https://rsshub.app",
+        return XTracker(
+            {
+                "x_tracker": {
+                    "backend": "rsshub",
+                    "rsshub_url": "https://rsshub.app",
+                }
             }
-        })
+        )
 
     @patch.object(XTracker, "_fetch_rsshub_feed")
     def test_fetch_account_rsshub(self, mock_fetch, tracker):
@@ -391,12 +400,14 @@ class TestFetchAccount:
     @patch.object(XTracker, "_fetch_api_user_tweets")
     def test_fetch_account_api_backend(self, mock_fetch):
         """Test fetching account via API backend."""
-        tracker = XTracker({
-            "x_tracker": {
-                "backend": "api",
-                "bearer_token": "token123",
+        tracker = XTracker(
+            {
+                "x_tracker": {
+                    "backend": "api",
+                    "bearer_token": "token123",
+                }
             }
-        })
+        )
         mock_fetch.return_value = [
             {"text": "Releasing open-source model", "signals": ["open source"]},
         ]
@@ -417,12 +428,14 @@ class TestFetchAll:
 
     @pytest.fixture
     def tracker(self):
-        return XTracker({
-            "x_tracker": {
-                "backend": "rsshub",
-                "accounts": ["OpenAI", "AnthropicAI"],
+        return XTracker(
+            {
+                "x_tracker": {
+                    "backend": "rsshub",
+                    "accounts": ["OpenAI", "AnthropicAI"],
+                }
             }
-        })
+        )
 
     @patch.object(XTracker, "fetch_account")
     def test_fetch_all_parallel(self, mock_fetch, tracker):
@@ -460,23 +473,23 @@ class TestFetchAll:
     @patch.object(XTracker, "fetch_account")
     def test_fetch_all_with_search(self, mock_fetch, mock_search):
         """Test fetch_all with API search keywords."""
-        tracker = XTracker({
-            "x_tracker": {
-                "backend": "api",
-                "bearer_token": "token",
-                "accounts": ["OpenAI"],
-                "search_keywords": ["dataset release"],
+        tracker = XTracker(
+            {
+                "x_tracker": {
+                    "backend": "api",
+                    "bearer_token": "token",
+                    "accounts": ["OpenAI"],
+                    "search_keywords": ["dataset release"],
+                }
             }
-        })
+        )
         mock_fetch.return_value = {
             "username": "OpenAI",
             "total_tweets": 0,
             "relevant_tweets": [],
             "has_activity": False,
         }
-        mock_search.return_value = [
-            {"text": "New dataset release!", "signals": ["dataset"]}
-        ]
+        mock_search.return_value = [{"text": "New dataset release!", "signals": ["dataset"]}]
 
         result = tracker.fetch_all()
         assert len(result["search_results"]) == 1

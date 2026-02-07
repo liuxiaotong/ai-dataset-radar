@@ -2,22 +2,43 @@
 
 import json
 import os
-import re
 from datetime import datetime, timedelta
 from typing import Optional
 
 
 # Fields to remove from dataset output
 INTERNAL_DATASET_FIELDS = {
-    "_id", "_org", "_hf_id", "sha", "key", "disabled", "gated", "private",
+    "_id",
+    "_org",
+    "_hf_id",
+    "sha",
+    "key",
+    "disabled",
+    "gated",
+    "private",
 }
 
 # Fields to keep in clean dataset output
 DATASET_OUTPUT_FIELDS = {
-    "id", "author", "name", "downloads", "likes", "description",
-    "tags", "license", "languages", "size_category", "task_categories",
-    "category", "all_categories", "signals", "created_at", "last_modified",
-    "source_url", "url", "source",
+    "id",
+    "author",
+    "name",
+    "downloads",
+    "likes",
+    "description",
+    "tags",
+    "license",
+    "languages",
+    "size_category",
+    "task_categories",
+    "category",
+    "all_categories",
+    "signals",
+    "created_at",
+    "last_modified",
+    "source_url",
+    "url",
+    "source",
 }
 
 
@@ -34,10 +55,7 @@ class DualOutputFormatter:
         os.makedirs(output_dir, exist_ok=True)
 
     def save_reports(
-        self,
-        markdown_content: str,
-        data: dict,
-        filename_prefix: str = "intel_report"
+        self, markdown_content: str, data: dict, filename_prefix: str = "intel_report"
     ) -> tuple[str, str]:
         """Save both Markdown and JSON reports.
 
@@ -199,9 +217,7 @@ class DualOutputFormatter:
         # Look up category from datasets_by_type
         ds_id = ds.get("id", "")
         if datasets_by_type and ds_id:
-            category, all_categories, signals = self._find_dataset_category(
-                ds_id, datasets_by_type
-            )
+            category, all_categories, signals = self._find_dataset_category(ds_id, datasets_by_type)
             if category:
                 cleaned["category"] = category
                 cleaned["all_categories"] = all_categories

@@ -23,20 +23,57 @@ class ValueScorer:
     # Top institutions that produce high-quality datasets
     TOP_INSTITUTIONS = [
         # US Tech Giants
-        "google", "deepmind", "meta", "fair", "openai", "anthropic",
-        "microsoft", "nvidia", "apple", "amazon", "aws",
+        "google",
+        "deepmind",
+        "meta",
+        "fair",
+        "openai",
+        "anthropic",
+        "microsoft",
+        "nvidia",
+        "apple",
+        "amazon",
+        "aws",
         # US Academia
-        "stanford", "berkeley", "mit", "cmu", "princeton", "harvard",
-        "caltech", "cornell", "washington", "illinois",
+        "stanford",
+        "berkeley",
+        "mit",
+        "cmu",
+        "princeton",
+        "harvard",
+        "caltech",
+        "cornell",
+        "washington",
+        "illinois",
         # Chinese Tech
-        "bytedance", "alibaba", "damo", "tencent", "baidu", "huawei",
+        "bytedance",
+        "alibaba",
+        "damo",
+        "tencent",
+        "baidu",
+        "huawei",
         # Chinese Academia
-        "shanghai ai lab", "tsinghua", "peking", "zhejiang", "fudan",
-        "chinese academy", "cuhk", "hkust",
+        "shanghai ai lab",
+        "tsinghua",
+        "peking",
+        "zhejiang",
+        "fudan",
+        "chinese academy",
+        "cuhk",
+        "hkust",
         # European
-        "deepmind", "inria", "mpi", "eth zurich", "oxford", "cambridge",
+        "deepmind",
+        "inria",
+        "mpi",
+        "eth zurich",
+        "oxford",
+        "cambridge",
         # AI Labs
-        "eleuther", "laion", "together", "stability", "cohere",
+        "eleuther",
+        "laion",
+        "together",
+        "stability",
+        "cohere",
     ]
 
     # Score weights
@@ -68,8 +105,7 @@ class ValueScorer:
 
         # Build institution patterns for matching
         self._institution_patterns = [
-            re.compile(rf"\b{inst}\b", re.IGNORECASE)
-            for inst in self.TOP_INSTITUTIONS
+            re.compile(rf"\b{inst}\b", re.IGNORECASE) for inst in self.TOP_INSTITUTIONS
         ]
 
     def score_dataset(
@@ -271,9 +307,7 @@ class ValueAggregator:
                 self._datasets[key] = {"name": dataset_name}
 
             self._datasets[key]["citation_count"] = paper.get("citation_count", 0)
-            self._datasets[key]["citation_monthly_growth"] = paper.get(
-                "citation_monthly_growth", 0
-            )
+            self._datasets[key]["citation_monthly_growth"] = paper.get("citation_monthly_growth", 0)
             self._datasets[key]["paper_url"] = paper.get("url")
             self._datasets[key]["has_paper"] = True
             self._datasets[key]["authors"] = paper.get("authors", [])
@@ -293,9 +327,7 @@ class ValueAggregator:
                 self._datasets[key] = {"name": ds.get("name")}
 
             self._datasets[key]["model_usage_count"] = ds.get("usage_count", 0)
-            self._datasets[key]["total_model_downloads"] = ds.get(
-                "total_model_downloads", 0
-            )
+            self._datasets[key]["total_model_downloads"] = ds.get("total_model_downloads", 0)
 
     def add_sota_data(self, sota_results: dict) -> None:
         """Add SOTA usage data from Papers with Code.

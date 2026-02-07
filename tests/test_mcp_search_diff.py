@@ -28,19 +28,67 @@ def rich_report():
             "total_blog_posts": 6,
         },
         "datasets": [
-            {"id": "openai/gsm8k", "category": "evaluation", "description": "Grade school math", "downloads": 50000, "all_categories": ["evaluation", "math"]},
-            {"id": "meta/llama-sft", "category": "sft", "description": "SFT training data for Llama", "downloads": 30000, "all_categories": ["sft"]},
-            {"id": "nvidia/helpsteer2", "category": "preference", "description": "RLHF preference dataset", "downloads": 10000, "all_categories": ["preference", "rlhf"]},
-            {"id": "openai/webgpt", "category": "preference", "description": "WebGPT comparison data", "downloads": 5000, "all_categories": ["preference"]},
-            {"id": "bigcode/starcoderdata", "category": "code", "description": "Code pretraining data", "downloads": 80000, "all_categories": ["code"]},
+            {
+                "id": "openai/gsm8k",
+                "category": "evaluation",
+                "description": "Grade school math",
+                "downloads": 50000,
+                "all_categories": ["evaluation", "math"],
+            },
+            {
+                "id": "meta/llama-sft",
+                "category": "sft",
+                "description": "SFT training data for Llama",
+                "downloads": 30000,
+                "all_categories": ["sft"],
+            },
+            {
+                "id": "nvidia/helpsteer2",
+                "category": "preference",
+                "description": "RLHF preference dataset",
+                "downloads": 10000,
+                "all_categories": ["preference", "rlhf"],
+            },
+            {
+                "id": "openai/webgpt",
+                "category": "preference",
+                "description": "WebGPT comparison data",
+                "downloads": 5000,
+                "all_categories": ["preference"],
+            },
+            {
+                "id": "bigcode/starcoderdata",
+                "category": "code",
+                "description": "Code pretraining data",
+                "downloads": 80000,
+                "all_categories": ["code"],
+            },
         ],
         "github_activity": [
             {
                 "org": "argilla-io",
                 "repos_count": 3,
                 "repos_updated": [
-                    {"name": "argilla", "full_name": "argilla-io/argilla", "description": "Collaboration tool for AI datasets", "stars": 4800, "relevance": "high", "relevance_signals": ["dataset", "rlhf"], "topics": ["annotation", "llm"], "signals": ["dataset", "rlhf", "annotation"]},
-                    {"name": "distilabel", "full_name": "argilla-io/distilabel", "description": "Synthetic data framework", "stars": 3000, "relevance": "high", "relevance_signals": ["dataset"], "topics": ["synthetic-data"], "signals": ["synthetic-data"]},
+                    {
+                        "name": "argilla",
+                        "full_name": "argilla-io/argilla",
+                        "description": "Collaboration tool for AI datasets",
+                        "stars": 4800,
+                        "relevance": "high",
+                        "relevance_signals": ["dataset", "rlhf"],
+                        "topics": ["annotation", "llm"],
+                        "signals": ["dataset", "rlhf", "annotation"],
+                    },
+                    {
+                        "name": "distilabel",
+                        "full_name": "argilla-io/distilabel",
+                        "description": "Synthetic data framework",
+                        "stars": 3000,
+                        "relevance": "high",
+                        "relevance_signals": ["dataset"],
+                        "topics": ["synthetic-data"],
+                        "signals": ["synthetic-data"],
+                    },
                 ],
                 "has_activity": True,
             },
@@ -48,28 +96,72 @@ def rich_report():
                 "org": "scaleapi",
                 "repos_count": 2,
                 "repos_updated": [
-                    {"name": "llm-engine", "full_name": "scaleapi/llm-engine", "description": "LLM fine-tuning engine", "stars": 500, "relevance": "medium", "relevance_signals": ["fine-tuning"], "topics": [], "signals": ["fine-tuning"]},
+                    {
+                        "name": "llm-engine",
+                        "full_name": "scaleapi/llm-engine",
+                        "description": "LLM fine-tuning engine",
+                        "stars": 500,
+                        "relevance": "medium",
+                        "relevance_signals": ["fine-tuning"],
+                        "topics": [],
+                        "signals": ["fine-tuning"],
+                    },
                 ],
                 "has_activity": True,
             },
         ],
         "papers": [
-            {"title": "RLHF at Scale", "url": "https://arxiv.org/abs/2401.001", "abstract": "Scaling RLHF training", "source": "arxiv", "categories": ["cs.CL"]},
-            {"title": "Synthetic Data Generation", "url": "https://arxiv.org/abs/2401.002", "abstract": "Methods for synthetic data", "source": "arxiv", "categories": ["cs.AI"]},
-            {"title": "Dataset Deduplication", "url": "https://hf.co/papers/123", "abstract": "Deduplication techniques", "source": "huggingface", "categories": []},
+            {
+                "title": "RLHF at Scale",
+                "url": "https://arxiv.org/abs/2401.001",
+                "abstract": "Scaling RLHF training",
+                "source": "arxiv",
+                "categories": ["cs.CL"],
+            },
+            {
+                "title": "Synthetic Data Generation",
+                "url": "https://arxiv.org/abs/2401.002",
+                "abstract": "Methods for synthetic data",
+                "source": "arxiv",
+                "categories": ["cs.AI"],
+            },
+            {
+                "title": "Dataset Deduplication",
+                "url": "https://hf.co/papers/123",
+                "abstract": "Deduplication techniques",
+                "source": "huggingface",
+                "categories": [],
+            },
         ],
         "blog_posts": [
             {
                 "source": "OpenAI Blog",
                 "articles": [
-                    {"title": "GPT-5 Training Data", "url": "https://openai.com/blog/gpt5-data", "date": "2024-01-30", "signals": ["dataset", "training data"], "snippet": "We describe our data pipeline"},
-                    {"title": "Safety Updates", "url": "https://openai.com/blog/safety", "date": "2024-01-28", "signals": ["alignment"]},
+                    {
+                        "title": "GPT-5 Training Data",
+                        "url": "https://openai.com/blog/gpt5-data",
+                        "date": "2024-01-30",
+                        "signals": ["dataset", "training data"],
+                        "snippet": "We describe our data pipeline",
+                    },
+                    {
+                        "title": "Safety Updates",
+                        "url": "https://openai.com/blog/safety",
+                        "date": "2024-01-28",
+                        "signals": ["alignment"],
+                    },
                 ],
             },
             {
                 "source": "Microsoft Research",
                 "articles": [
-                    {"title": "Phi-4 Synthetic Data", "url": "https://msft.com/phi4", "date": "2024-01-29", "signals": ["synthetic data"], "snippet": "Using synthetic data for Phi-4"},
+                    {
+                        "title": "Phi-4 Synthetic Data",
+                        "url": "https://msft.com/phi4",
+                        "date": "2024-01-29",
+                        "signals": ["synthetic data"],
+                        "snippet": "Using synthetic data for Phi-4",
+                    },
                 ],
             },
         ],
@@ -79,7 +171,12 @@ def rich_report():
                     "username": "OpenAI",
                     "total_tweets": 5,
                     "relevant_tweets": [
-                        {"username": "OpenAI", "text": "We're releasing a new dataset for RLHF research", "url": "https://x.com/OpenAI/status/123", "date": "2024-01-30"},
+                        {
+                            "username": "OpenAI",
+                            "text": "We're releasing a new dataset for RLHF research",
+                            "url": "https://x.com/OpenAI/status/123",
+                            "date": "2024-01-30",
+                        },
                     ],
                     "has_activity": True,
                 },
@@ -139,11 +236,13 @@ def _write_report(tmp_path, date_str, report):
 
 # ─── radar_search tests ──────────────────────────────────────────────────────
 
+
 class TestSearchInReport:
     """Test the search_in_report helper function."""
 
     def test_search_datasets_by_keyword(self, rich_report):
         from server import search_in_report
+
         results = search_in_report(rich_report, "rlhf", ["datasets"], 10)
         assert "datasets" in results
         ids = [d["id"] for d in results["datasets"]]
@@ -151,6 +250,7 @@ class TestSearchInReport:
 
     def test_search_github_by_keyword(self, rich_report):
         from server import search_in_report
+
         results = search_in_report(rich_report, "synthetic", ["github"], 10)
         assert "github" in results
         names = [r["name"] for r in results["github"]]
@@ -158,35 +258,41 @@ class TestSearchInReport:
 
     def test_search_papers_by_keyword(self, rich_report):
         from server import search_in_report
+
         results = search_in_report(rich_report, "deduplication", ["papers"], 10)
         assert "papers" in results
         assert results["papers"][0]["title"] == "Dataset Deduplication"
 
     def test_search_blogs_by_keyword(self, rich_report):
         from server import search_in_report
+
         results = search_in_report(rich_report, "synthetic", ["blogs"], 10)
         assert "blogs" in results
         assert results["blogs"][0]["source"] == "Microsoft Research"
 
     def test_search_x_by_keyword(self, rich_report):
         from server import search_in_report
+
         results = search_in_report(rich_report, "RLHF", ["x"], 10)
         assert "x" in results
         assert results["x"][0]["username"] == "OpenAI"
 
     def test_search_all_sources(self, rich_report):
         from server import search_in_report
+
         results = search_in_report(rich_report, "dataset", [], 10)
         # Should find matches in datasets, github, papers, blogs, x
         assert len(results) >= 3
 
     def test_search_no_match(self, rich_report):
         from server import search_in_report
+
         results = search_in_report(rich_report, "xyznonexistent", [], 10)
         assert results == {}
 
     def test_search_regex_pattern(self, rich_report):
         from server import search_in_report
+
         results = search_in_report(rich_report, r"llama|Llama", ["datasets"], 10)
         assert "datasets" in results
         ids = [d["id"] for d in results["datasets"]]
@@ -194,29 +300,34 @@ class TestSearchInReport:
 
     def test_search_invalid_regex_fallback(self, rich_report):
         from server import search_in_report
+
         # Invalid regex should fall back to literal search
         results = search_in_report(rich_report, "[invalid(regex", [], 10)
         assert isinstance(results, dict)
 
     def test_search_limit_respected(self, rich_report):
         from server import search_in_report
+
         results = search_in_report(rich_report, "data", ["datasets"], 2)
         if "datasets" in results:
             assert len(results["datasets"]) <= 2
 
     def test_search_case_insensitive(self, rich_report):
         from server import search_in_report
+
         results = search_in_report(rich_report, "OPENAI", ["datasets"], 10)
         assert "datasets" in results
 
 
 # ─── radar_diff tests ────────────────────────────────────────────────────────
 
+
 class TestDiffReports:
     """Test the diff_reports helper function."""
 
     def test_diff_summary_changes(self, older_report, rich_report):
         from server import diff_reports
+
         diff = diff_reports(older_report, rich_report)
 
         assert diff["summary_changes"]["total_datasets"]["before"] == 3
@@ -225,6 +336,7 @@ class TestDiffReports:
 
     def test_diff_new_datasets(self, older_report, rich_report):
         from server import diff_reports
+
         diff = diff_reports(older_report, rich_report)
 
         new_ds = diff["new_items"].get("datasets", [])
@@ -234,6 +346,7 @@ class TestDiffReports:
 
     def test_diff_removed_datasets(self, older_report, rich_report):
         from server import diff_reports
+
         diff = diff_reports(older_report, rich_report)
 
         removed_ds = diff["removed_items"].get("datasets", [])
@@ -241,6 +354,7 @@ class TestDiffReports:
 
     def test_diff_new_repos(self, older_report, rich_report):
         from server import diff_reports
+
         diff = diff_reports(older_report, rich_report)
 
         new_repos = diff["new_items"].get("github_repos", [])
@@ -249,6 +363,7 @@ class TestDiffReports:
 
     def test_diff_new_papers(self, older_report, rich_report):
         from server import diff_reports
+
         diff = diff_reports(older_report, rich_report)
 
         new_papers = diff["new_items"].get("papers", [])
@@ -257,6 +372,7 @@ class TestDiffReports:
 
     def test_diff_new_blog_articles(self, older_report, rich_report):
         from server import diff_reports
+
         diff = diff_reports(older_report, rich_report)
 
         new_blogs = diff["new_items"].get("blog_articles", [])
@@ -265,6 +381,7 @@ class TestDiffReports:
 
     def test_diff_identical_reports(self, rich_report):
         from server import diff_reports
+
         diff = diff_reports(rich_report, rich_report)
 
         assert diff["summary_changes"] == {}
@@ -273,6 +390,7 @@ class TestDiffReports:
 
     def test_diff_period_labels(self, older_report, rich_report):
         from server import diff_reports
+
         diff = diff_reports(older_report, rich_report)
 
         assert diff["period_a"] == "2024-01-25"
@@ -281,12 +399,14 @@ class TestDiffReports:
 
 # ─── MCP tool execution tests ────────────────────────────────────────────────
 
+
 class TestRadarSearchTool:
     """Test radar_search tool execution via call_tool."""
 
     @pytest.mark.asyncio
     async def test_search_returns_results(self, rich_report, tmp_path):
         from server import call_tool
+
         _write_report(tmp_path, "2024-02-01", rich_report)
 
         with patch("server.PROJECT_ROOT", tmp_path):
@@ -298,6 +418,7 @@ class TestRadarSearchTool:
     @pytest.mark.asyncio
     async def test_search_no_results(self, rich_report, tmp_path):
         from server import call_tool
+
         _write_report(tmp_path, "2024-02-01", rich_report)
 
         with patch("server.PROJECT_ROOT", tmp_path):
@@ -308,6 +429,7 @@ class TestRadarSearchTool:
     @pytest.mark.asyncio
     async def test_search_with_source_filter(self, rich_report, tmp_path):
         from server import call_tool
+
         _write_report(tmp_path, "2024-02-01", rich_report)
 
         with patch("server.PROJECT_ROOT", tmp_path):
@@ -327,6 +449,7 @@ class TestRadarSearchTool:
     @pytest.mark.asyncio
     async def test_search_empty_query(self, rich_report, tmp_path):
         from server import call_tool
+
         _write_report(tmp_path, "2024-02-01", rich_report)
 
         with patch("server.PROJECT_ROOT", tmp_path):
@@ -341,6 +464,7 @@ class TestRadarDiffTool:
     @pytest.mark.asyncio
     async def test_diff_two_reports(self, older_report, rich_report, tmp_path):
         from server import call_tool
+
         _write_report(tmp_path, "2024-01-25", older_report)
         _write_report(tmp_path, "2024-02-01", rich_report)
 
@@ -353,6 +477,7 @@ class TestRadarDiffTool:
     @pytest.mark.asyncio
     async def test_diff_by_date(self, older_report, rich_report, tmp_path):
         from server import call_tool
+
         _write_report(tmp_path, "2024-01-25", older_report)
         _write_report(tmp_path, "2024-02-01", rich_report)
 
@@ -365,6 +490,7 @@ class TestRadarDiffTool:
     @pytest.mark.asyncio
     async def test_diff_missing_date(self, older_report, rich_report, tmp_path):
         from server import call_tool
+
         _write_report(tmp_path, "2024-01-25", older_report)
         _write_report(tmp_path, "2024-02-01", rich_report)
 
@@ -376,6 +502,7 @@ class TestRadarDiffTool:
     @pytest.mark.asyncio
     async def test_diff_insufficient_reports(self, rich_report, tmp_path):
         from server import call_tool
+
         _write_report(tmp_path, "2024-02-01", rich_report)
 
         with patch("server.PROJECT_ROOT", tmp_path):
@@ -386,12 +513,14 @@ class TestRadarDiffTool:
 
 # ─── Parameter extension tests ───────────────────────────────────────────────
 
+
 class TestParameterExtensions:
     """Test new parameters on existing tools."""
 
     @pytest.mark.asyncio
     async def test_radar_datasets_org_filter(self, rich_report, tmp_path):
         from server import call_tool
+
         _write_report(tmp_path, "2024-02-01", rich_report)
 
         with patch("server.PROJECT_ROOT", tmp_path):
@@ -404,6 +533,7 @@ class TestParameterExtensions:
     @pytest.mark.asyncio
     async def test_radar_datasets_org_and_category(self, rich_report, tmp_path):
         from server import call_tool
+
         _write_report(tmp_path, "2024-02-01", rich_report)
 
         with patch("server.PROJECT_ROOT", tmp_path):
@@ -415,6 +545,7 @@ class TestParameterExtensions:
     @pytest.mark.asyncio
     async def test_radar_github_org_filter(self, rich_report, tmp_path):
         from server import call_tool
+
         _write_report(tmp_path, "2024-02-01", rich_report)
 
         with patch("server.PROJECT_ROOT", tmp_path):
@@ -451,21 +582,30 @@ class TestParameterExtensions:
         tool_names = {t.name for t in tools}
 
         expected = {
-            "radar_scan", "radar_summary", "radar_datasets",
-            "radar_github", "radar_papers", "radar_blogs",
-            "radar_config", "radar_search", "radar_diff",
-            "radar_trend", "radar_history",
+            "radar_scan",
+            "radar_summary",
+            "radar_datasets",
+            "radar_github",
+            "radar_papers",
+            "radar_blogs",
+            "radar_config",
+            "radar_search",
+            "radar_diff",
+            "radar_trend",
+            "radar_history",
         }
         assert expected == tool_names
 
 
 # ─── Helper function tests ───────────────────────────────────────────────────
 
+
 class TestHelperFunctions:
     """Test new helper functions."""
 
     def test_get_report_by_date(self, tmp_path):
         from server import get_report_by_date
+
         reports_dir = tmp_path / "data" / "reports"
         reports_dir.mkdir(parents=True)
         (reports_dir / "intel_report_2024-02-01.json").write_text('{"test": true}')
@@ -483,6 +623,7 @@ class TestHelperFunctions:
 
     def test_get_all_reports_sorted(self, tmp_path):
         from server import get_all_reports_sorted
+
         reports_dir = tmp_path / "data" / "reports"
         reports_dir.mkdir(parents=True)
         (reports_dir / "intel_report_2024-01-01.json").write_text("{}")

@@ -141,6 +141,7 @@ class TestModelScopeScraper:
     def test_fetch_recent_error(self, mock_get, scraper):
         """Test handling API errors."""
         import requests as req
+
         mock_get.side_effect = req.RequestException("Connection error")
 
         results = scraper._fetch_recent()
@@ -177,9 +178,7 @@ class TestModelScopeScraper:
     def test_scrape_targeted(self, mock_get, scraper):
         """Test scrape with targeted org config."""
         mock_response = MagicMock()
-        mock_response.json.return_value = {
-            "Data": {"Datasets": []}
-        }
+        mock_response.json.return_value = {"Data": {"Datasets": []}}
         mock_response.raise_for_status = MagicMock()
         mock_get.return_value = mock_response
 
@@ -191,6 +190,7 @@ class TestModelScopeScraper:
     def test_scraper_registered(self):
         """Test that the scraper is properly registered."""
         from scrapers.registry import get_scraper
+
         scraper = get_scraper("modelscope")
         assert scraper is not None
         assert scraper.name == "modelscope"

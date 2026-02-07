@@ -87,11 +87,13 @@ class ModelDatasetAnalyzer:
             datasets = self.scraper.extract_datasets_from_model(model_card)
 
             for dataset_id in datasets:
-                dataset_usage[dataset_id].append({
-                    "model_id": model_id,
-                    "model_db_id": model_db_id,
-                    "downloads": model.get("downloads", 0),
-                })
+                dataset_usage[dataset_id].append(
+                    {
+                        "model_id": model_id,
+                        "model_db_id": model_db_id,
+                        "downloads": model.get("downloads", 0),
+                    }
+                )
 
                 # Try to get dataset info and store in database
                 dataset_info = self.scraper.fetch_dataset_info(dataset_id)
@@ -146,13 +148,15 @@ class ModelDatasetAnalyzer:
             total_downloads = sum(m.get("downloads", 0) for m in models)
             model_count = len(models)
 
-            ranked.append({
-                "dataset_id": dataset_id,
-                "model_count": model_count,
-                "total_model_downloads": total_downloads,
-                "avg_model_downloads": total_downloads / model_count if model_count > 0 else 0,
-                "models": [m.get("model_id") for m in models],
-            })
+            ranked.append(
+                {
+                    "dataset_id": dataset_id,
+                    "model_count": model_count,
+                    "total_model_downloads": total_downloads,
+                    "avg_model_downloads": total_downloads / model_count if model_count > 0 else 0,
+                    "models": [m.get("model_id") for m in models],
+                }
+            )
 
         # Sort by model count first, then by total downloads
         ranked.sort(

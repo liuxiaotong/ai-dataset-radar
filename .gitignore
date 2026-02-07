@@ -226,3 +226,22 @@ Thumbs.db
 
 # API response cache
 data/cache/
+
+# ===================
+# Supplemented common patterns
+# ===================
+
+# Python wheels
+*.whl
+
+# Virtual environments (with trailing slash)
+.venv/
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# Environment
+.env.local

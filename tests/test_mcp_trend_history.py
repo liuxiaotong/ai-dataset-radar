@@ -1,10 +1,9 @@
 """Tests for MCP Server radar_trend, radar_history tools and _fmt_growth helper."""
 
 import json
-import sqlite3
 import sys
 from pathlib import Path
-from unittest.mock import patch, MagicMock
+from unittest.mock import patch
 
 import pytest
 
@@ -19,31 +18,38 @@ class TestFmtGrowth:
 
     def test_positive_growth(self):
         from server import _fmt_growth
+
         assert _fmt_growth(0.5) == "+50.0%"
 
     def test_negative_growth(self):
         from server import _fmt_growth
+
         assert _fmt_growth(-0.2) == "-20.0%"
 
     def test_zero_growth(self):
         from server import _fmt_growth
+
         assert _fmt_growth(0.0) == "0.0%"
 
     def test_none_growth(self):
         from server import _fmt_growth
+
         assert _fmt_growth(None) == "N/A"
 
     def test_infinity_growth(self):
         from server import _fmt_growth
+
         result = _fmt_growth(float("inf"))
         assert "∞" in result or "inf" in result.lower()
 
     def test_small_growth(self):
         from server import _fmt_growth
+
         assert _fmt_growth(0.005) == "+0.5%"
 
     def test_large_growth(self):
         from server import _fmt_growth
+
         assert _fmt_growth(10.0) == "+1000.0%"
 
 
@@ -140,6 +146,7 @@ class TestRadarTrendExecution:
         db_path.parent.mkdir(parents=True)
 
         from db import RadarDatabase
+
         db = RadarDatabase(str(db_path))
         db.close()
 
@@ -158,6 +165,7 @@ class TestRadarTrendExecution:
         db_path.parent.mkdir(parents=True)
 
         from db import RadarDatabase
+
         db = RadarDatabase(str(db_path))
         db.close()
 
@@ -175,6 +183,7 @@ class TestRadarTrendExecution:
         db_path.parent.mkdir(parents=True)
 
         from db import RadarDatabase
+
         db = RadarDatabase(str(db_path))
         db.close()
 
@@ -192,11 +201,14 @@ class TestRadarTrendExecution:
         db_path.parent.mkdir(parents=True)
 
         from db import RadarDatabase
+
         db = RadarDatabase(str(db_path))
         db.close()
 
         with patch("server.PROJECT_ROOT", tmp_path):
-            result = await call_tool("radar_trend", {"mode": "dataset", "dataset_id": "nonexistent/ds"})
+            result = await call_tool(
+                "radar_trend", {"mode": "dataset", "dataset_id": "nonexistent/ds"}
+            )
             text = result[0].text
             assert "未找到" in text
 
@@ -225,7 +237,9 @@ class TestRadarTrendExecution:
         db.close()
 
         with patch("server.PROJECT_ROOT", tmp_path):
-            result = await call_tool("radar_trend", {"mode": "dataset", "dataset_id": "test-org/my-dataset"})
+            result = await call_tool(
+                "radar_trend", {"mode": "dataset", "dataset_id": "test-org/my-dataset"}
+            )
             text = result[0].text
             assert "趋势" in text or "test-org/my-dataset" in text
 
@@ -238,6 +252,7 @@ class TestRadarTrendExecution:
         db_path.parent.mkdir(parents=True)
 
         from db import RadarDatabase
+
         db = RadarDatabase(str(db_path))
         db.close()
 
@@ -372,7 +387,7 @@ class TestRadarHistoryExecution:
 
         for i in range(5):
             report = {
-                "generated_at": f"2024-0{i+1}-01T10:00:00",
+                "generated_at": f"2024-0{i + 1}-01T10:00:00",
                 "summary": {
                     "total_datasets": i * 5,
                     "total_github_repos": i * 10,
@@ -381,7 +396,7 @@ class TestRadarHistoryExecution:
                     "total_blog_posts": i * 2,
                 },
             }
-            (reports_dir / f"intel_report_2024-0{i+1}-01.json").write_text(json.dumps(report))
+            (reports_dir / f"intel_report_2024-0{i + 1}-01.json").write_text(json.dumps(report))
 
         with patch("server.PROJECT_ROOT", tmp_path):
             result = await call_tool("radar_history", {"limit": 2})
@@ -426,9 +441,13 @@ class TestRadarHistoryExecution:
         # Write a valid report and a corrupt one
         valid = {
             "generated_at": "2024-02-01T10:00:00",
-            "summary": {"total_datasets": 10, "total_github_repos": 20,
-                        "total_github_repos_high_relevance": 3, "total_papers": 5,
-                        "total_blog_posts": 2},
+            "summary": {
+                "total_datasets": 10,
+                "total_github_repos": 20,
+                "total_github_repos_high_relevance": 3,
+                "total_papers": 5,
+                "total_blog_posts": 2,
+            },
         }
         (reports_dir / "intel_report_2024-02-01.json").write_text(json.dumps(valid))
         (reports_dir / "intel_report_2024-01-01.json").write_text("{corrupt json!!!")
@@ -445,12 +464,12 @@ class TestMainIntelTrendIntegration:
 
     def test_main_intel_imports_trend_analyzer(self):
         """Test main_intel imports TrendAnalyzer."""
-        import main_intel
         from analyzers.trend import TrendAnalyzer
+
         assert TrendAnalyzer is not None
 
     def test_main_intel_imports_radar_database(self):
         """Test main_intel imports RadarDatabase."""
-        import main_intel
         from db import RadarDatabase
+
         assert RadarDatabase is not None

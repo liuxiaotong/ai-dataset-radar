@@ -86,10 +86,7 @@ class TestGitHubRelevance:
             "description": "Uses transformers for training",
             "topics": [],
         }
-        relevance = scraper._calculate_relevance(
-            repo,
-            keywords=["transformers", "training", "nlp"]
-        )
+        relevance = scraper._calculate_relevance(repo, keywords=["transformers", "training", "nlp"])
         assert relevance == "high"
 
 

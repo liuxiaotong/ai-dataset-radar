@@ -7,34 +7,51 @@ Tightened filtering to only keep papers directly related to:
 """
 
 import re
-from typing import Optional
 
 
 # Core keywords - papers must contain at least one
 REQUIRED_KEYWORDS = [
     # RLHF related
-    "human feedback", "rlhf", "rlaif", "reinforcement learning from human",
-
+    "human feedback",
+    "rlhf",
+    "rlaif",
+    "reinforcement learning from human",
     # Preference learning
-    "preference learning", "preference data", "preference optimization",
-    "dpo", "direct preference", "pairwise comparison", "human preference",
-
+    "preference learning",
+    "preference data",
+    "preference optimization",
+    "dpo",
+    "direct preference",
+    "pairwise comparison",
+    "human preference",
     # Reward models
-    "reward model", "reward learning", "reward signal",
-
+    "reward model",
+    "reward learning",
+    "reward signal",
     # Annotation methods
-    "annotation", "labeling", "data collection", "crowdsourcing",
-    "annotator", "human evaluation", "annotation guideline",
-    "inter-annotator", "annotation quality",
-
+    "annotation",
+    "labeling",
+    "data collection",
+    "crowdsourcing",
+    "annotator",
+    "human evaluation",
+    "annotation guideline",
+    "inter-annotator",
+    "annotation quality",
     # SFT / Instruction
-    "instruction tuning", "instruction following", "supervised fine-tuning",
-    "instruction dataset", "sft data",
-
+    "instruction tuning",
+    "instruction following",
+    "supervised fine-tuning",
+    "instruction dataset",
+    "sft data",
     # Data quality
-    "data quality", "data curation", "data filtering",
-    "synthetic data generation", "data augmentation for llm",
-    "data mixture", "training data"
+    "data quality",
+    "data curation",
+    "data filtering",
+    "synthetic data generation",
+    "data augmentation for llm",
+    "data mixture",
+    "training data",
 ]
 
 # Exclude patterns - if matched without strong signals, exclude
@@ -48,10 +65,16 @@ EXCLUDE_PATTERNS = [
 
 # Strong signals - keep paper even if exclude patterns match
 STRONG_SIGNALS = [
-    "we release", "we collect", "we annotate", "we create",
-    "we introduce a dataset", "we present a dataset",
-    "annotation process", "data collection process",
-    "our dataset", "our benchmark"
+    "we release",
+    "we collect",
+    "we annotate",
+    "we create",
+    "we introduce a dataset",
+    "we present a dataset",
+    "annotation process",
+    "data collection process",
+    "our dataset",
+    "our benchmark",
 ]
 
 # Bonus signals for scoring
@@ -76,28 +99,58 @@ BONUS_SIGNALS = {
 
 # Priority organizations - papers from these get bonus
 PRIORITY_ORGS = [
-    "openai", "anthropic", "deepmind", "meta ai", "google",
-    "scale ai", "surge", "snorkel", "hugging face", "huggingface",
-    "allen ai", "allenai", "ai2"
+    "openai",
+    "anthropic",
+    "deepmind",
+    "meta ai",
+    "google",
+    "scale ai",
+    "surge",
+    "snorkel",
+    "hugging face",
+    "huggingface",
+    "allen ai",
+    "allenai",
+    "ai2",
 ]
 
 # Paper categories
 PAPER_CATEGORIES = {
     "RLHF/偏好学习": [
-        "rlhf", "human feedback", "preference", "dpo", "reward model",
-        "pairwise", "chosen", "rejected"
+        "rlhf",
+        "human feedback",
+        "preference",
+        "dpo",
+        "reward model",
+        "pairwise",
+        "chosen",
+        "rejected",
     ],
     "数据集构建": [
-        "dataset", "data collection", "we collect", "we release",
-        "benchmark", "we create", "corpus"
+        "dataset",
+        "data collection",
+        "we collect",
+        "we release",
+        "benchmark",
+        "we create",
+        "corpus",
     ],
     "标注方法论": [
-        "annotation", "labeling", "crowdsourcing", "annotator",
-        "inter-annotator", "annotation guideline", "label quality"
+        "annotation",
+        "labeling",
+        "crowdsourcing",
+        "annotator",
+        "inter-annotator",
+        "annotation guideline",
+        "label quality",
     ],
     "指令微调": [
-        "instruction", "sft", "fine-tuning", "supervised",
-        "instruction following", "instruction tuning"
+        "instruction",
+        "sft",
+        "fine-tuning",
+        "supervised",
+        "instruction following",
+        "instruction tuning",
     ],
 }
 
@@ -137,9 +190,7 @@ class PaperFilter:
                 continue
 
             # Check exclude patterns
-            is_excluded = any(
-                re.search(pattern, text) for pattern in EXCLUDE_PATTERNS
-            )
+            is_excluded = any(re.search(pattern, text) for pattern in EXCLUDE_PATTERNS)
 
             # Check for strong signals that override exclusion
             has_strong_signal = any(signal in text for signal in STRONG_SIGNALS)
@@ -158,7 +209,7 @@ class PaperFilter:
 
         # Sort by score and limit
         results.sort(key=lambda x: x.get("relevance_score", 0), reverse=True)
-        return results[:self.max_papers]
+        return results[: self.max_papers]
 
     def _calculate_score(self, paper: dict, text: str) -> int:
         """Calculate relevance score for a paper.

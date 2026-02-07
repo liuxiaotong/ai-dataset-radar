@@ -35,26 +35,20 @@ class ArxivScraper(BaseScraper):
         '"RLHF"',
         '"preference learning"',
         '"reward model"',
-
         # Data annotation
         '"data annotation"',
         '"annotation guideline"',
         '"crowdsourcing"',
-
         # Instruction tuning
         '"instruction tuning"',
         '"instruction following"',
-
         # Data quality
         '"data curation"',
         '"synthetic data"',
     ]
 
     def __init__(
-        self,
-        limit: int = 50,
-        categories: Optional[list[str]] = None,
-        config: dict = None
+        self, limit: int = 50, categories: Optional[list[str]] = None, config: dict = None
     ):
         """Initialize arXiv scraper.
 

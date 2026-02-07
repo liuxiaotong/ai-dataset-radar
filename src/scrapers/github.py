@@ -1,6 +1,5 @@
 """GitHub repository scraper for dataset discovery."""
 
-import re
 import requests
 from datetime import datetime, timedelta
 from typing import Optional
@@ -31,29 +30,45 @@ class GitHubScraper(BaseScraper):
 
     # Keywords that indicate a dataset repository
     DATASET_KEYWORDS = [
-        "dataset", "datasets", "benchmark", "corpus",
-        "training-data", "evaluation", "annotation",
-        "labeled", "labelled", "fine-tuning", "instruction",
+        "dataset",
+        "datasets",
+        "benchmark",
+        "corpus",
+        "training-data",
+        "evaluation",
+        "annotation",
+        "labeled",
+        "labelled",
+        "fine-tuning",
+        "instruction",
     ]
 
     # Topics to search for
     DATASET_TOPICS = [
-        "dataset", "datasets", "machine-learning-dataset",
-        "nlp-dataset", "benchmark", "llm", "fine-tuning",
+        "dataset",
+        "datasets",
+        "machine-learning-dataset",
+        "nlp-dataset",
+        "benchmark",
+        "llm",
+        "fine-tuning",
     ]
 
     # Keywords for relevance scoring
     RELEVANCE_KEYWORDS = [
-        "dataset", "annotation", "benchmark", "rlhf", "evaluation",
-        "training-data", "preference", "instruction", "fine-tuning",
+        "dataset",
+        "annotation",
+        "benchmark",
+        "rlhf",
+        "evaluation",
+        "training-data",
+        "preference",
+        "instruction",
+        "fine-tuning",
     ]
 
     def __init__(
-        self,
-        config: dict = None,
-        limit: int = 50,
-        days: int = 7,
-        token: Optional[str] = None
+        self, config: dict = None, limit: int = 50, days: int = 7, token: Optional[str] = None
     ):
         """Initialize the scraper.
 
@@ -70,9 +85,7 @@ class GitHubScraper(BaseScraper):
         if token:
             self.headers["Authorization"] = f"token {token}"
         # Load relevance keywords from config if available
-        self.relevance_keywords = (
-            self.config.get("relevance_keywords") or self.RELEVANCE_KEYWORDS
-        )
+        self.relevance_keywords = self.config.get("relevance_keywords") or self.RELEVANCE_KEYWORDS
 
     def scrape(self, config: dict = None) -> list[dict]:
         """Scrape repositories from GitHub.
@@ -90,11 +103,7 @@ class GitHubScraper(BaseScraper):
                 repo["relevance"] = self._calculate_relevance(repo)
         return repos
 
-    def _calculate_relevance(
-        self,
-        repo: dict,
-        keywords: Optional[list[str]] = None
-    ) -> str:
+    def _calculate_relevance(self, repo: dict, keywords: Optional[list[str]] = None) -> str:
         """Calculate relevance score for a repository.
 
         Args:
@@ -164,7 +173,7 @@ class GitHubScraper(BaseScraper):
                         if len(results) >= self.limit:
                             break
 
-        return results[:self.limit]
+        return results[: self.limit]
 
     def _search_repos(self, keyword: str) -> list[dict]:
         """Search for repositories using GitHub Search API.
@@ -190,10 +199,7 @@ class GitHubScraper(BaseScraper):
 
         try:
             response = requests.get(
-                self.SEARCH_API,
-                params=params,
-                headers=self.headers,
-                timeout=30
+                self.SEARCH_API, params=params, headers=self.headers, timeout=30
             )
             response.raise_for_status()
             data = response.json()
@@ -205,7 +211,7 @@ class GitHubScraper(BaseScraper):
                     repos.append(parsed)
             return repos
 
-        except requests.RequestException as e:
+        except requests.RequestException:
             logger.info("Error searching GitHub for '{keyword}': {e}")
             return []
 
@@ -221,7 +227,7 @@ class GitHubScraper(BaseScraper):
                 f"{self.TRENDING_URL}/python",
                 params={"since": "weekly"},
                 headers={"User-Agent": "Mozilla/5.0"},
-                timeout=30
+                timeout=30,
             )
             response.raise_for_status()
 
@@ -269,14 +275,16 @@ class GitHubScraper(BaseScraper):
                 "topics": item.get("topics", []),
                 "created_at": created_at.isoformat() if created_at else None,
                 "url": item.get("html_url", ""),
-                "is_dataset": self._is_dataset_related({
-                    "name": item.get("name", ""),
-                    "description": item.get("description", "") or "",
-                    "topics": item.get("topics", []),
-                }),
+                "is_dataset": self._is_dataset_related(
+                    {
+                        "name": item.get("name", ""),
+                        "description": item.get("description", "") or "",
+                        "topics": item.get("topics", []),
+                    }
+                ),
             }
         except Exception as e:
-            logger.info("Error parsing repo %s: %s", item.get('full_name', 'unknown'), e)
+            logger.info("Error parsing repo %s: %s", item.get("full_name", "unknown"), e)
             return None
 
     def _parse_trending_article(self, article) -> Optional[dict]:
@@ -337,11 +345,13 @@ class GitHubScraper(BaseScraper):
                 "topics": [],
                 "created_at": None,
                 "url": f"https://github.com/{full_name}",
-                "is_dataset": self._is_dataset_related({
-                    "name": name,
-                    "description": description,
-                    "topics": [],
-                }),
+                "is_dataset": self._is_dataset_related(
+                    {
+                        "name": name,
+                        "description": description,
+                        "topics": [],
+                    }
+                ),
             }
         except Exception as e:
             logger.info("Error parsing trending article: %s", e)
@@ -403,9 +413,7 @@ class GitHubScraper(BaseScraper):
 
         try:
             response = requests.get(
-                url,
-                headers={**self.headers, "Accept": "application/vnd.github.raw"},
-                timeout=15
+                url, headers={**self.headers, "Accept": "application/vnd.github.raw"}, timeout=15
             )
             if response.status_code == 200:
                 return response.text

@@ -8,7 +8,6 @@ Generates structured markdown reports with:
 """
 
 from datetime import datetime
-from typing import Optional
 
 from analyzers.data_type_classifier import DataType, DataTypeClassifier
 from trackers.blog_tracker import map_blog_to_vendor
@@ -57,18 +56,19 @@ class IntelReportGenerator:
         lines.append("")
 
         # Executive Summary
-        lines.extend(self._generate_summary(
-            lab_activity, vendor_activity, datasets_by_type,
-            github_activity, blog_activity
-        ))
+        lines.extend(
+            self._generate_summary(
+                lab_activity, vendor_activity, datasets_by_type, github_activity, blog_activity
+            )
+        )
 
         # US AI Labs Activity
         lines.extend(self._generate_labs_section(lab_activity))
 
         # Data Vendor Activity (enhanced with GitHub + Blogs)
-        lines.extend(self._generate_vendors_section(
-            vendor_activity, github_activity, blog_activity
-        ))
+        lines.extend(
+            self._generate_vendors_section(vendor_activity, github_activity, blog_activity)
+        )
 
         # Datasets by Type
         lines.extend(self._generate_datasets_section(datasets_by_type))
@@ -149,15 +149,19 @@ class IntelReportGenerator:
         other_ratio = other_count / total_datasets if total_datasets > 0 else 0
 
         lines.append(f"- **活跃 AI Labs**: {active_labs} 家，发布 {lab_datasets} 个数据集")
-        lines.append(f"- **数据供应商监控**: HF({active_vendors}家), GitHub({github_orgs}组织/{github_repos}仓库), 博客({blog_sources}源/{blog_articles}文章)")
-        lines.append(f"- **高价值数据集**: {total_datasets} 个（已分类 {total_datasets - other_count} 个）")
+        lines.append(
+            f"- **数据供应商监控**: HF({active_vendors}家), GitHub({github_orgs}组织/{github_repos}仓库), 博客({blog_sources}源/{blog_articles}文章)"
+        )
+        lines.append(
+            f"- **高价值数据集**: {total_datasets} 个（已分类 {total_datasets - other_count} 个）"
+        )
 
         if type_counts:
             # Sort by count, exclude "other" from top display
             sorted_types = sorted(
                 [(k, v) for k, v in type_counts.items() if k != "other"],
                 key=lambda x: x[1],
-                reverse=True
+                reverse=True,
             )[:4]
             if sorted_types:
                 top_str = ", ".join(f"{dtype}({count})" for dtype, count in sorted_types)
@@ -165,7 +169,7 @@ class IntelReportGenerator:
 
         # Warning if too many unclassified
         if other_ratio > 0.3:
-            lines.append(f"- **⚠️ 分类覆盖率**: {1-other_ratio:.0%}（{other_count}个未分类）")
+            lines.append(f"- **⚠️ 分类覆盖率**: {1 - other_ratio:.0%}（{other_count}个未分类）")
 
         lines.append("")
         return lines
@@ -213,7 +217,9 @@ class IntelReportGenerator:
                         ds_id = ds.get("id", "Unknown")
                         ds_name = ds_id.split("/")[-1] if "/" in ds_id else ds_id
                         downloads = ds.get("downloads", 0)
-                        lines.append(f"- [{ds_name}](https://huggingface.co/datasets/{ds_id}) ({downloads:,} downloads)")
+                        lines.append(
+                            f"- [{ds_name}](https://huggingface.co/datasets/{ds_id}) ({downloads:,} downloads)"
+                        )
                     lines.append("")
 
         # Emerging Labs
@@ -304,10 +310,7 @@ class IntelReportGenerator:
                 vendors[vendor_key]["blog"].extend(activity.get("articles", []))
 
         # Check if any vendor has activity
-        has_activity = any(
-            v["datasets"] or v["github"] or v["blog"]
-            for v in vendors.values()
-        )
+        has_activity = any(v["datasets"] or v["github"] or v["blog"] for v in vendors.values())
 
         if not has_activity:
             lines.append("本周无监控供应商的公开动态")
@@ -358,7 +361,9 @@ class IntelReportGenerator:
                     ds_id = ds.get("id", "Unknown")
                     ds_name = ds_id.split("/")[-1] if "/" in ds_id else ds_id
                     downloads = ds.get("downloads", 0)
-                    lines.append(f"- [{ds_name}](https://huggingface.co/datasets/{ds_id}) ({downloads:,} downloads)")
+                    lines.append(
+                        f"- [{ds_name}](https://huggingface.co/datasets/{ds_id}) ({downloads:,} downloads)"
+                    )
                 lines.append("")
 
         return lines

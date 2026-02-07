@@ -1,11 +1,9 @@
 """Tests for MCP Server tools."""
 
 import json
-import os
 import sys
-import tempfile
 from pathlib import Path
-from unittest.mock import patch, MagicMock
+from unittest.mock import patch
 
 import pytest
 
@@ -20,7 +18,7 @@ class TestMCPServerHelpers:
 
     def test_get_latest_report_no_reports(self, tmp_path):
         """Test get_latest_report when no reports exist."""
-        from server import get_latest_report, PROJECT_ROOT as SERVER_ROOT
+        from server import get_latest_report
 
         # Temporarily override PROJECT_ROOT
         with patch("server.PROJECT_ROOT", tmp_path):
@@ -38,12 +36,8 @@ class TestMCPServerHelpers:
         report1 = {"summary": {"total_datasets": 5}}
         report2 = {"summary": {"total_datasets": 10}}
 
-        (reports_dir / "intel_report_2024-01-01.json").write_text(
-            json.dumps(report1)
-        )
-        (reports_dir / "intel_report_2024-01-02.json").write_text(
-            json.dumps(report2)
-        )
+        (reports_dir / "intel_report_2024-01-01.json").write_text(json.dumps(report1))
+        (reports_dir / "intel_report_2024-01-02.json").write_text(json.dumps(report2))
 
         with patch("server.PROJECT_ROOT", tmp_path):
             result = get_latest_report()
@@ -142,18 +136,32 @@ class TestMCPToolExecution:
                 {
                     "org": "test-org",
                     "repos_updated": [
-                        {"name": "repo1", "stars": 100, "relevance": "high", "relevance_signals": ["dataset"]},
+                        {
+                            "name": "repo1",
+                            "stars": 100,
+                            "relevance": "high",
+                            "relevance_signals": ["dataset"],
+                        },
                     ],
                 }
             ],
             "papers": [
-                {"title": "Test Paper", "url": "https://arxiv.org/abs/1234", "abstract": "Test abstract"},
+                {
+                    "title": "Test Paper",
+                    "url": "https://arxiv.org/abs/1234",
+                    "abstract": "Test abstract",
+                },
             ],
             "blog_posts": [
                 {
                     "source": "Test Blog",
                     "articles": [
-                        {"title": "Test Article", "url": "https://example.com/article", "date": "2024-01-15", "signals": ["rlhf"]},
+                        {
+                            "title": "Test Article",
+                            "url": "https://example.com/article",
+                            "date": "2024-01-15",
+                            "signals": ["rlhf"],
+                        },
                     ],
                 }
             ],
@@ -166,9 +174,7 @@ class TestMCPToolExecution:
 
         reports_dir = tmp_path / "data" / "reports"
         reports_dir.mkdir(parents=True)
-        (reports_dir / "intel_report_2024-01-15.json").write_text(
-            json.dumps(mock_report)
-        )
+        (reports_dir / "intel_report_2024-01-15.json").write_text(json.dumps(mock_report))
 
         with patch("server.PROJECT_ROOT", tmp_path):
             result = await call_tool("radar_summary", {})
@@ -184,9 +190,7 @@ class TestMCPToolExecution:
 
         reports_dir = tmp_path / "data" / "reports"
         reports_dir.mkdir(parents=True)
-        (reports_dir / "intel_report_2024-01-15.json").write_text(
-            json.dumps(mock_report)
-        )
+        (reports_dir / "intel_report_2024-01-15.json").write_text(json.dumps(mock_report))
 
         with patch("server.PROJECT_ROOT", tmp_path):
             result = await call_tool("radar_datasets", {"category": "synthetic"})
@@ -201,9 +205,7 @@ class TestMCPToolExecution:
 
         reports_dir = tmp_path / "data" / "reports"
         reports_dir.mkdir(parents=True)
-        (reports_dir / "intel_report_2024-01-15.json").write_text(
-            json.dumps(mock_report)
-        )
+        (reports_dir / "intel_report_2024-01-15.json").write_text(json.dumps(mock_report))
 
         with patch("server.PROJECT_ROOT", tmp_path):
             result = await call_tool("radar_blogs", {})
@@ -218,9 +220,7 @@ class TestMCPToolExecution:
 
         reports_dir = tmp_path / "data" / "reports"
         reports_dir.mkdir(parents=True)
-        (reports_dir / "intel_report_2024-01-15.json").write_text(
-            json.dumps(mock_report)
-        )
+        (reports_dir / "intel_report_2024-01-15.json").write_text(json.dumps(mock_report))
 
         with patch("server.PROJECT_ROOT", tmp_path):
             result = await call_tool("radar_github", {"relevance": "high"})
@@ -235,9 +235,7 @@ class TestMCPToolExecution:
 
         reports_dir = tmp_path / "data" / "reports"
         reports_dir.mkdir(parents=True)
-        (reports_dir / "intel_report_2024-01-15.json").write_text(
-            json.dumps(mock_report)
-        )
+        (reports_dir / "intel_report_2024-01-15.json").write_text(json.dumps(mock_report))
 
         with patch("server.PROJECT_ROOT", tmp_path):
             result = await call_tool("radar_papers", {"limit": 5})

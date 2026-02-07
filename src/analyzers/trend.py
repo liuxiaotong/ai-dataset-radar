@@ -1,7 +1,7 @@
 """Trend analysis for dataset growth patterns."""
 
 import sys
-from datetime import datetime, timedelta
+from datetime import datetime
 from pathlib import Path
 from typing import Optional
 
@@ -114,8 +114,9 @@ class TrendAnalyzer:
                 )
                 calculated += 1
 
-                if (growth_7d is not None and growth_7d > 0) or \
-                   (growth_30d is not None and growth_30d > 0):
+                if (growth_7d is not None and growth_7d > 0) or (
+                    growth_30d is not None and growth_30d > 0
+                ):
                     with_growth += 1
 
         return {

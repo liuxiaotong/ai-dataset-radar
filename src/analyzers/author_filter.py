@@ -17,18 +17,18 @@ class AuthorFilter:
     """
 
     # Pattern for suspicious usernames: letters followed by 5+ digits
-    SUSPICIOUS_USERNAME_PATTERN = re.compile(r'^[a-zA-Z]+\d{5,}$')
+    SUSPICIOUS_USERNAME_PATTERN = re.compile(r"^[a-zA-Z]+\d{5,}$")
 
     # Pattern for random/meaningless dataset IDs: 10+ alphanumeric characters
-    RANDOM_ID_PATTERN = re.compile(r'^[a-zA-Z0-9]{10,}$')
+    RANDOM_ID_PATTERN = re.compile(r"^[a-zA-Z0-9]{10,}$")
 
     # Common meaningful dataset name patterns (should NOT be filtered)
     MEANINGFUL_PATTERNS = [
-        re.compile(r'[-_]'),  # Contains separator
-        re.compile(r'\d{4}'),  # Contains year
-        re.compile(r'(dataset|data|benchmark|corpus|eval)', re.I),  # Dataset keywords
-        re.compile(r'(train|test|val|dev)', re.I),  # Split keywords
-        re.compile(r'(v\d|version)', re.I),  # Version indicators
+        re.compile(r"[-_]"),  # Contains separator
+        re.compile(r"\d{4}"),  # Contains year
+        re.compile(r"(dataset|data|benchmark|corpus|eval)", re.I),  # Dataset keywords
+        re.compile(r"(train|test|val|dev)", re.I),  # Split keywords
+        re.compile(r"(v\d|version)", re.I),  # Version indicators
     ]
 
     def __init__(self, config: Optional[dict] = None):
@@ -83,8 +83,8 @@ class AuthorFilter:
             return True
 
         # Extract just the dataset name (remove author prefix)
-        if '/' in dataset_id:
-            dataset_id = dataset_id.split('/')[-1]
+        if "/" in dataset_id:
+            dataset_id = dataset_id.split("/")[-1]
 
         # Check if it matches random pattern
         if not self.RANDOM_ID_PATTERN.match(dataset_id):
@@ -120,7 +120,7 @@ class AuthorFilter:
         license_info = dataset.get("license", "") or dataset.get("tags", [])
         if license_info:
             if isinstance(license_info, list):
-                license_tags = [t for t in license_info if 'license' in str(t).lower()]
+                license_tags = [t for t in license_info if "license" in str(t).lower()]
                 if license_tags:
                     return True
             elif license_info.strip():
@@ -163,8 +163,7 @@ class AuthorFilter:
         # Check dataset IDs
         if datasets:
             random_id_count = sum(
-                1 for ds in datasets
-                if self.is_random_dataset_id(ds.get("name", ds.get("id", "")))
+                1 for ds in datasets if self.is_random_dataset_id(ds.get("name", ds.get("id", "")))
             )
             random_ratio = random_id_count / len(datasets)
 
@@ -174,9 +173,7 @@ class AuthorFilter:
 
         # Check dataset quality
         if datasets:
-            quality_count = sum(
-                1 for ds in datasets if self.has_quality_metadata(ds)
-            )
+            quality_count = sum(1 for ds in datasets if self.has_quality_metadata(ds))
 
             if quality_count == 0:
                 result["reasons"].append("no_quality_metadata")

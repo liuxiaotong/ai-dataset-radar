@@ -10,7 +10,6 @@ This script automatically applies code quality improvements:
 Run: python scripts/fix_code_quality.py
 """
 
-import os
 import re
 import subprocess
 import sys
@@ -75,7 +74,7 @@ def replace_prints_with_logger(file_path: Path) -> int:
             lines.insert(last_import_idx + 1, "")
             lines.insert(last_import_idx + 2, "from utils.logging_config import get_logger")
             lines.insert(last_import_idx + 3, "")
-            lines.insert(last_import_idx + 4, 'logger = get_logger(__name__)')
+            lines.insert(last_import_idx + 4, "logger = get_logger(__name__)")
             content = "\n".join(lines)
 
     if content != original:
@@ -107,7 +106,7 @@ def _validate_required(name: str, value, max_length: int = None):
 '''
 
     # Find class definition and insert before it
-    class_match = re.search(r'\nclass DatasetDatabase:', content)
+    class_match = re.search(r"\nclass DatasetDatabase:", content)
     if class_match:
         insert_pos = class_match.start()
         content = content[:insert_pos] + "\n" + validation_code + content[insert_pos:]
@@ -210,10 +209,14 @@ def calculate_relevance(
     init_file = SRC_DIR / "utils" / "__init__.py"
     init_content = init_file.read_text(encoding="utf-8")
     if "keywords" not in init_content:
-        init_content += "\nfrom .keywords import match_keywords, count_keyword_matches, calculate_relevance\n"
+        init_content += (
+            "\nfrom .keywords import match_keywords, count_keyword_matches, calculate_relevance\n"
+        )
         init_file.write_text(init_content, encoding="utf-8")
 
-    log("  Created utils/keywords.py with match_keywords(), count_keyword_matches(), calculate_relevance()")
+    log(
+        "  Created utils/keywords.py with match_keywords(), count_keyword_matches(), calculate_relevance()"
+    )
     return 1
 
 
@@ -281,7 +284,7 @@ def run_tests() -> tuple[bool, str]:
             cwd=PROJECT_ROOT,
             capture_output=True,
             text=True,
-            timeout=120
+            timeout=120,
         )
         success = result.returncode == 0
         output = result.stdout + result.stderr

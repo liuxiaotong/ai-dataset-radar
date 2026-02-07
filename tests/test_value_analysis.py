@@ -1,9 +1,7 @@
 """Tests for v3 value analysis features."""
 
 import sys
-from datetime import datetime
 from pathlib import Path
-from unittest.mock import MagicMock, patch
 
 import pytest
 
@@ -447,35 +445,41 @@ class TestIntegration:
         aggregator = ValueAggregator()
 
         # Simulate data from multiple sources
-        aggregator.add_semantic_scholar_data([
+        aggregator.add_semantic_scholar_data(
+            [
+                {
+                    "dataset_name": "high-value-dataset",
+                    "citation_count": 500,
+                    "citation_monthly_growth": 20.0,
+                    "url": "https://example.com",
+                    "authors": ["Google Research"],
+                }
+            ]
+        )
+
+        aggregator.add_model_card_data(
             {
-                "dataset_name": "high-value-dataset",
-                "citation_count": 500,
-                "citation_monthly_growth": 20.0,
-                "url": "https://example.com",
-                "authors": ["Google Research"],
+                "valuable_datasets": [
+                    {
+                        "name": "high-value-dataset",
+                        "usage_count": 10,
+                        "total_model_downloads": 100000,
+                    }
+                ]
             }
-        ])
+        )
 
-        aggregator.add_model_card_data({
-            "valuable_datasets": [
-                {
-                    "name": "high-value-dataset",
-                    "usage_count": 10,
-                    "total_model_downloads": 100000,
-                }
-            ]
-        })
-
-        aggregator.add_sota_data({
-            "ranked_datasets": [
-                {
-                    "name": "high-value-dataset",
-                    "sota_model_count": 5,
-                    "areas": ["nlp"],
-                }
-            ]
-        })
+        aggregator.add_sota_data(
+            {
+                "ranked_datasets": [
+                    {
+                        "name": "high-value-dataset",
+                        "sota_model_count": 5,
+                        "areas": ["nlp"],
+                    }
+                ]
+            }
+        )
 
         scored = aggregator.get_scored_datasets()
 

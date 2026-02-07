@@ -8,8 +8,7 @@ Integrates HuggingFace, GitHub, and Blog monitoring.
 import argparse
 import json
 import sys
-import time
-from concurrent.futures import ThreadPoolExecutor, as_completed
+from concurrent.futures import ThreadPoolExecutor
 from datetime import datetime
 from pathlib import Path
 
@@ -60,7 +59,6 @@ def load_config(config_path: str = "config.yaml") -> dict:
         return {}
 
 
-
 def format_insights_prompt(
     all_datasets: list,
     blog_activity: list,
@@ -98,10 +96,7 @@ def format_insights_prompt(
     for cat_key, cat_display in category_names.items():
         cat_data = labs.get(cat_key, {})
         # Filter to orgs with actual activity
-        active_orgs = {
-            k: v for k, v in cat_data.items()
-            if v.get("datasets") or v.get("models")
-        }
+        active_orgs = {k: v for k, v in cat_data.items() if v.get("datasets") or v.get("models")}
         if not active_orgs:
             continue
 
@@ -129,16 +124,27 @@ def format_insights_prompt(
                 # Show meaningful tags (filter out noise)
                 tags = ds.get("tags", [])
                 meaningful_tags = [
-                    t for t in tags
-                    if not t.startswith(("region:", "library:", "size_categories:",
-                                        "format:", "arxiv:", "language:"))
+                    t
+                    for t in tags
+                    if not t.startswith(
+                        (
+                            "region:",
+                            "library:",
+                            "size_categories:",
+                            "format:",
+                            "arxiv:",
+                            "language:",
+                        )
+                    )
                     and t not in ("region:us",)
                 ][:8]
                 if meaningful_tags:
                     lines.append(f"  标签: {', '.join(meaningful_tags)}")
 
             # Models with context - show top models by downloads+likes, limit noise
-            notable_models = [m for m in model_list if m.get("downloads", 0) > 0 or m.get("likes", 0) > 0]
+            notable_models = [
+                m for m in model_list if m.get("downloads", 0) > 0 or m.get("likes", 0) > 0
+            ]
             if not notable_models:
                 # All models are zero-activity, just summarize
                 if model_list:
@@ -146,7 +152,9 @@ def format_insights_prompt(
                     lines.append(f"- 🤖 {len(model_list)} 个模型（均无下载/点赞，如 {sample} 等）")
                 model_list_to_show = []
             else:
-                top_models = sorted(notable_models, key=lambda m: -(m.get("downloads", 0) + m.get("likes", 0) * 100))
+                top_models = sorted(
+                    notable_models, key=lambda m: -(m.get("downloads", 0) + m.get("likes", 0) * 100)
+                )
                 model_list_to_show = top_models[:5]
             for model in model_list_to_show:
                 model_id = model.get("id", "")
@@ -156,13 +164,24 @@ def format_insights_prompt(
                 model_tags = model.get("tags", [])
                 # Extract meaningful tags for models
                 meaningful = [
-                    t for t in model_tags
-                    if not t.startswith(("region:", "base_model:", "endpoints_",
-                                        "license:", "arxiv:"))
-                    and t not in ("safetensors", "transformers", "pytorch", "en",
-                                  "model_hub_mixin", "pytorch_model_hub_mixin")
+                    t
+                    for t in model_tags
+                    if not t.startswith(
+                        ("region:", "base_model:", "endpoints_", "license:", "arxiv:")
+                    )
+                    and t
+                    not in (
+                        "safetensors",
+                        "transformers",
+                        "pytorch",
+                        "en",
+                        "model_hub_mixin",
+                        "pytorch_model_hub_mixin",
+                    )
                 ][:6]
-                lines.append(f"- 🤖 **{model_id}** (downloads: {downloads:,}, likes: {likes}, pipeline: {pipeline})")
+                lines.append(
+                    f"- 🤖 **{model_id}** (downloads: {downloads:,}, likes: {likes}, pipeline: {pipeline})"
+                )
                 if meaningful:
                     lines.append(f"  标签: {', '.join(meaningful)}")
             if len(notable_models) > 5:
@@ -180,8 +199,7 @@ def format_insights_prompt(
 
     for tier_name, tier_data in vendors.items():
         active_vendors = {
-            k: v for k, v in tier_data.items()
-            if v.get("datasets") or v.get("models")
+            k: v for k, v in tier_data.items() if v.get("datasets") or v.get("models")
         }
         if not active_vendors:
             continue
@@ -213,22 +231,32 @@ def format_insights_prompt(
     lines.append("## 三、数据集分类分析\n")
     if datasets_by_type:
         # Show classified types first, "other" last
-        classified = {k: v for k, v in datasets_by_type.items()
-                      if (k.value if hasattr(k, 'value') else str(k)) != "other" and v}
-        other = {k: v for k, v in datasets_by_type.items()
-                 if (k.value if hasattr(k, 'value') else str(k)) == "other" and v}
+        classified = {
+            k: v
+            for k, v in datasets_by_type.items()
+            if (k.value if hasattr(k, "value") else str(k)) != "other" and v
+        }
+        other = {
+            k: v
+            for k, v in datasets_by_type.items()
+            if (k.value if hasattr(k, "value") else str(k)) == "other" and v
+        }
 
         total = sum(len(v) for v in datasets_by_type.values())
         classified_count = sum(len(v) for v in classified.values())
         lines.append(f"共 {total} 个数据集，已分类 {classified_count} 个：\n")
 
         for dtype, ds_list in classified.items():
-            type_name = dtype.value if hasattr(dtype, 'value') else str(dtype)
-            lines.append(f"- **{type_name}**: {len(ds_list)} 个 — {', '.join(ds.get('id', '') for ds in ds_list[:5])}")
+            type_name = dtype.value if hasattr(dtype, "value") else str(dtype)
+            lines.append(
+                f"- **{type_name}**: {len(ds_list)} 个 — {', '.join(ds.get('id', '') for ds in ds_list[:5])}"
+            )
 
         if other:
             other_list = list(other.values())[0]
-            lines.append(f"- **未分类**: {len(other_list)} 个 — {', '.join(ds.get('id', '') for ds in other_list[:5])}")
+            lines.append(
+                f"- **未分类**: {len(other_list)} 个 — {', '.join(ds.get('id', '') for ds in other_list[:5])}"
+            )
         lines.append("")
     else:
         lines.append("无分类数据\n")
@@ -280,7 +308,9 @@ def format_insights_prompt(
         if high:
             lines.append(f"### 高相关 ({len(high)} 个)")
             for repo in high:
-                lines.append(f"- **{repo.get('org')}/{repo.get('name')}** ⭐ {repo.get('stars', 0)}")
+                lines.append(
+                    f"- **{repo.get('org')}/{repo.get('name')}** ⭐ {repo.get('stars', 0)}"
+                )
                 if repo.get("description"):
                     lines.append(f"  {repo.get('description', '')[:120]}")
                 signals = repo.get("signals", [])
@@ -291,7 +321,9 @@ def format_insights_prompt(
         if medium:
             lines.append(f"### 中相关 (Top {len(medium)})")
             for repo in medium:
-                lines.append(f"- **{repo.get('org')}/{repo.get('name')}** ⭐ {repo.get('stars', 0)}")
+                lines.append(
+                    f"- **{repo.get('org')}/{repo.get('name')}** ⭐ {repo.get('stars', 0)}"
+                )
                 if repo.get("description"):
                     lines.append(f"  {repo.get('description', '')[:120]}")
             lines.append("")
@@ -452,8 +484,7 @@ def fetch_dataset_readmes(datasets: list[dict], hf_scraper: HuggingFaceScraper) 
     """
     logger.info("Fetching dataset READMEs for better classification...")
     to_fetch = [
-        (i, ds) for i, ds in enumerate(datasets[:30])
-        if ds.get("id") and not ds.get("card_data")
+        (i, ds) for i, ds in enumerate(datasets[:30]) if ds.get("id") and not ds.get("card_data")
     ]
 
     if not to_fetch:
@@ -564,7 +595,11 @@ def main():
     org_tracker = OrgTracker(config)
     github_tracker = GitHubTracker(config)
     blog_tracker = BlogTracker(config)
-    x_tracker = XTracker(config) if not args.no_x and config.get("x_tracker", {}).get("enabled", False) else None
+    x_tracker = (
+        XTracker(config)
+        if not args.no_x and config.get("x_tracker", {}).get("enabled", False)
+        else None
+    )
     data_classifier = DataTypeClassifier(config)
     paper_filter = PaperFilter(config)
     report_generator = IntelReportGenerator(config)
@@ -634,17 +669,27 @@ def main():
                     github_activity = result.get("vendors", []) + result.get("labs", [])
                     active_count = sum(1 for a in github_activity if a.get("repos_updated"))
                     repo_count = sum(len(a.get("repos_updated", [])) for a in github_activity)
-                    logger.info("Found %d active orgs with %d updated repos", active_count, repo_count)
+                    logger.info(
+                        "Found %d active orgs with %d updated repos", active_count, repo_count
+                    )
                 elif key == "blogs":
                     blog_activity = result
                     active_count = sum(1 for a in blog_activity if a.get("articles"))
                     article_count = sum(len(a.get("articles", [])) for a in blog_activity)
-                    logger.info("Found %d active blogs with %d relevant articles", active_count, article_count)
+                    logger.info(
+                        "Found %d active blogs with %d relevant articles",
+                        active_count,
+                        article_count,
+                    )
                 elif key == "x":
                     x_activity = result
                     x_accounts = len(result.get("accounts", []))
-                    x_tweets = sum(len(a.get("relevant_tweets", [])) for a in result.get("accounts", []))
-                    logger.info("Found %d active X accounts with %d relevant tweets", x_accounts, x_tweets)
+                    x_tweets = sum(
+                        len(a.get("relevant_tweets", [])) for a in result.get("accounts", [])
+                    )
+                    logger.info(
+                        "Found %d active X accounts with %d relevant tweets", x_accounts, x_tweets
+                    )
                 elif key == "arxiv":
                     logger.info("Found %d arXiv papers", len(result))
                     papers.extend(paper_filter.filter_papers(result))
@@ -681,8 +726,8 @@ def main():
     datasets_by_type = data_classifier.group_by_type(all_datasets)
 
     summary = data_classifier.summarize(all_datasets)
-    logger.info("Classified datasets: %d/%d relevant", summary['relevant'], summary['total'])
-    logger.info("Other ratio: %.1f%%", summary['other_ratio'] * 100)
+    logger.info("Classified datasets: %d/%d relevant", summary["relevant"], summary["total"])
+    logger.info("Other ratio: %.1f%%", summary["other_ratio"] * 100)
     for dtype, count in summary["by_type"].items():
         if count > 0:
             logger.info("  %s: %d", dtype, count)
@@ -731,8 +776,7 @@ def main():
     for dtype, ds_list in datasets_by_type.items():
         key = dtype.value if isinstance(dtype, DataType) else str(dtype)
         datasets_json[key] = [
-            {k: v for k, v in ds.items() if not k.startswith("_")}
-            for ds in ds_list
+            {k: v for k, v in ds.items() if not k.startswith("_")} for ds in ds_list
         ]
 
     all_data = {
@@ -771,15 +815,16 @@ def main():
             with open(json_path, "w", encoding="utf-8") as f:
                 json.dump(
                     formatter._format_json_output(all_data),
-                    f, ensure_ascii=False, indent=2, default=str
+                    f,
+                    ensure_ascii=False,
+                    indent=2,
+                    default=str,
                 )
             logger.info("JSON data saved to: %s", json_path)
     else:
         # Use DualOutputFormatter for default path
         md_path, json_path = formatter.save_reports(
-            markdown_content=report,
-            data=all_data,
-            filename_prefix="intel_report"
+            markdown_content=report, data=all_data, filename_prefix="intel_report"
         )
         logger.info("Report saved to: %s", md_path)
         logger.info("JSON data saved to: %s", json_path)
@@ -806,10 +851,11 @@ def main():
         logger.warning("Trend analysis skipped: %s", e)
 
     # Print console summary
-    logger.info(report_generator.generate_console_summary(
-        lab_activity, vendor_activity, datasets_by_type,
-        github_activity, blog_activity
-    ))
+    logger.info(
+        report_generator.generate_console_summary(
+            lab_activity, vendor_activity, datasets_by_type, github_activity, blog_activity
+        )
+    )
 
     logger.info("Done!")
 
@@ -827,14 +873,17 @@ def main():
         )
 
         # Save insights prompt to file for reference
-        date_str = datetime.now().strftime('%Y-%m-%d')
-        insights_prompt_path = output_dir / "reports" / f"intel_report_{date_str}_insights_prompt.md"
+        date_str = datetime.now().strftime("%Y-%m-%d")
+        insights_prompt_path = (
+            output_dir / "reports" / f"intel_report_{date_str}_insights_prompt.md"
+        )
         with open(insights_prompt_path, "w", encoding="utf-8") as f:
             f.write(insights_content)
         logger.info("Insights prompt saved to: %s", insights_prompt_path)
 
         # Try auto-generating insights via LLM API
         from utils.llm_client import generate_insights
+
         insights_result = generate_insights(insights_content)
 
         insights_path = output_dir / "reports" / f"intel_report_{date_str}_insights.md"

@@ -97,8 +97,9 @@ class OrgTracker:
                 time.sleep(self._request_delay - elapsed)
             self._last_request = time.time()
 
-    def _request_with_retry(self, url: str, params: dict, cache_key: str,
-                            description: str, max_retries: int = 3) -> list[dict]:
+    def _request_with_retry(
+        self, url: str, params: dict, cache_key: str, description: str, max_retries: int = 3
+    ) -> list[dict]:
         """Make an HF API request with retry and cache fallback.
 
         Args:
@@ -128,14 +129,21 @@ class OrgTracker:
                     # Server error — retry
                     if attempt < max_retries - 1:
                         wait = 2 ** (attempt + 1)
-                        logger.warning("HF API %d for %s, retry in %ds", response.status_code, description, wait)
+                        logger.warning(
+                            "HF API %d for %s, retry in %ds",
+                            response.status_code,
+                            description,
+                            wait,
+                        )
                         time.sleep(wait)
                         continue
                 return []
             except requests.RequestException as e:
                 if attempt < max_retries - 1:
                     wait = 2 ** (attempt + 1)
-                    logger.warning("HF request failed for %s, retry in %ds: %s", description, wait, e)
+                    logger.warning(
+                        "HF request failed for %s, retry in %ds: %s", description, wait, e
+                    )
                     time.sleep(wait)
                 else:
                     logger.warning("All retries failed for %s: %s", description, e)
@@ -339,9 +347,7 @@ class OrgTracker:
             for org_data in category.values()
         )
         lab_models = sum(
-            len(org_data["models"])
-            for category in labs.values()
-            for org_data in category.values()
+            len(org_data["models"]) for category in labs.values() for org_data in category.values()
         )
         vendor_datasets = sum(
             len(vendor_data["datasets"])

@@ -30,10 +30,12 @@ class PapersWithCodeScraper(BaseScraper):
         super().__init__(config)
         self.limit = limit
         self.session = requests.Session()
-        self.session.headers.update({
-            "Accept": "application/json",
-            "User-Agent": "AI-Dataset-Radar/3.0 (https://github.com/liuxiaotong/ai-dataset-radar)",
-        })
+        self.session.headers.update(
+            {
+                "Accept": "application/json",
+                "User-Agent": "AI-Dataset-Radar/3.0 (https://github.com/liuxiaotong/ai-dataset-radar)",
+            }
+        )
         self._last_request_time = 0
         self._base_delay = 1.0
 
@@ -82,7 +84,7 @@ class PapersWithCodeScraper(BaseScraper):
                 if "application/json" not in content_type:
                     if attempt < max_retries:
                         logger.info("  Non-JSON response, retrying... (attempt %s)", attempt + 1)
-                        time.sleep(2 ** attempt)
+                        time.sleep(2**attempt)
                         continue
                     logger.info("  Papers with Code API returned non-JSON: %s", content_type[:50])
                     return None
@@ -91,7 +93,7 @@ class PapersWithCodeScraper(BaseScraper):
                     return response.json()
 
                 elif response.status_code == 429:
-                    wait_time = (2 ** attempt) * 3 + random.uniform(1, 2)
+                    wait_time = (2**attempt) * 3 + random.uniform(1, 2)
                     if attempt < max_retries:
                         logger.info("  Rate limited, waiting %.1fs...", wait_time)
                         time.sleep(wait_time)
@@ -100,21 +102,21 @@ class PapersWithCodeScraper(BaseScraper):
 
                 elif response.status_code >= 500:
                     if attempt < max_retries:
-                        time.sleep(2 ** attempt)
+                        time.sleep(2**attempt)
                         continue
 
                 response.raise_for_status()
 
             except requests.exceptions.Timeout:
                 if attempt < max_retries:
-                    time.sleep(2 ** attempt)
+                    time.sleep(2**attempt)
                     continue
                 logger.info("  Request timeout")
                 return None
 
             except requests.RequestException as e:
                 if attempt < max_retries:
-                    time.sleep(2 ** attempt)
+                    time.sleep(2**attempt)
                     continue
                 logger.info("  Request error: %s", e)
                 return None
@@ -194,7 +196,7 @@ class PapersWithCodeScraper(BaseScraper):
                 "url": ds.get("url", ""),
             }
         except Exception as e:
-            logger.info("Error parsing dataset %s: %s", ds.get('name', 'unknown'), e)
+            logger.info("Error parsing dataset %s: %s", ds.get("name", "unknown"), e)
             return None
 
     def search_datasets(self, query: str, limit: int = 20) -> list[dict]:
@@ -244,12 +246,14 @@ class PapersWithCodeScraper(BaseScraper):
 
         papers = []
         for item in data.get("results", []):
-            papers.append({
-                "id": item.get("id"),
-                "title": item.get("title", ""),
-                "url": item.get("url", ""),
-                "arxiv_id": item.get("arxiv_id"),
-                "abstract": item.get("abstract", ""),
-            })
+            papers.append(
+                {
+                    "id": item.get("id"),
+                    "title": item.get("title", ""),
+                    "url": item.get("url", ""),
+                    "arxiv_id": item.get("arxiv_id"),
+                    "abstract": item.get("abstract", ""),
+                }
+            )
 
         return papers

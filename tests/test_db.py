@@ -32,6 +32,7 @@ class TestRadarDatabase:
     def test_init_creates_tables(self, db):
         """Test that database initialization creates all required tables."""
         import sqlite3
+
         conn = sqlite3.connect(db.db_path)
         cursor = conn.cursor()
 
@@ -93,6 +94,7 @@ class TestRadarDatabase:
     def test_record_daily_stats(self, db):
         """Test recording daily statistics."""
         from datetime import datetime
+
         db_id = db.upsert_dataset("huggingface", "test/ds", "ds")
         today = datetime.now().strftime("%Y-%m-%d")
 
@@ -178,6 +180,7 @@ class TestRadarDatabase:
     def test_record_and_get_trends(self, db):
         """Test recording and retrieving trend data."""
         from datetime import datetime
+
         ds_id = db.upsert_dataset("hf", "ds", "ds")
         today = datetime.now().strftime("%Y-%m-%d")
 
@@ -196,6 +199,7 @@ class TestRadarDatabase:
     def test_calculate_growth_rate(self, db):
         """Test growth rate calculation."""
         from datetime import datetime, timedelta
+
         ds_id = db.upsert_dataset("hf", "ds", "ds")
 
         # Record stats over multiple days (use recent dates)

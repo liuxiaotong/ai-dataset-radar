@@ -1,6 +1,5 @@
 """Opportunity detection for business intelligence."""
 
-import re
 import sys
 from collections import defaultdict
 from datetime import datetime, timedelta
@@ -110,9 +109,9 @@ class OpportunityAnalyzer:
                 try:
                     if isinstance(created_at, str):
                         # Parse ISO format date
-                        ds_date = datetime.fromisoformat(
-                            created_at.replace("Z", "+00:00")
-                        ).replace(tzinfo=None)
+                        ds_date = datetime.fromisoformat(created_at.replace("Z", "+00:00")).replace(
+                            tzinfo=None
+                        )
                     else:
                         ds_date = created_at.replace(tzinfo=None)
 
@@ -133,9 +132,7 @@ class OpportunityAnalyzer:
         # Apply quality filtering if enabled
         filtered_out = []
         if self.enable_quality_filter:
-            qualified_authors, filtered_out = self.author_filter.filter_authors(
-                qualified_authors
-            )
+            qualified_authors, filtered_out = self.author_filter.filter_authors(qualified_authors)
 
         # Separate into org-affiliated and individual publishers
         org_factories = []
@@ -235,15 +232,17 @@ class OpportunityAnalyzer:
                 # Detect organization
                 org = self._detect_org_from_paper(paper)
 
-                opportunities.append({
-                    "paper": paper,
-                    "title": title,
-                    "signals": detected_signals,
-                    "signal_count": len(detected_signals),
-                    "detected_org": org,
-                    "url": paper.get("url", paper.get("arxiv_url", "")),
-                    "arxiv_id": paper.get("arxiv_id", paper.get("id", "")),
-                })
+                opportunities.append(
+                    {
+                        "paper": paper,
+                        "title": title,
+                        "signals": detected_signals,
+                        "signal_count": len(detected_signals),
+                        "detected_org": org,
+                        "url": paper.get("url", paper.get("arxiv_url", "")),
+                        "arxiv_id": paper.get("arxiv_id", paper.get("id", "")),
+                    }
+                )
 
         # Sort by signal count descending
         opportunities.sort(key=lambda x: x["signal_count"], reverse=True)
@@ -315,16 +314,12 @@ class OpportunityAnalyzer:
 
         # Calculate totals
         for org_name in org_activity:
-            org_activity[org_name]["total_items"] = (
-                len(org_activity[org_name]["datasets"]) +
-                len(org_activity[org_name]["papers"])
+            org_activity[org_name]["total_items"] = len(org_activity[org_name]["datasets"]) + len(
+                org_activity[org_name]["papers"]
             )
 
         # Filter out orgs with no activity and sort by total items
-        active_orgs = {
-            org: data for org, data in org_activity.items()
-            if data["total_items"] > 0
-        }
+        active_orgs = {org: data for org, data in org_activity.items() if data["total_items"] > 0}
 
         return active_orgs
 
@@ -347,7 +342,9 @@ class OpportunityAnalyzer:
         org_count = len(factory_results["org_factories"])
         ind_count = len(factory_results["individual_factories"])
         filtered_count = factory_results["filtered_stats"]["filtered_count"]
-        print(f"  Found {org_count} org + {ind_count} individual factories (filtered {filtered_count} low-quality)")
+        print(
+            f"  Found {org_count} org + {ind_count} individual factories (filtered {filtered_count} low-quality)"
+        )
 
         print("Extracting annotation signals from papers...")
         annotation_opportunities = self.extract_annotation_signals(papers)
@@ -387,13 +384,15 @@ class OpportunityAnalyzer:
         lines.append("")
 
         summary = results.get("summary", {})
-        org_count = summary.get('org_factory_count', 0)
-        ind_count = summary.get('individual_factory_count', 0)
-        filtered_count = summary.get('filtered_factory_count', 0)
+        org_count = summary.get("org_factory_count", 0)
+        ind_count = summary.get("individual_factory_count", 0)
+        filtered_count = summary.get("filtered_factory_count", 0)
         lines.append(f"Organization data factories: {org_count}")
         lines.append(f"Individual data factories: {ind_count}")
         lines.append(f"Low-quality accounts filtered: {filtered_count}")
-        lines.append(f"Papers with annotation signals: {summary.get('annotation_opportunity_count', 0)}")
+        lines.append(
+            f"Papers with annotation signals: {summary.get('annotation_opportunity_count', 0)}"
+        )
         lines.append(f"Active tracked organizations: {summary.get('active_org_count', 0)}")
         lines.append("")
 
@@ -411,10 +410,12 @@ class OpportunityAnalyzer:
                 org_display = factory.get("org_display", factory.get("possible_org", "Unknown"))
                 quality = factory.get("quality_stars", "")
                 lines.append(f"\n  {org_display} ({factory['author']}) {quality}")
-                lines.append(f"    Published {factory['dataset_count']} datasets in {factory['period_days']} days")
+                lines.append(
+                    f"    Published {factory['dataset_count']} datasets in {factory['period_days']} days"
+                )
                 lines.append(f"    Avg quality: {factory.get('avg_quality_score', 0)}/10")
                 for ds in factory["datasets"][:3]:
-                    ds_name = ds.get('name', ds.get('id', 'Unknown'))
+                    ds_name = ds.get("name", ds.get("id", "Unknown"))
                     lines.append(f"      - {ds_name}")
                 if len(factory["datasets"]) > 3:
                     lines.append(f"      ... and {len(factory['datasets']) - 3} more")
@@ -435,11 +436,13 @@ class OpportunityAnalyzer:
             for factory in individual_factories[:5]:
                 quality = factory.get("quality_stars", "")
                 lines.append(f"\n  {factory['author']} {quality}")
-                lines.append(f"    Published {factory['dataset_count']} datasets | Quality: {factory.get('avg_quality_score', 0)}/10")
+                lines.append(
+                    f"    Published {factory['dataset_count']} datasets | Quality: {factory.get('avg_quality_score', 0)}/10"
+                )
                 # Show signals if any
                 signals = []
                 for ds in factory["datasets"][:2]:
-                    ds_name = ds.get('name', ds.get('id', 'Unknown'))
+                    ds_name = ds.get("name", ds.get("id", "Unknown"))
                     lines.append(f"      - {ds_name}")
         else:
             lines.append("")

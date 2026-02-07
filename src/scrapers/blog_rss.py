@@ -4,14 +4,12 @@ Fetches and parses RSS/Atom feeds from configured sources,
 with URL-based deduplication.
 """
 
-import re
 import time
 from datetime import datetime, timedelta
 from typing import Optional
 from urllib.parse import urlparse, urlunparse, parse_qs, urlencode
 
 import feedparser
-import requests
 from bs4 import BeautifulSoup
 
 from .base import BaseScraper
@@ -31,11 +29,29 @@ class BlogRSSScraper(BaseScraper):
 
     # Signal keywords for detecting relevant articles
     SIGNAL_KEYWORDS = [
-        "rlhf", "human feedback", "preference", "annotation", "labeling",
-        "data quality", "evaluation", "benchmark", "dataset", "training data",
-        "fine-tuning", "instruction", "crowdsourcing", "data collection",
-        "synthetic data", "reward model", "alignment", "llm", "language model",
-        "product launch", "release", "announcing", "introducing"
+        "rlhf",
+        "human feedback",
+        "preference",
+        "annotation",
+        "labeling",
+        "data quality",
+        "evaluation",
+        "benchmark",
+        "dataset",
+        "training data",
+        "fine-tuning",
+        "instruction",
+        "crowdsourcing",
+        "data collection",
+        "synthetic data",
+        "reward model",
+        "alignment",
+        "llm",
+        "language model",
+        "product launch",
+        "release",
+        "announcing",
+        "introducing",
     ]
 
     def __init__(self, config: dict = None):
@@ -47,9 +63,7 @@ class BlogRSSScraper(BaseScraper):
         """
         super().__init__(config)
         self.feeds = self.config.get("feeds", [])
-        self.headers = {
-            "User-Agent": "Mozilla/5.0 (compatible; AI-Dataset-Radar/1.0)"
-        }
+        self.headers = {"User-Agent": "Mozilla/5.0 (compatible; AI-Dataset-Radar/1.0)"}
 
     def scrape(self, config: dict = None) -> list[dict]:
         """Scrape articles from all configured feeds.
@@ -122,12 +136,7 @@ class BlogRSSScraper(BaseScraper):
 
         return articles
 
-    def _parse_entry(
-        self,
-        entry: dict,
-        source_name: str,
-        feed_url: str
-    ) -> Optional[dict]:
+    def _parse_entry(self, entry: dict, source_name: str, feed_url: str) -> Optional[dict]:
         """Parse a feed entry into article dict.
 
         Args:
@@ -194,10 +203,7 @@ class BlogRSSScraper(BaseScraper):
         Returns:
             List of matched keywords.
         """
-        text = " ".join([
-            article.get("title", ""),
-            article.get("summary", "")
-        ]).lower()
+        text = " ".join([article.get("title", ""), article.get("summary", "")]).lower()
 
         signals = []
         for keyword in self.SIGNAL_KEYWORDS:
@@ -240,15 +246,17 @@ class BlogRSSScraper(BaseScraper):
 
             # Remove tracking query params
             tracking_params = {
-                "utm_source", "utm_medium", "utm_campaign",
-                "utm_content", "utm_term", "ref", "source"
+                "utm_source",
+                "utm_medium",
+                "utm_campaign",
+                "utm_content",
+                "utm_term",
+                "ref",
+                "source",
             }
             if parsed.query:
                 params = parse_qs(parsed.query, keep_blank_values=True)
-                filtered = {
-                    k: v for k, v in params.items()
-                    if k.lower() not in tracking_params
-                }
+                filtered = {k: v for k, v in params.items() if k.lower() not in tracking_params}
                 new_query = urlencode(filtered, doseq=True) if filtered else ""
                 parsed = parsed._replace(query=new_query)
 

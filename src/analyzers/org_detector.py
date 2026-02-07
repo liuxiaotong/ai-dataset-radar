@@ -25,7 +25,6 @@ class OrgDetector:
         "baidu": ["baidu", "ernie", "wenxin", "paddlepaddle"],
         "tencent": ["tencent", "hunyuan", "youtu", "wechat"],
         "huawei": ["huawei", "pangu", "mindspore"],
-
         # Chinese AI Labs
         "deepseek": ["deepseek"],
         "yi": ["01-ai", "01ai", "yi-", "yi_"],
@@ -34,7 +33,6 @@ class OrgDetector:
         "minimax": ["minimax"],
         "baichuan": ["baichuan"],
         "sensenova": ["sensetime", "sensenova"],
-
         # US Tech
         "google": ["google", "deepmind", "brain"],
         "meta": ["meta", "facebook", "fair"],
@@ -44,7 +42,6 @@ class OrgDetector:
         "nvidia": ["nvidia", "nemo"],
         "apple": ["apple"],
         "amazon": ["amazon", "aws", "alexa"],
-
         # AI Labs
         "huggingface": ["huggingface", "hf"],
         "stability": ["stability", "stable-diffusion"],
@@ -52,7 +49,6 @@ class OrgDetector:
         "mistral": ["mistral"],
         "together": ["together", "togethercomputer"],
         "eleuther": ["eleuther"],
-
         # Academia - China
         "tsinghua": ["tsinghua", "thu", "thudm"],
         "peking": ["peking", "pku"],
@@ -62,7 +58,6 @@ class OrgDetector:
         "nju": ["nanjing", "nju"],
         "ustc": ["ustc", "science and technology of china"],
         "shanghai_ai_lab": ["shanghai ai", "shlab", "openmmlab", "opengvlab"],
-
         # Academia - US/Europe
         "stanford": ["stanford"],
         "berkeley": ["berkeley", "ucb", "bair"],
@@ -105,7 +100,7 @@ class OrgDetector:
         self._patterns = {}
         for org, aliases in self.orgs.items():
             # Create pattern that matches any alias as word boundary
-            pattern_str = r'\b(' + '|'.join(re.escape(a) for a in aliases) + r')\b'
+            pattern_str = r"\b(" + "|".join(re.escape(a) for a in aliases) + r")\b"
             self._patterns[org] = re.compile(pattern_str, re.IGNORECASE)
 
     def detect_from_author(self, author: str) -> Optional[str]:
@@ -270,11 +265,13 @@ class OrgDetector:
         enriched = []
         for ds in datasets:
             detection = self.detect_from_dataset(ds)
-            enriched.append({
-                **ds,
-                "_detected_org": detection["organization"],
-                "_org_confidence": detection["confidence"],
-            })
+            enriched.append(
+                {
+                    **ds,
+                    "_detected_org": detection["organization"],
+                    "_org_confidence": detection["confidence"],
+                }
+            )
         return enriched
 
     def get_org_display_name(self, org: str) -> str:

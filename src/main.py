@@ -24,7 +24,7 @@ from scrapers import (
     SemanticScholarScraper,
     PwCSOTAScraper,
 )
-from filters import filter_datasets, DomainFilter, OrganizationFilter
+from filters import filter_datasets, DomainFilter
 from notifiers import create_notifiers, expand_env_vars, BusinessIntelNotifier
 from db import get_database
 from analyzers import (
@@ -32,7 +32,6 @@ from analyzers import (
     TrendAnalyzer,
     OpportunityAnalyzer,
     ModelCardAnalyzer,
-    ValueScorer,
     ValueAggregator,
 )
 from report import generate_value_report
@@ -59,7 +58,7 @@ def load_config(config_path: str = "config.yaml") -> dict:
             with open(path, "r", encoding="utf-8") as f:
                 return yaml.safe_load(f)
 
-    print(f"Warning: Config file not found, using defaults")
+    print("Warning: Config file not found, using defaults")
     return {}
 
 
@@ -127,7 +126,9 @@ def fetch_all_data(config: dict) -> dict:
         )
         result = scraper.fetch()
         dataset_repos = [r for r in result if r.get("is_dataset")]
-        logger.info("Found %d repos (%d dataset-related) from GitHub", len(result), len(dataset_repos))
+        logger.info(
+            "Found %d repos (%d dataset-related) from GitHub", len(result), len(dataset_repos)
+        )
         return "github", result
 
     def fetch_hf_papers():
@@ -141,7 +142,9 @@ def fetch_all_data(config: dict) -> dict:
         )
         result = scraper.fetch()
         dataset_papers = [p for p in result if p.get("is_dataset_paper")]
-        logger.info("Found %d papers (%d dataset-related) from HF Papers", len(result), len(dataset_papers))
+        logger.info(
+            "Found %d papers (%d dataset-related) from HF Papers", len(result), len(dataset_papers)
+        )
         return "hf_papers", result
 
     # Run all fetchers in parallel
@@ -450,7 +453,9 @@ def run_value_analysis(data: dict, config: dict) -> dict:
         )
         model_card_results = analyzer.analyze()
         print(f"  Analyzed {model_card_results.get('models_analyzed', 0)} models")
-        print(f"  Found {len(model_card_results.get('valuable_datasets', []))} datasets with 3+ uses")
+        print(
+            f"  Found {len(model_card_results.get('valuable_datasets', []))} datasets with 3+ uses"
+        )
         aggregator.add_model_card_data(model_card_results)
         results["model_card_results"] = model_card_results
 
@@ -666,9 +671,7 @@ def main():
 
     # Run trend analysis (record daily stats)
     if not args.no_trends and filtered_data.get("huggingface"):
-        trend_results = run_trend_analysis(
-            filtered_data, config, min_growth=args.min_growth
-        )
+        trend_results = run_trend_analysis(filtered_data, config, min_growth=args.min_growth)
 
     # Run opportunity analysis
     if not args.no_opportunities and not args.quick:
@@ -720,7 +723,9 @@ def main():
     if args.opportunities:
         print("\n--opportunities mode: focusing on business signals")
         if opportunity_results:
-            opp_count = opportunity_results.get("summary", {}).get("annotation_opportunity_count", 0)
+            opp_count = opportunity_results.get("summary", {}).get(
+                "annotation_opportunity_count", 0
+            )
             factory_count = opportunity_results.get("summary", {}).get("data_factory_count", 0)
             print(f"  Annotation opportunities: {opp_count}")
             print(f"  Data factories detected: {factory_count}")

@@ -67,13 +67,7 @@ class TestGitHubTrackerInit:
 
     def test_init_custom_relevance_keywords(self):
         """Test custom relevance keywords from config."""
-        config = {
-            "sources": {
-                "github": {
-                    "relevance_keywords": ["custom1", "custom2"]
-                }
-            }
-        }
+        config = {"sources": {"github": {"relevance_keywords": ["custom1", "custom2"]}}}
         tracker = GitHubTracker(config)
         assert tracker.relevance_keywords == ["custom1", "custom2"]
 
@@ -302,8 +296,12 @@ class TestMakeRequest:
     def test_request_exception_retries(self, mock_sleep, tracker):
         """Test network error triggers retry."""
         import requests
+
         tracker.session.get = MagicMock(
-            side_effect=[requests.ConnectionError("timeout"), MagicMock(status_code=200, json=MagicMock(return_value={"ok": True}))]
+            side_effect=[
+                requests.ConnectionError("timeout"),
+                MagicMock(status_code=200, json=MagicMock(return_value={"ok": True})),
+            ]
         )
 
         result = tracker._make_request("https://api.github.com/test")
@@ -313,9 +311,8 @@ class TestMakeRequest:
     def test_all_retries_exhausted(self, mock_sleep, tracker):
         """Test returns None when all retries fail."""
         import requests
-        tracker.session.get = MagicMock(
-            side_effect=requests.ConnectionError("timeout")
-        )
+
+        tracker.session.get = MagicMock(side_effect=requests.ConnectionError("timeout"))
 
         result = tracker._make_request("https://api.github.com/test", max_retries=2)
         assert result is None
@@ -339,10 +336,30 @@ class TestGetOrgRepos:
         old_date = (datetime.utcnow() - timedelta(days=30)).strftime("%Y-%m-%dT%H:%M:%SZ")
         recent_date = datetime.utcnow().strftime("%Y-%m-%dT%H:%M:%SZ")
 
-        tracker._make_request = MagicMock(return_value=[
-            {"name": "old-repo", "full_name": "org/old-repo", "description": "old", "html_url": "https://github.com/org/old-repo", "updated_at": old_date, "stargazers_count": 10, "language": "Python", "topics": []},
-            {"name": "new-repo", "full_name": "org/new-repo", "description": "dataset tool", "html_url": "https://github.com/org/new-repo", "updated_at": recent_date, "stargazers_count": 100, "language": "Python", "topics": ["dataset"]},
-        ])
+        tracker._make_request = MagicMock(
+            return_value=[
+                {
+                    "name": "old-repo",
+                    "full_name": "org/old-repo",
+                    "description": "old",
+                    "html_url": "https://github.com/org/old-repo",
+                    "updated_at": old_date,
+                    "stargazers_count": 10,
+                    "language": "Python",
+                    "topics": [],
+                },
+                {
+                    "name": "new-repo",
+                    "full_name": "org/new-repo",
+                    "description": "dataset tool",
+                    "html_url": "https://github.com/org/new-repo",
+                    "updated_at": recent_date,
+                    "stargazers_count": 100,
+                    "language": "Python",
+                    "topics": ["dataset"],
+                },
+            ]
+        )
 
         result = tracker.get_org_repos("org", days=7)
         assert len(result) == 1
@@ -351,9 +368,20 @@ class TestGetOrgRepos:
     def test_repo_info_structure(self, tracker):
         """Test returned repo dict has expected fields."""
         now = datetime.utcnow().strftime("%Y-%m-%dT%H:%M:%SZ")
-        tracker._make_request = MagicMock(return_value=[
-            {"name": "test", "full_name": "org/test", "description": "A dataset", "html_url": "https://github.com/org/test", "updated_at": now, "stargazers_count": 42, "language": "Python", "topics": ["nlp"]},
-        ])
+        tracker._make_request = MagicMock(
+            return_value=[
+                {
+                    "name": "test",
+                    "full_name": "org/test",
+                    "description": "A dataset",
+                    "html_url": "https://github.com/org/test",
+                    "updated_at": now,
+                    "stargazers_count": 42,
+                    "language": "Python",
+                    "topics": ["nlp"],
+                },
+            ]
+        )
 
         result = tracker.get_org_repos("org")
         assert len(result) == 1
@@ -377,9 +405,11 @@ class TestGetOrgActivity:
 
     def test_activity_structure(self, tracker):
         """Test activity summary has expected structure."""
-        tracker.get_org_repos = MagicMock(return_value=[
-            {"name": "repo1", "signals": ["dataset"], "stars": 200, "relevance": "high"},
-        ])
+        tracker.get_org_repos = MagicMock(
+            return_value=[
+                {"name": "repo1", "signals": ["dataset"], "stars": 200, "relevance": "high"},
+            ]
+        )
 
         result = tracker.get_org_activity("test-org")
         assert result["org"] == "test-org"
@@ -389,9 +419,11 @@ class TestGetOrgActivity:
 
     def test_no_activity(self, tracker):
         """Test no activity when no relevant repos."""
-        tracker.get_org_repos = MagicMock(return_value=[
-            {"name": "unrelated", "signals": [], "stars": 5, "relevance": "low"},
-        ])
+        tracker.get_org_repos = MagicMock(
+            return_value=[
+                {"name": "unrelated", "signals": [], "stars": 5, "relevance": "low"},
+            ]
+        )
 
         result = tracker.get_org_activity("test-org")
         assert result["has_activity"] is False

@@ -6,10 +6,8 @@ Monitors company blogs for:
 """
 
 import re
-import time
 from concurrent.futures import ThreadPoolExecutor
 from datetime import datetime, timedelta
-from threading import Lock
 from typing import Optional
 from urllib.parse import urljoin, urlparse, urlunparse, parse_qs, urlencode
 
@@ -25,26 +23,80 @@ logger = get_logger("blog_tracker")
 # Signal keywords for detecting relevant articles
 SIGNAL_KEYWORDS = [
     # Data & Training
-    "rlhf", "human feedback", "preference", "annotation", "labeling",
-    "data quality", "evaluation", "benchmark", "dataset", "training data",
-    "fine-tuning", "instruction", "crowdsourcing", "data collection",
-    "synthetic data", "reward model", "alignment", "llm", "language model",
+    "rlhf",
+    "human feedback",
+    "preference",
+    "annotation",
+    "labeling",
+    "data quality",
+    "evaluation",
+    "benchmark",
+    "dataset",
+    "training data",
+    "fine-tuning",
+    "instruction",
+    "crowdsourcing",
+    "data collection",
+    "synthetic data",
+    "reward model",
+    "alignment",
+    "llm",
+    "language model",
     # Research announcements
-    "product launch", "release", "announcing", "introducing",
+    "product launch",
+    "release",
+    "announcing",
+    "introducing",
     # Scaling & Data Quality
-    "scaling law", "data scaling", "data curation", "data filtering",
-    "decontamination", "deduplication", "data pipeline",
+    "scaling law",
+    "data scaling",
+    "data curation",
+    "data filtering",
+    "decontamination",
+    "deduplication",
+    "data pipeline",
     # Methods & Techniques
-    "dpo", "direct preference", "chain-of-thought", "distillation",
-    "curriculum learning", "active learning", "contrastive learning",
-    "synthetic generation", "data augmentation",
+    "dpo",
+    "direct preference",
+    "chain-of-thought",
+    "distillation",
+    "curriculum learning",
+    "active learning",
+    "contrastive learning",
+    "synthetic generation",
+    "data augmentation",
     # AI Research topics (Chinese labs)
-    "reasoning", "context", "learning", "model", "multimodal", "vision",
-    "agent", "tool", "code", "math", "science", "knowledge",
-    "function calling", "tool use", "code generation",
-    "video understanding", "speech data", "embodied", "robotics",
-    "open source", "开源", "发布", "数据集", "训练", "模型",
-    "合成数据", "数据质量", "标注", "蒸馏", "推理", "对齐",
+    "reasoning",
+    "context",
+    "learning",
+    "model",
+    "multimodal",
+    "vision",
+    "agent",
+    "tool",
+    "code",
+    "math",
+    "science",
+    "knowledge",
+    "function calling",
+    "tool use",
+    "code generation",
+    "video understanding",
+    "speech data",
+    "embodied",
+    "robotics",
+    "open source",
+    "开源",
+    "发布",
+    "数据集",
+    "训练",
+    "模型",
+    "合成数据",
+    "数据质量",
+    "标注",
+    "蒸馏",
+    "推理",
+    "对齐",
 ]
 
 # Common RSS feed paths to try
@@ -74,9 +126,9 @@ class BlogTracker:
         self.config = config
         # Check multiple possible config locations
         self.blogs = (
-            config.get("data_vendors", {}).get("blogs", []) or
-            config.get("watched_vendors", {}).get("blogs", []) or
-            config.get("blogs", [])
+            config.get("data_vendors", {}).get("blogs", [])
+            or config.get("watched_vendors", {}).get("blogs", [])
+            or config.get("blogs", [])
         )
 
         self.headers = {
@@ -114,7 +166,11 @@ class BlogTracker:
                     if any(t in content_type for t in ["xml", "rss", "atom", "feed"]):
                         return feed_url
                     resp = self.session.get(feed_url, timeout=5)
-                    if resp.status_code == 200 and ("<?xml" in resp.text[:100] or "<rss" in resp.text[:200] or "<feed" in resp.text[:200]):
+                    if resp.status_code == 200 and (
+                        "<?xml" in resp.text[:100]
+                        or "<rss" in resp.text[:200]
+                        or "<feed" in resp.text[:200]
+                    ):
                         return feed_url
             except requests.RequestException:
                 pass
@@ -249,9 +305,18 @@ class BlogTracker:
 
         # Remove if it's navigation/menu text
         nav_indicators = [
-            "github", "hugging face", "modelscope", "demo", "discord",
-            "navigation", "menu", "home", "about", "contact",
-            "skip to content", "toggle menu"
+            "github",
+            "hugging face",
+            "modelscope",
+            "demo",
+            "discord",
+            "navigation",
+            "menu",
+            "home",
+            "about",
+            "contact",
+            "skip to content",
+            "toggle menu",
         ]
         summary_lower = summary.lower()
         nav_matches = sum(1 for ind in nav_indicators if ind in summary_lower)
@@ -288,7 +353,16 @@ class BlogTracker:
         cutoff = datetime.utcnow() - timedelta(days=days)
 
         # Remove noise sections before selecting articles
-        for noise_sel in ["nav", ".nav", ".sidebar", "footer", ".footer", "header", ".header", ".comments"]:
+        for noise_sel in [
+            "nav",
+            ".nav",
+            ".sidebar",
+            "footer",
+            ".footer",
+            "header",
+            ".header",
+            ".comments",
+        ]:
             for noise_elem in soup.select(noise_sel):
                 noise_elem.decompose()
 
@@ -342,7 +416,13 @@ class BlogTracker:
 
             # Extract summary
             summary = ""
-            for sum_sel in ["p", ".summary", ".excerpt", "[class*='excerpt']", "[class*='description']"]:
+            for sum_sel in [
+                "p",
+                ".summary",
+                ".excerpt",
+                "[class*='excerpt']",
+                "[class*='description']",
+            ]:
                 sum_elem = elem.select_one(sum_sel)
                 if sum_elem:
                     summary = sum_elem.get_text(strip=True)
@@ -382,7 +462,10 @@ class BlogTracker:
         try:
             from playwright.sync_api import sync_playwright, TimeoutError as PlaywrightTimeout
         except ImportError:
-            return [], "Playwright not installed. Run: pip install playwright && playwright install chromium"
+            return (
+                [],
+                "Playwright not installed. Run: pip install playwright && playwright install chromium",
+            )
 
         articles = []
         cutoff = datetime.utcnow() - timedelta(days=days)
@@ -392,6 +475,7 @@ class BlogTracker:
             pw_context = None
             if own_browser:
                 from playwright.sync_api import sync_playwright
+
                 pw_context = sync_playwright().start()
                 browser = pw_context.chromium.launch(headless=True)
 
@@ -458,7 +542,14 @@ class BlogTracker:
 
                     # Extract title
                     title = ""
-                    for title_sel in [".blog-title", "h1", "h2", "h3", ".title", "[class*='title']"]:
+                    for title_sel in [
+                        ".blog-title",
+                        "h1",
+                        "h2",
+                        "h3",
+                        ".title",
+                        "[class*='title']",
+                    ]:
                         title_elem = elem.query_selector(title_sel)
                         if title_elem:
                             title = title_elem.inner_text().strip()
@@ -473,7 +564,11 @@ class BlogTracker:
                             title = title.split("\n")[0].strip()
 
                     # Skip generic titles
-                    if not title or len(title) < 5 or title.lower() in ["read more", "read post", "learn more"]:
+                    if (
+                        not title
+                        or len(title) < 5
+                        or title.lower() in ["read more", "read post", "learn more"]
+                    ):
                         continue
 
                     # Stop after collecting 15 valid items
@@ -482,9 +577,13 @@ class BlogTracker:
 
                     # Extract date
                     date_str = ""
-                    date_elem = elem.query_selector(".blog-item-date, time, .date, [class*='date'], [datetime]")
+                    date_elem = elem.query_selector(
+                        ".blog-item-date, time, .date, [class*='date'], [datetime]"
+                    )
                     if date_elem:
-                        date_str = date_elem.get_attribute("datetime") or date_elem.inner_text().strip()
+                        date_str = (
+                            date_elem.get_attribute("datetime") or date_elem.inner_text().strip()
+                        )
                         date_str = self._parse_date(date_str)
 
                     # Extract summary
@@ -497,13 +596,15 @@ class BlogTracker:
                             if summary:
                                 break
 
-                    items_data.append({
-                        "index": i,
-                        "title": title,
-                        "link": link,
-                        "date": date_str,
-                        "summary": summary,
-                    })
+                    items_data.append(
+                        {
+                            "index": i,
+                            "title": title,
+                            "link": link,
+                            "date": date_str,
+                            "summary": summary,
+                        }
+                    )
 
                 # Second pass: for items without links, click to discover URL
                 for item in items_data:
@@ -607,10 +708,7 @@ class BlogTracker:
         Returns:
             List of matched signal keywords.
         """
-        text = " ".join([
-            article.get("title", ""),
-            article.get("summary", "")
-        ]).lower()
+        text = " ".join([article.get("title", ""), article.get("summary", "")]).lower()
 
         signals = []
         for keyword in SIGNAL_KEYWORDS:
@@ -732,10 +830,7 @@ class BlogTracker:
         # Fetch auto/RSS blogs in parallel (I/O-bound, safe to parallelize)
         if auto_blogs:
             with ThreadPoolExecutor(max_workers=8) as executor:
-                futures = {
-                    executor.submit(self.fetch_blog, cfg, days): cfg
-                    for cfg in auto_blogs
-                }
+                futures = {executor.submit(self.fetch_blog, cfg, days): cfg for cfg in auto_blogs}
                 for future in futures:
                     try:
                         all_activities.append(future.result())
@@ -749,6 +844,7 @@ class BlogTracker:
             pw_context = None
             try:
                 from playwright.sync_api import sync_playwright
+
                 pw_context = sync_playwright().start()
                 shared_browser = pw_context.chromium.launch(headless=True)
             except Exception as e:
@@ -822,15 +918,17 @@ class BlogTracker:
 
             # Remove tracking query params
             tracking_params = {
-                "utm_source", "utm_medium", "utm_campaign",
-                "utm_content", "utm_term", "ref", "source"
+                "utm_source",
+                "utm_medium",
+                "utm_campaign",
+                "utm_content",
+                "utm_term",
+                "ref",
+                "source",
             }
             if parsed.query:
                 params = parse_qs(parsed.query, keep_blank_values=True)
-                filtered = {
-                    k: v for k, v in params.items()
-                    if k.lower() not in tracking_params
-                }
+                filtered = {k: v for k, v in params.items() if k.lower() not in tracking_params}
                 new_query = urlencode(filtered, doseq=True) if filtered else ""
                 parsed = parsed._replace(query=new_query)
 
