@@ -8,7 +8,7 @@
 [![License: MIT](https://img.shields.io/badge/License-MIT-green.svg)](LICENSE)
 [![Python 3.10+](https://img.shields.io/badge/python-3.10+-blue.svg)](https://www.python.org/downloads/)
 [![Agent Ready](https://img.shields.io/badge/Agent-Ready-orange.svg)](#agent-集成)
-[![MCP](https://img.shields.io/badge/MCP-7_Tools-purple.svg)](#mcp-server)
+[![MCP](https://img.shields.io/badge/MCP-9_Tools-purple.svg)](#mcp-server)
 
 [快速开始](#快速开始) · [Agent 集成](#agent-集成) · [数据源](#数据源) · [输出规范](#输出规范) · [配置](#配置)
 
@@ -265,15 +265,17 @@ tools = [
 }
 ```
 
-| 工具 | 功能 |
-|------|------|
-| `radar_scan` | 执行完整扫描 |
-| `radar_summary` | 获取报告摘要 |
-| `radar_datasets` | 按类别查询数据集 |
-| `radar_github` | 查询 GitHub 活动 |
-| `radar_papers` | 查询论文 |
-| `radar_blogs` | 查询博客文章 |
-| `radar_config` | 获取监控配置 |
+| 工具 | 功能 | 新增参数 |
+|------|------|----------|
+| `radar_scan` | 执行完整扫描 | `sources` — 只扫描指定数据源 |
+| `radar_summary` | 获取报告摘要 | |
+| `radar_datasets` | 按类别查询数据集 | `org` — 按组织过滤 |
+| `radar_github` | 查询 GitHub 活动 | `org` — 按组织过滤 |
+| `radar_papers` | 查询论文 | |
+| `radar_blogs` | 查询博客文章 | |
+| `radar_config` | 获取监控配置 | |
+| `radar_search` | **全文搜索** — 跨数据集/GitHub/论文/博客/X 搜索，支持正则 | `query`, `sources`, `limit` |
+| `radar_diff` | **报告对比** — 自动识别两期报告之间的新增/消失项 | `date_a`, `date_b` |
 
 ---
 
@@ -458,7 +460,7 @@ Radar (情报采集) → DataRecipe (逆向分析) → 复刻生产
 - [x] 多源数据采集 (HuggingFace, GitHub, arXiv, Blogs)
 - [x] 双格式输出 (Markdown + JSON)
 - [x] Agent 集成层 (HTTP API, Function Calling, Schema)
-- [x] MCP Server (7 工具)
+- [x] MCP Server (9 工具: scan/summary/datasets/github/papers/blogs/config/search/diff)
 - [x] 插件化采集器 (9 个)
 - [x] 性能优化 (并行采集、缓存、连接池)
 - [x] 测试覆盖 (198 用例)
@@ -472,6 +474,9 @@ Radar (情报采集) → DataRecipe (逆向分析) → 复刻生产
 - [x] 博客噪声过滤 (nav/sidebar/footer 自动排除, 浏览器每 5 页重启)
 - [x] GitHub 加权相关性评分 (keyword×10 + stars/100 + 近 3 天活跃加成 - 噪声惩罚)
 - [x] 研究者博客监控 (Lil'Log, fast.ai, Interconnects, LessWrong, Alignment Forum, The Gradient, Epoch AI)
+- [x] radar_search 全文搜索 (跨 5 类数据源, 支持正则, 按来源过滤)
+- [x] radar_diff 报告对比 (自动识别新增/消失的数据集、仓库、论文、博客)
+- [x] 工具参数扩展 (radar_scan sources 过滤, radar_datasets/github org 过滤)
 - [ ] 定时任务与告警
 - [ ] Web 可视化界面
 
