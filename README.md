@@ -18,7 +18,7 @@
 
 **GitHub Topics**: `ai-agent`, `competitive-intelligence`, `dataset-monitoring`, `mcp`, `function-calling`
 
-监控 29 家 AI Labs、19 家数据供应商、38 个博客源、13 个 GitHub 组织、52 个 X/Twitter 账户的训练数据动态，提供结构化输出供智能体消费。支持 Function Calling、MCP、REST API 多种接入方式。
+监控 29 家 AI Labs、19 家数据供应商、38 个博客源、13 个 GitHub 组织、~100 个 X/Twitter 账户的训练数据动态，提供结构化输出供智能体消费。支持 Function Calling、MCP、REST API 多种接入方式。
 
 ## 系统概述 / System Overview
 
@@ -30,7 +30,7 @@
 
 ```mermaid
 graph LR
-    A["数据源监控<br/>48+ orgs, 52 X accounts"] --> B["语义分类<br/>LLM+规则"]
+    A["数据源监控<br/>48+ orgs, ~100 X accounts"] --> B["语义分类<br/>LLM+规则"]
     B --> C["报告生成<br/>JSON+MD"]
     C --> D["Agent / 人类<br/>消费/决策"]
 ```
@@ -287,7 +287,7 @@ tools = [
 | **博客** | 38 来源：OpenAI, Anthropic (Research/News/Alignment/Red Team/API), Google AI, DeepMind, Mistral, Scale AI, Mercor, Surge AI, 海天瑞声, 整数智能, 智源 BAAI 等 |
 | **GitHub** | 13 组织：openai, anthropics, deepseek-ai, argilla-io, scaleapi, meta-llama 等 |
 | **论文** | arXiv (cs.CL/AI/LG) + HuggingFace Daily Papers |
-| **X/Twitter** | 52 账户：前沿实验室、开源社区、评估基准、数据供应商、研究者与影响者 |
+| **X/Twitter** | ~100 账户：前沿实验室、开源社区、评估基准、数据供应商、安全/对齐、亚太/欧洲、研究者与影响者 |
 
 ### 数据供应商分类
 
@@ -301,17 +301,21 @@ tools = [
 
 ### X/Twitter 监控账户
 
-通过 RSSHub（免费）或 X API v2 监控 52 个账户的数据集相关动态：
+通过 RSSHub（免费）或 X API v2 监控 ~100 个账户的数据集相关动态：
 
 | 类别 | 账户 | 数量 |
 |------|------|------|
 | **前沿实验室** | OpenAI, AnthropicAI, GoogleDeepMind, GoogleAI, MetaAI, AIatMeta, xai, NVIDIAAI | 8 |
-| **新兴实验室** | MistralAI, CohereForAI, AI21Labs, togethercompute, StabilityAI, databricks, NousResearch, UnslothAI, LiquidAI_ | 9 |
+| **新兴/开源实验室** | MistralAI, CohereForAI, AI21Labs, togethercompute, StabilityAI, databricks, NousResearch, UnslothAI, LiquidAI_, cohere, RekaAILabs, upstageai | 12 |
 | **研究/开源** | EleutherAI, huggingface, allen_ai, lmsys_org, EpochAIResearch | 5 |
-| **中国实验室** | Alibaba_Qwen, deepseek_ai, ZhipuAI, Baichuan_Inc, 01AI_Yi, Kimi_Moonshot, MiniMax__AI, intern_lm, StepFun_ai | 9 |
-| **数据供应商** | scale_AI, surge_ai, ArgillaIO, SnorkelAI, LabelBox, weights_biases, EvidentlyAI | 7 |
+| **中国实验室** | Alibaba_Qwen, deepseek_ai, ZhipuAI, Baichuan_Inc, 01AI_Yi, Kimi_Moonshot, MiniMax__AI, intern_lm, StepFun_ai, BAAIBeijing, SenseTime_AI, iflytek1999, Baidu_Inc, ByteDanceOSS | 14 |
+| **亚太实验室** | SakanaAILabs, hardmaru, samsungresearch, NAVER_AI_Lab, kakaocorpglobal, cyberagent_ai | 6 |
+| **欧洲 AI** | laion_ai, Aleph__Alpha, LightOnIO, LG_AI_Research, StanfordHAI | 5 |
+| **数据供应商/平台** | scale_AI, surge_ai, ArgillaIO, SnorkelAI, LabelBox, weights_biases, EvidentlyAI, TolokaMI, ProlificAc | 9 |
+| **基础设施/MLOps** | modal_labs, datologyai, kaggle | 3 |
 | **评估/基准** | lmarena_ai, ArtificialAnlys, livebench_ai, arcprize | 4 |
-| **研究者/影响者** | karpathy, ylecun, jimfan, natolambert, lvwerra, ClementDelangue, percyliang, Teknium1, maximelabonne, danielhanchen, rasbt, AndrewYNg, mmitchell_ai, _jasonwei, rohanpaul_ai | 15 |
+| **安全/对齐/政策** | ai_risks, ShayneRedford, sayashk, JaredKaplan | 4 |
+| **研究者/影响者** | karpathy, ylecun, jimfan, natolambert, lvwerra, ClementDelangue, percyliang, Teknium1, maximelabonne, danielhanchen, rasbt, AndrewYNg, mmitchell_ai, _jasonwei, rohanpaul_ai, rm_rafailov, _philschmid, YiTayML, lilianweng, hendrycks, cwolferesearch, _lewtun, Thom_Wolf, drfeifei, osanseviero, markchen90, karlcobbe, aidangomez | 28 |
 
 信号关键词自动过滤：dataset, training data, benchmark, RLHF, synthetic data, fine-tuning 等。
 
@@ -460,7 +464,7 @@ Radar (情报采集) → DataRecipe (逆向分析) → 复刻生产
 - [x] 测试覆盖 (198 用例)
 - [x] 博客抓取多策略降级 (RSS → HTML → Playwright, networkidle → domcontentloaded)
 - [x] 中国数据供应商监控 (海天瑞声、整数智能、数据堂、智源 BAAI)
-- [x] X/Twitter 监控 (52 账户，RSSHub/API 双后端，信号关键词过滤)
+- [x] X/Twitter 监控 (~100 账户，12 类别，RSSHub/API 双后端，信号关键词过滤)
 - [x] Insights 分析提示生成 (`--insights` 模式)
 - [x] 异常报告独立输出
 - [ ] 定时任务与告警
