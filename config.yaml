@@ -930,6 +930,62 @@ database:
   path: data/radar.db
 
 # =============================================================================
+# X/Twitter 监控配置 | X/Twitter Monitoring
+# =============================================================================
+
+x_tracker:
+  enabled: true
+  # Backend: "rsshub" (free, recommended) or "api" (needs bearer token)
+  backend: rsshub
+  # RSSHub instance URL (public or self-hosted)
+  rsshub_url: "https://rsshub.app"
+  # X API v2 bearer token (only needed if backend is "api")
+  bearer_token: ""
+
+  # Monitored accounts - AI labs, researchers, data vendors
+  accounts:
+    # US Frontier Labs
+    - OpenAI
+    - AnthropicAI
+    - GoogleDeepMind
+    - MetaAI
+    - xai
+    # Emerging Labs
+    - MistralAI
+    - CohereForAI
+    - AI21Labs
+    - togethercompute
+    # Research / Open Source
+    - EleutherAI
+    - huggingface
+    - allen_ai
+    - lmsys_org
+    # China Labs
+    - Alibaba_Qwen
+    - deepseek_ai
+    - ZhipuAI
+    - Baichuan_Inc
+    - 01AI_Yi
+    # Data Vendors
+    - scale_AI
+    - surge_ai
+    - ArgillaIO
+    - SnorkelAI
+    - LabelBox
+    # Researchers & Influencers
+    - karpathy
+    - ylecun
+    - jimfan
+
+  # Search keywords (API backend only)
+  search_keywords:
+    - "new dataset release"
+    - "open source dataset"
+    - "RLHF training data"
+    - "benchmark evaluation"
+    - "synthetic data"
+
+# =============================================================================
 # 通知配置 | Notifications
 # =============================================================================
 
