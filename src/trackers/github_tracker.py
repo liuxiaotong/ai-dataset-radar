@@ -62,6 +62,10 @@ class GitHubTracker:
         if self.token and not self.token.startswith("${"):
             self.headers["Authorization"] = f"token {self.token}"
 
+        # Use Session for connection pooling across requests
+        self.session = requests.Session()
+        self.session.headers.update(self.headers)
+
         # Get org lists from config
         self.vendor_orgs = github_config.get("orgs", {}).get("data_vendors", [])
         self.lab_orgs = github_config.get("orgs", {}).get("ai_labs", [])
@@ -75,7 +79,7 @@ class GitHubTracker:
     def _make_request(self, url: str, params: dict = None) -> Optional[dict]:
         """Make a GitHub API request with rate limit handling."""
         try:
-            resp = requests.get(url, headers=self.headers, params=params, timeout=30)
+            resp = self.session.get(url, params=params, timeout=30)
 
             if resp.status_code == 403:
                 # Rate limited
@@ -243,12 +247,9 @@ class GitHubTracker:
         """
         url = f"{self.BASE_URL}/repos/{full_name}/readme"
 
-        # Request raw content
-        headers = self.headers.copy()
-        headers["Accept"] = "application/vnd.github.v3.raw"
-
+        # Request raw content - use direct request with overridden Accept header
         try:
-            resp = requests.get(url, headers=headers, timeout=30)
+            resp = self.session.get(url, headers={"Accept": "application/vnd.github.v3.raw"}, timeout=30)
             if resp.status_code == 200:
                 return resp.text[:5000]  # Limit length
         except requests.RequestException:
