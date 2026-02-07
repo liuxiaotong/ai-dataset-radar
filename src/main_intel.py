@@ -533,9 +533,24 @@ def main():
     vendor_activity = {"vendors": {}}
     github_activity = []
     blog_activity = []
+    papers = []
+
+    # Pre-build paper scrapers so they're ready for parallel submission
+    arxiv_scraper = None
+    hf_papers_scraper = None
+    if not args.no_papers:
+        arxiv_config = config.get("sources", {}).get("arxiv", {})
+        if arxiv_config.get("enabled", True):
+            arxiv_scraper = ArxivScraper(limit=50, config=config)
+        hf_config = config.get("sources", {}).get("hf_papers", {})
+        if hf_config.get("enabled", True):
+            hf_papers_scraper = HFPapersScraper(
+                limit=50,
+                days=hf_config.get("days", 7),
+            )
 
     futures = {}
-    with ThreadPoolExecutor(max_workers=4, thread_name_prefix="radar") as executor:
+    with ThreadPoolExecutor(max_workers=6, thread_name_prefix="radar") as executor:
         if not args.no_labs:
             logger.info("Tracking AI labs on HuggingFace...")
             futures["labs"] = executor.submit(org_tracker.fetch_lab_activity, days=args.days)
@@ -551,6 +566,14 @@ def main():
         if not args.no_blogs:
             logger.info("Tracking company blogs...")
             futures["blogs"] = executor.submit(blog_tracker.fetch_all_blogs, days=args.days)
+
+        if arxiv_scraper:
+            logger.info("Fetching from arXiv...")
+            futures["arxiv"] = executor.submit(arxiv_scraper.fetch)
+
+        if hf_papers_scraper:
+            logger.info("Fetching from HuggingFace Papers...")
+            futures["hf_papers"] = executor.submit(hf_papers_scraper.fetch)
 
         # Collect results as they complete
         for key, future in futures.items():
@@ -570,6 +593,15 @@ def main():
                     active_count = sum(1 for a in blog_activity if a.get("articles"))
                     article_count = sum(len(a.get("articles", [])) for a in blog_activity)
                     logger.info("Found %d active blogs with %d relevant articles", active_count, article_count)
+                elif key == "arxiv":
+                    logger.info("Found %d arXiv papers", len(result))
+                    papers.extend(paper_filter.filter_papers(result))
+                    logger.info("Relevant arXiv: %d", len(papers))
+                elif key == "hf_papers":
+                    logger.info("Found %d HF papers", len(result))
+                    filtered = paper_filter.filter_papers(result)
+                    papers.extend(filtered)
+                    logger.info("Relevant HF papers: %d", len(filtered))
             except Exception as e:
                 logger.warning("Error fetching %s: %s", key, e)
 
@@ -603,39 +635,7 @@ def main():
         if count > 0:
             logger.info("  %s: %d", dtype, count)
 
-    # 7. Fetch and filter papers
-    papers = []
-    if not args.no_papers:
-        logger.info("Fetching relevant papers...")
-
-        # arXiv
-        arxiv_config = config.get("sources", {}).get("arxiv", {})
-        if arxiv_config.get("enabled", True):
-            logger.info("Fetching from arXiv...")
-            arxiv_scraper = ArxivScraper(limit=50, config=config)
-            arxiv_papers = arxiv_scraper.fetch()
-            logger.info("Found %d papers", len(arxiv_papers))
-
-            # Filter with paper filter
-            arxiv_papers = paper_filter.filter_papers(arxiv_papers)
-            logger.info("Relevant: %d", len(arxiv_papers))
-            papers.extend(arxiv_papers)
-
-        # HF Papers
-        hf_config = config.get("sources", {}).get("hf_papers", {})
-        if hf_config.get("enabled", True):
-            logger.info("Fetching from HuggingFace Papers...")
-            hf_papers_scraper = HFPapersScraper(
-                limit=50,
-                days=hf_config.get("days", 7),
-            )
-            hf_papers = hf_papers_scraper.fetch()
-            logger.info("Found %d papers", len(hf_papers))
-
-            # Filter with paper filter
-            hf_papers = paper_filter.filter_papers(hf_papers)
-            logger.info("Relevant: %d", len(hf_papers))
-            papers.extend(hf_papers)
+    # 7. Papers already fetched in parallel above (arXiv + HF Papers)
 
     # 8. Generate report
     logger.info("Generating intelligence report...")
