@@ -157,12 +157,25 @@ watched_vendors:
       hf_ids: ["surge-ai", "surgeai"]
       github: ["surge-ai"]
       keywords: ["surge ai", "surgeai"]
+      blog_url: "https://surgehq.ai/blog"
     appen:
       hf_ids: ["appen"]
       keywords: ["appen"]
     sama:
       hf_ids: ["sama"]
       keywords: ["sama", "samasource"]
+    mercor:
+      hf_ids: []
+      keywords: ["mercor"]
+      blog_url: "https://www.mercor.com/blog"
+    invisible:
+      hf_ids: []
+      keywords: ["invisible technologies", "invisible tech", "invisibletech"]
+      blog_url: "https://invisibletech.ai"
+    telus_digital:
+      hf_ids: []
+      keywords: ["telus digital", "telus international", "lionbridge ai"]
+      blog_url: "https://www.telusdigital.com/blog"
 
   # Specialized - 专业供应商
   specialized:
@@ -179,6 +192,50 @@ watched_vendors:
     humanloop:
       hf_ids: ["humanloop"]
       keywords: ["humanloop"]
+    turing:
+      hf_ids: []
+      keywords: ["turing ai", "turing.com"]
+      blog_url: "https://www.turing.com/blog"
+    prolific:
+      hf_ids: []
+      keywords: ["prolific"]
+      blog_url: "https://www.prolific.com/resources"
+
+  # China Data Vendors - 中国数据供应商（Tier 1）
+  china_premium:
+    speechocean:
+      hf_ids: ["SpeechOcean"]
+      keywords: ["海天瑞声", "speechocean", "haitianruisheng"]
+      blog_url: "https://www.haitianruisheng.com/"
+      priority: high
+    molardata:
+      hf_ids: []
+      keywords: ["整数智能", "molardata"]
+      blog_url: "https://www.molardata.com/"
+      priority: high
+    testin:
+      hf_ids: []
+      keywords: ["云测数据", "testin"]
+      blog_url: "https://ai.testin.cn/"
+      priority: high
+
+  # China Data Vendors - 中国数据供应商（Tier 2）
+  china_specialized:
+    databaker:
+      hf_ids: []
+      keywords: ["标贝科技", "data-baker", "databaker"]
+    datatang:
+      hf_ids: ["Datatang"]
+      keywords: ["数据堂", "datatang"]
+      blog_url: "https://www.datatang.com/"
+
+  # China Research Institutions - 中国研究机构
+  china_research:
+    baai:
+      hf_ids: ["BAAI"]
+      keywords: ["智源研究院", "baai", "flagdata", "flageval"]
+      blog_url: "https://hub.baai.ac.cn/"
+      priority: high
 
   # 博客监控配置（优先使用 RSS，回退到网页抓取）
   blogs:
@@ -202,10 +259,52 @@ watched_vendors:
       url: "https://snorkel.ai/blog/"
       type: "auto"
       selector: "article, .blog-card, [class*='post'], [class*='blog']"
+    - name: "Surge AI Blog"
+      url: "https://surgehq.ai/blog"
+      type: "auto"
+      selector: "article, [class*='post'], [class*='blog'], [class*='card']"
+    - name: "Surge AI Research"
+      url: "https://surgehq.ai/research"
+      type: "auto"
+      selector: "article, [class*='post'], [class*='card'], a[href*='/research']"
+    # --- Data Vendors (Tier 1) ---
+    - name: "Mercor Blog"
+      url: "https://www.mercor.com/blog"
+      type: "auto"
+      selector: "article, [class*='post'], [class*='blog'], [class*='card']"
+    - name: "Mercor Research"
+      url: "https://www.mercor.com/research"
+      type: "auto"
+      selector: "article, [class*='post'], [class*='card'], a[href*='/research']"
+    - name: "Invisible Technologies"
+      url: "https://invisibletech.ai/blog"
+      type: "browser"
+      selector: ".w-dyn-item, .blog--card"
+    # --- Data Vendors (Tier 2) ---
+    - name: "Prolific"
+      url: "https://www.prolific.com/resources"
+      type: "browser"
+      selector: ".Thumb, .Archive a[href*='/resources/']"
     - name: "Anthropic Research"
       url: "https://www.anthropic.com/research"
       type: "auto"
       selector: "article, [class*='post'], [class*='card'], a[href*='/research/']"
+    - name: "Anthropic News"
+      url: "https://www.anthropic.com/news"
+      type: "auto"
+      selector: "article, [class*='post'], [class*='card'], a[href*='/news/']"
+    - name: "Anthropic Alignment Science"
+      url: "https://alignment.anthropic.com/"
+      type: "auto"
+      selector: "article, [class*='post'], [class*='card'], a[href*='/blog/']"
+    - name: "Anthropic Frontier Red Team"
+      url: "https://red.anthropic.com/"
+      type: "auto"
+      selector: "article, [class*='post'], [class*='card'], a[href*='/2026/']"
+    - name: "Claude API Release Notes"
+      url: "https://docs.anthropic.com/en/release-notes/overview"
+      type: "auto"
+      selector: "article, [class*='release'], [class*='changelog'], [class*='card']"
     - name: "Tencent Hunyuan Research"
       url: "https://hy.tencent.com/research"
       type: "browser"
@@ -252,6 +351,23 @@ watched_vendors:
       url: "https://www.sensetime.com/cn/news-detail"
       type: "browser"
       selector: "article, [class*='news'], [class*='post'], [class*='list']"
+    # --- Chinese Data Vendors ---
+    - name: "海天瑞声 SpeechOcean"
+      url: "https://www.haitianruisheng.com/aboutus/news/catid-23.htm"
+      type: "browser"
+      selector: ".news-wrapper a[href*='/news-'], a[href*='/news-']"
+    - name: "整数智能 MolarData"
+      url: "https://www.molardata.com/blog"
+      type: "browser"
+      selector: ".articles-item-wrap, a[href*='/article/']"
+    - name: "数据堂 Datatang"
+      url: "https://datatang.com/news"
+      type: "browser"
+      selector: "a[href*='/news/']"
+    - name: "智源社区 BAAI"
+      url: "https://hub.baai.ac.cn/"
+      type: "browser"
+      selector: "article, [class*='post'], [class*='card'], a[href*='/view/']"
     # --- Emerging Labs ---
     - name: "Mistral AI"
       url: "https://mistral.ai/news/"
@@ -418,6 +534,9 @@ sources:
       - nvidia
       - Qwen
       - MiniMaxAI
+      - BAAI
+      - SpeechOcean
+      - Datatang
 
   arxiv:
     enabled: true

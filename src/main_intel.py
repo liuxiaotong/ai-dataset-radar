@@ -57,104 +57,312 @@ def load_config(config_path: str = "config.yaml") -> dict:
 
 
 
-def format_insights_prompt(all_datasets: list, blog_activity: list, github_activity: list, papers: list, datasets_by_type: dict) -> str:
+def format_insights_prompt(
+    all_datasets: list,
+    blog_activity: list,
+    github_activity: list,
+    papers: list,
+    datasets_by_type: dict,
+    lab_activity: dict = None,
+    vendor_activity: dict = None,
+) -> str:
     """Format data with analysis prompt for LLM consumption.
 
     This output is designed to be read by Claude Code / Claude App,
     which will then perform the analysis using its native LLM capabilities.
+    Surfaces all available intelligence data with full context.
     """
     lines = []
     lines.append("\n" + "=" * 60)
-    lines.append("  AI Dataset Radar - 请分析以下竞争情报数据")
+    lines.append("  AI Dataset Radar - 竞争情报分析材料")
     lines.append("=" * 60 + "\n")
 
-    # Datasets summary
-    lines.append("## 一、本周数据集动态\n")
-    if all_datasets:
-        # Group by category
-        by_cat = {}
-        for ds in all_datasets:
-            cat = ds.get("category", "other")
-            if cat not in by_cat:
-                by_cat[cat] = []
-            by_cat[cat].append(ds)
+    # ── Section 1: Lab Activity (org-by-org with datasets AND models) ──
+    lines.append("## 一、AI Labs 动态（按组织）\n")
+    labs = (lab_activity or {}).get("labs", {})
+    has_lab_activity = False
 
-        for cat, ds_list in sorted(by_cat.items(), key=lambda x: -len(x[1])):
-            lines.append(f"### {cat} ({len(ds_list)} 个)")
-            for ds in sorted(ds_list, key=lambda x: -x.get("downloads", 0))[:5]:
-                lines.append(f"- **{ds.get('id')}**")
-                lines.append(f"  - 下载量: {ds.get('downloads', 0):,} | 点赞: {ds.get('likes', 0)}")
-                if ds.get('tags'):
-                    lines.append(f"  - 标签: {', '.join(ds.get('tags', [])[:5])}")
-                if ds.get('description'):
-                    lines.append(f"  - 简介: {ds.get('description', '')[:100]}...")
+    category_names = {
+        "frontier_labs": "Frontier Labs（一线实验室）",
+        "emerging_labs": "Emerging Labs（新兴实验室）",
+        "research_labs": "Research Labs（研究机构）",
+        "china_opensource": "中国开源大模型",
+        "china_closedsource": "中国闭源大模型",
+    }
+
+    for cat_key, cat_display in category_names.items():
+        cat_data = labs.get(cat_key, {})
+        # Filter to orgs with actual activity
+        active_orgs = {
+            k: v for k, v in cat_data.items()
+            if v.get("datasets") or v.get("models")
+        }
+        if not active_orgs:
+            continue
+
+        has_lab_activity = True
+        lines.append(f"### {cat_display}\n")
+
+        for org_name, org_data in active_orgs.items():
+            org_display = org_name.replace("_", " ").title()
+            ds_list = org_data.get("datasets", [])
+            model_list = org_data.get("models", [])
+            lines.append(f"**{org_display}** — {len(ds_list)} 数据集, {len(model_list)} 模型")
+
+            # Datasets with full info
+            for ds in ds_list:
+                ds_id = ds.get("id", "")
+                downloads = ds.get("downloads", 0)
+                likes = ds.get("likes", 0)
+                desc = ds.get("description", "")
+                # Clean up description whitespace
+                if desc:
+                    desc = " ".join(desc.split())[:300]
+                lines.append(f"- 📦 **{ds_id}** (downloads: {downloads:,}, likes: {likes})")
+                if desc:
+                    lines.append(f"  {desc}")
+                # Show meaningful tags (filter out noise)
+                tags = ds.get("tags", [])
+                meaningful_tags = [
+                    t for t in tags
+                    if not t.startswith(("region:", "library:", "size_categories:",
+                                        "format:", "arxiv:", "language:"))
+                    and t not in ("region:us",)
+                ][:8]
+                if meaningful_tags:
+                    lines.append(f"  标签: {', '.join(meaningful_tags)}")
+
+            # Models with context - show top models by downloads+likes, limit noise
+            notable_models = [m for m in model_list if m.get("downloads", 0) > 0 or m.get("likes", 0) > 0]
+            if not notable_models:
+                # All models are zero-activity, just summarize
+                if model_list:
+                    sample = model_list[0].get("id", "").split("/")[-1] if model_list else ""
+                    lines.append(f"- 🤖 *{len(model_list)} 个模型（均无下载/点赞，如 {sample} 等）*")
+                model_list_to_show = []
+            else:
+                top_models = sorted(notable_models, key=lambda m: -(m.get("downloads", 0) + m.get("likes", 0) * 100))
+                model_list_to_show = top_models[:5]
+            for model in model_list_to_show:
+                model_id = model.get("id", "")
+                downloads = model.get("downloads", 0)
+                likes = model.get("likes", 0)
+                pipeline = model.get("pipeline_tag", "")
+                model_tags = model.get("tags", [])
+                # Extract meaningful tags for models
+                meaningful = [
+                    t for t in model_tags
+                    if not t.startswith(("region:", "base_model:", "endpoints_",
+                                        "license:", "arxiv:"))
+                    and t not in ("safetensors", "transformers", "pytorch", "en",
+                                  "model_hub_mixin", "pytorch_model_hub_mixin")
+                ][:6]
+                lines.append(f"- 🤖 **{model_id}** (downloads: {downloads:,}, likes: {likes}, pipeline: {pipeline})")
+                if meaningful:
+                    lines.append(f"  标签: {', '.join(meaningful)}")
+            if len(notable_models) > 5:
+                lines.append(f"  *(另有 {len(notable_models) - 5} 个模型省略)*")
+
             lines.append("")
-    else:
-        lines.append("*无新数据集*\n")
 
-    # Blog highlights
-    lines.append("## 二、博客要闻\n")
+    if not has_lab_activity:
+        lines.append("*本周无 AI Labs 新活动*\n")
+
+    # ── Section 2: Vendor Activity ──
+    lines.append("## 二、数据供应商动态（竞品）\n")
+    vendors = (vendor_activity or {}).get("vendors", {})
+    has_vendor_activity = False
+
+    for tier_name, tier_data in vendors.items():
+        active_vendors = {
+            k: v for k, v in tier_data.items()
+            if v.get("datasets") or v.get("models")
+        }
+        if not active_vendors:
+            continue
+
+        has_vendor_activity = True
+        lines.append(f"### {tier_name.replace('_', ' ').title()}\n")
+
+        for vendor_name, vendor_data in active_vendors.items():
+            vendor_display = vendor_name.replace("_", " ").title()
+            ds_list = vendor_data.get("datasets", [])
+            model_list = vendor_data.get("models", [])
+            lines.append(f"**{vendor_display}** — {len(ds_list)} 数据集, {len(model_list)} 模型")
+
+            for ds in ds_list:
+                ds_id = ds.get("id", "")
+                downloads = ds.get("downloads", 0)
+                desc = ds.get("description", "")
+                if desc:
+                    desc = " ".join(desc.split())[:300]
+                lines.append(f"- 📦 **{ds_id}** (downloads: {downloads:,})")
+                if desc:
+                    lines.append(f"  {desc}")
+            lines.append("")
+
+    if not has_vendor_activity:
+        lines.append("*本周无供应商 HuggingFace 新活动*\n")
+
+    # ── Section 3: Dataset Classification Results ──
+    lines.append("## 三、数据集分类分析\n")
+    if datasets_by_type:
+        # Show classified types first, "other" last
+        classified = {k: v for k, v in datasets_by_type.items()
+                      if (k.value if hasattr(k, 'value') else str(k)) != "other" and v}
+        other = {k: v for k, v in datasets_by_type.items()
+                 if (k.value if hasattr(k, 'value') else str(k)) == "other" and v}
+
+        total = sum(len(v) for v in datasets_by_type.values())
+        classified_count = sum(len(v) for v in classified.values())
+        lines.append(f"共 {total} 个数据集，已分类 {classified_count} 个：\n")
+
+        for dtype, ds_list in classified.items():
+            type_name = dtype.value if hasattr(dtype, 'value') else str(dtype)
+            lines.append(f"- **{type_name}**: {len(ds_list)} 个 — {', '.join(ds.get('id', '') for ds in ds_list[:5])}")
+
+        if other:
+            other_list = list(other.values())[0]
+            lines.append(f"- **未分类**: {len(other_list)} 个 — {', '.join(ds.get('id', '') for ds in other_list[:5])}")
+        lines.append("")
+    else:
+        lines.append("*无分类数据*\n")
+
+    # ── Section 4: Blog Activity (full titles, more articles) ──
+    lines.append("## 四、博客要闻\n")
     if blog_activity:
         active_blogs = [b for b in blog_activity if b.get("articles")]
-        for blog in active_blogs[:8]:
-            source = blog.get("source", "未知")
-            articles = blog.get("articles", [])[:3]
-            if articles:
-                lines.append(f"### {source}")
-                for art in articles:
-                    title = art.get("title", "无标题")[:50]
-                    url = art.get("url", "")
-                    lines.append(f"- [{title}]({url})")
-                lines.append("")
+        if active_blogs:
+            for blog in active_blogs:
+                source = blog.get("source", "未知")
+                articles = blog.get("articles", [])[:5]
+                if articles:
+                    lines.append(f"### {source}")
+                    for art in articles:
+                        title = art.get("title", "无标题")
+                        url = art.get("url", "")
+                        summary = art.get("summary", "")
+                        if summary:
+                            summary = " ".join(summary.split())[:200]
+                        lines.append(f"- [{title}]({url})")
+                        if summary:
+                            lines.append(f"  {summary}")
+                    lines.append("")
+        else:
+            lines.append("*无博客更新*\n")
     else:
         lines.append("*无博客更新*\n")
 
-    # GitHub highlights
-    lines.append("## 三、GitHub 活动\n")
+    # ── Section 5: GitHub Activity (high + medium relevance) ──
+    lines.append("## 五、GitHub 活动\n")
     if github_activity:
-        high_relevance = []
+        # Collect all repos with relevance info
+        all_repos = []
         for org in github_activity:
+            org_name = org.get("org", "")
             for repo in org.get("repos_updated", []):
-                if repo.get("relevance") == "high":
-                    repo["org"] = org.get("org")
-                    high_relevance.append(repo)
+                repo_copy = dict(repo)
+                repo_copy["org"] = org_name
+                all_repos.append(repo_copy)
 
-        high_relevance = sorted(high_relevance, key=lambda x: -x.get("stars", 0))[:10]
-        if high_relevance:
-            lines.append("### 高相关仓库 (Top 10)")
-            for repo in high_relevance:
+        # High relevance
+        high = [r for r in all_repos if r.get("relevance") == "high"]
+        high = sorted(high, key=lambda x: -x.get("stars", 0))
+        # Medium relevance
+        medium = [r for r in all_repos if r.get("relevance") == "medium"]
+        medium = sorted(medium, key=lambda x: -x.get("stars", 0))[:10]
+
+        if high:
+            lines.append(f"### 高相关 ({len(high)} 个)")
+            for repo in high:
                 lines.append(f"- **{repo.get('org')}/{repo.get('name')}** ⭐ {repo.get('stars', 0)}")
                 if repo.get("description"):
-                    lines.append(f"  - {repo.get('description', '')[:80]}")
+                    lines.append(f"  {repo.get('description', '')[:120]}")
+                signals = repo.get("signals", [])
+                if signals:
+                    lines.append(f"  信号: {', '.join(str(s) for s in signals[:5])}")
             lines.append("")
+
+        if medium:
+            lines.append(f"### 中相关 (Top {len(medium)})")
+            for repo in medium:
+                lines.append(f"- **{repo.get('org')}/{repo.get('name')}** ⭐ {repo.get('stars', 0)}")
+                if repo.get("description"):
+                    lines.append(f"  {repo.get('description', '')[:120]}")
+            lines.append("")
+
+        # Summary stats
+        total_repos = len(all_repos)
+        active_orgs = len([o for o in github_activity if o.get("repos_updated")])
+        lines.append(f"*共监控 {active_orgs} 个组织，{total_repos} 个活跃仓库*\n")
     else:
         lines.append("*无 GitHub 活动*\n")
 
-    # Papers
-    lines.append("## 四、相关论文\n")
+    # ── Section 6: Papers (full titles, longer abstracts) ──
+    lines.append("## 六、相关论文\n")
     if papers:
-        for paper in papers[:10]:
-            title = paper.get("title", "无标题")[:60]
-            source = paper.get("source", "")
-            lines.append(f"- **{title}** [{source}]")
-            if paper.get("abstract"):
-                lines.append(f"  - {paper.get('abstract', '')[:100]}...")
-        lines.append("")
+        # Group by category if available
+        by_cat = {}
+        for paper in papers:
+            cat = paper.get("category", "其他")
+            if cat not in by_cat:
+                by_cat[cat] = []
+            by_cat[cat].append(paper)
+
+        for cat, paper_list in by_cat.items():
+            if len(by_cat) > 1:
+                lines.append(f"### {cat}\n")
+            for paper in paper_list[:8]:
+                title = paper.get("title", "无标题")
+                source = paper.get("source", "")
+                url = paper.get("url", "")
+                abstract = paper.get("abstract", "")
+                if abstract:
+                    abstract = " ".join(abstract.split())[:400]
+                matched_kw = paper.get("_matched_keywords", [])
+
+                link_str = f"[{source}]({url})" if url else f"[{source}]"
+                lines.append(f"- **{title}** {link_str}")
+                if matched_kw:
+                    lines.append(f"  关键词命中: {', '.join(matched_kw[:5])}")
+                if abstract:
+                    lines.append(f"  摘要: {abstract}")
+            lines.append("")
     else:
         lines.append("*无相关论文*\n")
 
-    # Analysis prompt
+    # ── Analysis Prompt ──
     lines.append("=" * 60)
     lines.append("  分析要求")
     lines.append("=" * 60 + "\n")
-    lines.append("""请基于以上数据，提供以下分析：
+    lines.append("""背景：你是 AI 训练数据行业的竞争情报分析师。读者是一家数据服务公司的管理层，需要从以上数据中获取可执行的商业洞察。
 
-1. **本周亮点** - 最值得关注的 2-3 个数据集及原因
-2. **组织动向** - 哪些组织本周比较活跃？有什么值得注意的动作？
-3. **趋势信号** - 从数据类型分布、博客内容、论文方向看到什么趋势？
-4. **行动建议** - 对于关注 AI 训练数据的团队，有什么建议？
+请提供以下分析：
 
-请用中文回答，保持简洁。
+### 1. 关键发现（Key Findings）
+- 本周最值得关注的 3-5 个事件（数据集发布、模型动态、工具更新），逐条说明原因和商业意义
+- 特别关注：新发布的高价值训练数据集、RLHF/对齐相关动态、合成数据方向
+
+### 2. 组织动态图谱
+- 各 AI Lab 本周的数据策略动向（发了什么数据集？训练了什么模型？模型需要什么类型的数据？）
+- 数据供应商竞品的最新动作（产品发布、开源工具、技术博客传递的信号）
+- 中国 vs 海外 AI Labs 的数据布局差异
+
+### 3. 数据需求信号
+- 从模型发布反推：哪些类型的训练数据需求在上升？（如 RLHF、多模态、代码、Agent 等）
+- 从论文方向看：学术界在探索什么新的数据方法论？（如新的标注范式、合成数据技术、数据质量评估）
+- 从博客和 GitHub 看：数据工具链有什么新趋势？
+
+### 4. 行动建议
+- 针对数据服务公司，本周有哪些值得跟进的机会？
+- 有哪些值得警惕的竞争威胁？
+- 建议优先关注的数据类型或技术方向
+
+### 5. 异常与待排查
+- 数据采集中是否有异常（如某数据源返回 0 结果、分类覆盖率过低等）
+- 值得人工复查的条目
+
+请用中文回答。分析应该具体、可执行，避免泛泛而谈。引用具体的数据集名称、组织名称和论文标题。
 """)
 
     return "\n".join(lines)
@@ -278,9 +486,9 @@ def main():
         help="Skip fetching dataset READMEs",
     )
     parser.add_argument(
-        "--insights",
+        "--no-insights",
         action="store_true",
-        help="Output data with analysis prompt for LLM (Claude Code / Claude App)",
+        help="Skip LLM analysis prompt output (enabled by default)",
     )
 
     args = parser.parse_args()
@@ -482,13 +690,15 @@ def main():
     logger.info("Done!")
 
     # Output insights prompt for LLM analysis (Claude Code / Claude App)
-    if args.insights:
+    if not args.no_insights:
         insights_content = format_insights_prompt(
             all_datasets=all_datasets,
             blog_activity=blog_activity,
             github_activity=github_activity,
             papers=papers,
-            datasets_by_type=datasets_by_type
+            datasets_by_type=datasets_by_type,
+            lab_activity=lab_activity,
+            vendor_activity=vendor_activity,
         )
         print(insights_content)
 
