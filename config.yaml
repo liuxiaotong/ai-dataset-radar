@@ -117,6 +117,79 @@ watched_orgs:
       keywords: ["step", "阶跃星辰"]
       priority: medium
 
+  # Global Emerging Labs - 全球新兴力量
+  global_emerging:
+    apple:
+      hf_ids: ["apple"]
+      github: ["apple"]
+      keywords: ["apple", "mlx", "openelm", "afm"]
+      priority: medium
+    microsoft:
+      hf_ids: ["microsoft", "Microsoft"]
+      github: ["microsoft"]
+      keywords: ["microsoft", "phi", "orca", "wizardlm"]
+      priority: high
+    amazon:
+      hf_ids: ["amazon", "Amazon"]
+      github: ["amazon-science"]
+      keywords: ["amazon", "alexa", "titan"]
+      priority: medium
+    stability_ai:
+      hf_ids: ["stabilityai"]
+      github: ["Stability-AI"]
+      keywords: ["stability", "stable diffusion", "stablelm"]
+      priority: medium
+    tii:
+      hf_ids: ["tiiuae"]
+      github: ["tiiuae"]
+      keywords: ["tii", "falcon", "technology innovation institute"]
+      priority: medium
+    reka:
+      hf_ids: ["RekaAI"]
+      keywords: ["reka", "reka ai"]
+      priority: low
+    snowflake:
+      hf_ids: ["Snowflake"]
+      keywords: ["snowflake", "arctic"]
+      priority: low
+
+  # Korean & Japanese Labs - 韩日 AI 实验室
+  asia_pacific:
+    samsung:
+      hf_ids: ["samsung", "Samsung"]
+      github: ["Samsung"]
+      keywords: ["samsung", "gauss"]
+      priority: medium
+    naver:
+      hf_ids: ["naver-clova-ix", "NAVER-AI"]
+      keywords: ["naver", "hyperclova", "clova"]
+      priority: medium
+    kakao:
+      hf_ids: ["kakaobrain"]
+      github: ["kakaobrain"]
+      keywords: ["kakao", "kakaobrain", "kogpt"]
+      priority: low
+    cyberagent:
+      hf_ids: ["cyberagent"]
+      keywords: ["cyberagent", "open-calm"]
+      priority: low
+    sakana:
+      hf_ids: ["SakanaAI"]
+      keywords: ["sakana"]
+      priority: low
+
+  # European Research - 欧洲研究机构
+  european_research:
+    laion:
+      hf_ids: ["laion"]
+      github: ["LAION-AI"]
+      keywords: ["laion", "open-assistant", "openassistant"]
+      priority: medium
+    aleph_alpha:
+      hf_ids: ["Aleph-Alpha"]
+      keywords: ["aleph alpha", "luminous", "pharia"]
+      priority: low
+
   # China Closed Source Labs - 中国闭源大模型（关键词监控）
   china_closedsource:
     baidu_ernie:
@@ -200,6 +273,43 @@ watched_vendors:
       hf_ids: []
       keywords: ["prolific"]
       blog_url: "https://www.prolific.com/resources"
+
+  # Global Data Vendors - 新增全球供应商
+  global_vendors:
+    toloka:
+      hf_ids: ["toloka"]
+      github: ["Toloka"]
+      keywords: ["toloka", "crowd sourcing"]
+      blog_url: "https://toloka.ai/blog"
+    imerit:
+      hf_ids: []
+      keywords: ["imerit", "i merit"]
+      blog_url: "https://imerit.net/blog/"
+    cloudfactory:
+      hf_ids: []
+      keywords: ["cloudfactory", "cloud factory"]
+      blog_url: "https://www.cloudfactory.com/blog"
+    defined_ai:
+      hf_ids: []
+      keywords: ["defined.ai", "definedai", "defined ai"]
+      blog_url: "https://www.defined.ai/blog"
+    superannotate:
+      hf_ids: []
+      github: ["superannotateai"]
+      keywords: ["superannotate"]
+      blog_url: "https://www.superannotate.com/blog"
+    shaip:
+      hf_ids: []
+      keywords: ["shaip"]
+      blog_url: "https://www.shaip.com/blog/"
+    welocalize:
+      hf_ids: []
+      keywords: ["welocalize"]
+      blog_url: "https://www.welocalize.com/insights/"
+    coactive_ai:
+      hf_ids: []
+      keywords: ["coactive ai", "coactive"]
+      blog_url: "https://coactive.ai/blog"
 
   # China Data Vendors - 中国数据供应商（Tier 1）
   china_premium:
@@ -398,6 +508,76 @@ watched_vendors:
       url: "https://allenai.org/blog"
       type: "browser"
       selector: "a[href*='/blog/']"
+    # --- New: Global Tech Giants ---
+    - name: "Apple Machine Learning Research"
+      url: "https://machinelearning.apple.com/"
+      type: "auto"
+      rss_url: "https://machinelearning.apple.com/rss.xml"
+    - name: "Microsoft Research Blog"
+      url: "https://www.microsoft.com/en-us/research/blog/"
+      type: "auto"
+      rss_url: "https://www.microsoft.com/en-us/research/feed/"
+    - name: "Amazon Science"
+      url: "https://www.amazon.science/"
+      type: "auto"
+      rss_url: "https://www.amazon.science/index.rss"
+    - name: "Stability AI"
+      url: "https://stability.ai/news"
+      type: "browser"
+      selector: "article, [class*='post'], [class*='card'], a[href*='/news/']"
+    - name: "TII Falcon Blog"
+      url: "https://falconllm.tii.ae/blog.html"
+      type: "auto"
+      selector: "article, [class*='post'], [class*='blog'], [class*='card']"
+    # --- New: Korean & Japanese Labs ---
+    - name: "Naver AI Lab"
+      url: "https://clova-ai.blog/"
+      type: "auto"
+      selector: "article, [class*='post'], [class*='entry']"
+    - name: "Sakana AI"
+      url: "https://sakana.ai/blog/"
+      type: "auto"
+      selector: "article, [class*='post'], [class*='blog'], [class*='card']"
+    # --- New: European Research ---
+    - name: "LAION Blog"
+      url: "https://laion.ai/blog/"
+      type: "auto"
+      selector: "article, [class*='post'], [class*='entry']"
+    # --- New: Data Vendor Blogs ---
+    - name: "Toloka AI Blog"
+      url: "https://toloka.ai/blog"
+      type: "auto"
+      selector: "article, [class*='post'], [class*='blog'], [class*='card']"
+    - name: "SuperAnnotate"
+      url: "https://www.superannotate.com/blog"
+      type: "auto"
+      selector: "article, [class*='post'], [class*='blog'], [class*='card']"
+    - name: "iMerit Blog"
+      url: "https://imerit.net/blog/"
+      type: "auto"
+      selector: "article, [class*='post'], [class*='blog'], [class*='card']"
+    - name: "Defined.ai Blog"
+      url: "https://www.defined.ai/blog"
+      type: "auto"
+      selector: "article, [class*='post'], [class*='blog'], [class*='card']"
+    # --- New: Community & Aggregators ---
+    - name: "LMSYS Org Blog"
+      url: "https://lmsys.org/blog/"
+      type: "auto"
+      selector: "article, [class*='post'], [class*='entry']"
+    - name: "EleutherAI Blog"
+      url: "https://blog.eleuther.ai/"
+      type: "auto"
+      rss_url: "https://blog.eleuther.ai/feed.xml"
+    # --- New: Chinese Platforms ---
+    - name: "ModelScope Community"
+      url: "https://community.modelscope.cn/articles"
+      type: "browser"
+      selector: "article, [class*='post'], [class*='article'], [class*='card']"
+    - name: "天池 Tianchi AI"
+      url: "https://tianchi.aliyun.com/competition"
+      type: "browser"
+      selector: "[class*='competition'], [class*='card'], a[href*='/competition/']"
 
 # =============================================================================
 # 关注的数据类型 | Priority Data Types
@@ -537,6 +717,25 @@ sources:
       - BAAI
       - SpeechOcean
       - Datatang
+      # New: global tech
+      - apple
+      - microsoft
+      - Microsoft
+      - amazon
+      - Amazon
+      - stabilityai
+      - tiiuae
+      # New: Asia-Pacific
+      - kakaobrain
+      - SakanaAI
+      - cyberagent
+      - naver-clova-ix
+      # New: European
+      - laion
+      # New: Vendors
+      - toloka
+      - Snowflake
+      - RekaAI
 
   arxiv:
     enabled: true
@@ -571,6 +770,12 @@ sources:
       - argilla-io
       - scaleapi
       - EleutherAI
+      - apple
+      - microsoft
+      - amazon-science
+      - Stability-AI
+      - tiiuae
+      - LAION-AI
     # Keywords for relevance scoring
     relevance_keywords:
       - dataset
@@ -591,6 +796,39 @@ sources:
         url: https://qwenlm.github.io/feed.xml
       - name: Hugging Face
         url: https://huggingface.co/blog/feed.xml
+
+  # ModelScope - 魔搭社区（中国 HuggingFace 等价平台）
+  modelscope:
+    enabled: true
+    mode: targeted
+    # ModelScope organizations to watch
+    watch_orgs:
+      - damo          # 达摩院
+      - qwen          # 通义千问
+      - ZhipuAI       # 智谱
+      - deepseek-ai   # DeepSeek
+      - iic           # 阿里 IIC
+      - Shanghai_AI_Laboratory  # 上海 AI Lab
+      - baichuan-inc  # 百川
+      - BAAI          # 智源
+      - TeleAI        # 中国电信
+
+  # Kaggle - 全球数据竞赛与数据集平台
+  kaggle:
+    enabled: true
+    mode: search
+    keywords:
+      - llm training
+      - instruction tuning
+      - rlhf
+      - preference
+      - text generation
+      - NLP benchmark
+
+  # OpenDataLab - 上海 AI Lab 开放数据平台
+  opendatalab:
+    enabled: true
+    mode: targeted
 
   paperswithcode:
     enabled: true
@@ -623,6 +861,20 @@ github:
       - baichuan-inc
       - 01-ai
       - InternLM
+    # Global tech companies - 全球科技巨头
+    global_tech:
+      - apple
+      - microsoft
+      - amazon-science
+      - Stability-AI
+      - tiiuae
+      - SakanaAI
+      - LAION-AI
+    # Additional data vendors - 更多数据供应商
+    data_vendors_extended:
+      - Toloka
+      - superannotateai
+      - kakaobrain
 
   hf_papers:
     enabled: true
