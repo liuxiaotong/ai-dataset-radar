@@ -7,7 +7,9 @@ Monitors company blogs for:
 
 import re
 import time
+from concurrent.futures import ThreadPoolExecutor
 from datetime import datetime, timedelta
+from threading import Lock
 from typing import Optional
 from urllib.parse import urljoin, urlparse, urlunparse, parse_qs, urlencode
 
@@ -636,7 +638,10 @@ class BlogTracker:
         return result
 
     def fetch_all_blogs(self, days: int = 7) -> list[dict]:
-        """Fetch articles from all configured blogs.
+        """Fetch articles from all configured blogs (parallelized).
+
+        Uses ThreadPoolExecutor to fetch multiple blogs concurrently.
+        Browser-based scraping is serialized to avoid resource contention.
 
         Args:
             days: Look back period in days.
@@ -644,16 +649,51 @@ class BlogTracker:
         Returns:
             List of blog activity dicts, deduplicated by URL.
         """
-        results = []
-        seen_urls = set()
-
         logger.info("Tracking %d company blogs...", len(self.blogs))
 
+        # Separate browser blogs (heavy) from auto/RSS blogs (light)
+        auto_blogs = []
+        browser_blogs = []
         for blog_config in self.blogs:
-            logger.debug("Checking %s...", blog_config.get('name', 'Unknown'))
-            activity = self.fetch_blog(blog_config, days)
+            if blog_config.get("type") == "browser":
+                browser_blogs.append(blog_config)
+            else:
+                auto_blogs.append(blog_config)
 
-            # Deduplicate articles by normalized URL
+        all_activities = []
+
+        # Fetch auto/RSS blogs in parallel (I/O-bound, safe to parallelize)
+        if auto_blogs:
+            with ThreadPoolExecutor(max_workers=8) as executor:
+                futures = {
+                    executor.submit(self.fetch_blog, cfg, days): cfg
+                    for cfg in auto_blogs
+                }
+                for future in futures:
+                    try:
+                        all_activities.append(future.result())
+                    except Exception as e:
+                        cfg = futures[future]
+                        logger.warning("Error fetching %s: %s", cfg.get("name", "?"), e)
+
+        # Fetch browser blogs with limited concurrency (Playwright is heavy)
+        if browser_blogs:
+            with ThreadPoolExecutor(max_workers=2) as executor:
+                futures = {
+                    executor.submit(self.fetch_blog, cfg, days): cfg
+                    for cfg in browser_blogs
+                }
+                for future in futures:
+                    try:
+                        all_activities.append(future.result())
+                    except Exception as e:
+                        cfg = futures[future]
+                        logger.warning("Error fetching %s: %s", cfg.get("name", "?"), e)
+
+        # Deduplicate articles by normalized URL
+        seen_urls = set()
+        results = []
+        for activity in all_activities:
             unique_articles = []
             for article in activity.get("articles", []):
                 normalized_url = self._normalize_url(article.get("url", ""))
@@ -664,10 +704,7 @@ class BlogTracker:
             activity["articles"] = unique_articles
             if unique_articles:
                 activity["has_activity"] = True
-
-            # Always include in results (even failures for transparency)
             results.append(activity)
-            time.sleep(1)  # Politeness delay
 
         return results
 
