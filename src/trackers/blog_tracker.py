@@ -354,8 +354,12 @@ class BlogTracker:
                 page.set_default_timeout(30000)
 
                 # Navigate and wait for content
-                page.goto(url, wait_until="networkidle")
-                page.wait_for_timeout(2000)  # Extra wait for dynamic content
+                try:
+                    page.goto(url, wait_until="networkidle")
+                except Exception:
+                    # Fallback: some sites (e.g. Webflow) never reach networkidle
+                    page.goto(url, wait_until="domcontentloaded")
+                page.wait_for_timeout(3000)  # Extra wait for dynamic content
 
                 # Find all article elements
                 elements = page.query_selector_all(selector)
