@@ -27,6 +27,7 @@ from .blog_rss import BlogRSSScraper
 from .hf_papers import HFPapersScraper
 from .semantic_scholar import SemanticScholarScraper
 from .pwc_sota import PwCSOTAScraper
+from .modelscope import ModelScopeScraper
 
 __all__ = [
     # Base and registry
@@ -48,4 +49,5 @@ __all__ = [
     "HFPapersScraper",
     "SemanticScholarScraper",
     "PwCSOTAScraper",
+    "ModelScopeScraper",
 ]
