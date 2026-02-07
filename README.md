@@ -8,7 +8,7 @@
 [![License: MIT](https://img.shields.io/badge/License-MIT-green.svg)](LICENSE)
 [![Python 3.10+](https://img.shields.io/badge/python-3.10+-blue.svg)](https://www.python.org/downloads/)
 [![Agent Ready](https://img.shields.io/badge/Agent-Ready-orange.svg)](#agent-集成)
-[![MCP](https://img.shields.io/badge/MCP-9_Tools-purple.svg)](#mcp-server)
+[![MCP](https://img.shields.io/badge/MCP-11_Tools-purple.svg)](#mcp-server)
 
 [快速开始](#快速开始) · [Agent 集成](#agent-集成) · [数据源](#数据源) · [输出规范](#输出规范) · [配置](#配置)
 
@@ -276,6 +276,8 @@ tools = [
 | `radar_config` | 获取监控配置 | |
 | `radar_search` | **全文搜索** — 跨数据集/GitHub/论文/博客/X 搜索，支持正则 | `query`, `sources`, `limit` |
 | `radar_diff` | **报告对比** — 自动识别两期报告之间的新增/消失项 | `date_a`, `date_b` |
+| `radar_trend` | **趋势分析** — 增长最快/上升中/突破性数据集，支持单数据集历史曲线 | `mode`, `dataset_id`, `days`, `limit` |
+| `radar_history` | **历史时间线** — 跨期报告统计摘要对比表 + 整体变化趋势 | `limit` |
 
 ---
 
@@ -460,10 +462,10 @@ Radar (情报采集) → DataRecipe (逆向分析) → 复刻生产
 - [x] 多源数据采集 (HuggingFace, GitHub, arXiv, Blogs)
 - [x] 双格式输出 (Markdown + JSON)
 - [x] Agent 集成层 (HTTP API, Function Calling, Schema)
-- [x] MCP Server (9 工具: scan/summary/datasets/github/papers/blogs/config/search/diff)
+- [x] MCP Server (11 工具: scan/summary/datasets/github/papers/blogs/config/search/diff/trend/history)
 - [x] 插件化采集器 (9 个)
 - [x] 性能优化 (并行采集、缓存、连接池)
-- [x] 测试覆盖 (357 用例: MCP 工具 53 + GitHub tracker 40 + Org tracker 27 + X tracker 27 + 既有 210)
+- [x] 测试覆盖 (390+ 用例: MCP 工具 86 + GitHub tracker 40 + Org tracker 27 + X tracker 27 + 既有 210)
 - [x] 博客抓取多策略降级 (RSS → HTML → Playwright, networkidle → domcontentloaded)
 - [x] 中国数据供应商监控 (海天瑞声、整数智能、数据堂、智源 BAAI)
 - [x] X/Twitter 监控 (~100 账户，12 类别，RSSHub/API 双后端，信号关键词过滤)
@@ -477,6 +479,8 @@ Radar (情报采集) → DataRecipe (逆向分析) → 复刻生产
 - [x] radar_search 全文搜索 (跨 5 类数据源, 支持正则, 按来源过滤)
 - [x] radar_diff 报告对比 (自动识别新增/消失的数据集、仓库、论文、博客)
 - [x] 工具参数扩展 (radar_scan sources 过滤, radar_datasets/github org 过滤)
+- [x] 趋势分析集成 (radar_trend 增长/上升/突破查询 + main_intel 每次扫描自动记录 daily_stats)
+- [x] 历史时间线 (radar_history 跨期报告统计对比 + 趋势线)
 - [ ] 定时任务与告警
 - [ ] Web 可视化界面
 
