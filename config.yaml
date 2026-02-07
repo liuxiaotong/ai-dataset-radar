@@ -52,6 +52,22 @@ watched_orgs:
       hf_ids: ["databricks"]
       keywords: ["databricks", "dolly", "dbrx"]
       priority: medium
+    cerebras:
+      hf_ids: ["cerebras"]
+      keywords: ["cerebras", "btlm", "jamba"]
+      priority: medium
+    arcee_ai:
+      hf_ids: ["arcee-ai"]
+      keywords: ["arcee", "mergekit"]
+      priority: medium
+    nous_research:
+      hf_ids: ["NousResearch"]
+      keywords: ["nous", "hermes", "capybara"]
+      priority: medium
+    upstage:
+      hf_ids: ["upstage"]
+      keywords: ["upstage", "solar"]
+      priority: low
 
   # Research Labs - 开源研究
   research_labs:
@@ -151,6 +167,18 @@ watched_orgs:
     snowflake:
       hf_ids: ["Snowflake"]
       keywords: ["snowflake", "arctic"]
+      priority: low
+    huawei:
+      hf_ids: ["huawei-noah"]
+      keywords: ["huawei", "pangu", "ascend"]
+      priority: medium
+    gretel:
+      hf_ids: ["gretelai"]
+      keywords: ["gretel", "synthetic data"]
+      priority: medium
+    sambanova:
+      hf_ids: ["sambanova"]
+      keywords: ["sambanova", "samba"]
       priority: low
 
   # Korean & Japanese Labs - 韩日 AI 实验室
@@ -560,7 +588,40 @@ watched_vendors:
       url: "https://www.defined.ai/blog"
       type: "auto"
       selector: "article, [class*='post'], [class*='blog'], [class*='card']"
-    # --- New: Community & Aggregators ---
+    # --- Researcher Blogs & Community ---
+    - name: "Lil'Log (Lilian Weng)"
+      url: "https://lilianweng.github.io/"
+      type: "auto"
+      rss_url: "https://lilianweng.github.io/index.xml"
+    - name: "fast.ai Blog"
+      url: "https://www.fast.ai/posts/"
+      type: "auto"
+      rss_url: "https://www.fast.ai/index.xml"
+    - name: "Interconnects (Nathan Lambert)"
+      url: "https://www.interconnects.ai/"
+      type: "auto"
+      selector: "article, [class*='post'], [class*='card']"
+    - name: "Sebastian Raschka - Ahead of AI"
+      url: "https://magazine.sebastianraschka.com/"
+      type: "auto"
+      selector: "article, [class*='post'], [class*='card']"
+    - name: "LessWrong AI"
+      url: "https://www.lesswrong.com/tag/ai"
+      type: "auto"
+      rss_url: "https://www.lesswrong.com/feed.xml?view=ai"
+    - name: "Alignment Forum"
+      url: "https://www.alignmentforum.org/"
+      type: "auto"
+      rss_url: "https://www.alignmentforum.org/feed.xml"
+    - name: "The Gradient"
+      url: "https://thegradient.pub/"
+      type: "auto"
+      rss_url: "https://thegradient.pub/rss/"
+    - name: "Epoch AI Blog"
+      url: "https://epoch.ai/blog"
+      type: "auto"
+      selector: "article, [class*='post'], [class*='blog'], [class*='card']"
+    # --- Community & Aggregators ---
     - name: "LMSYS Org Blog"
       url: "https://lmsys.org/blog/"
       type: "auto"
