@@ -86,28 +86,44 @@ class GitHubTracker:
             DEFAULT_SIGNAL_KEYWORDS
         )
 
-    def _make_request(self, url: str, params: dict = None) -> Optional[dict]:
-        """Make a GitHub API request with rate limit handling."""
-        try:
-            resp = self.session.get(url, params=params, timeout=30)
+    def _make_request(self, url: str, params: dict = None, max_retries: int = 3) -> Optional[dict]:
+        """Make a GitHub API request with rate limit handling and retry."""
+        for attempt in range(max_retries):
+            try:
+                resp = self.session.get(url, params=params, timeout=30)
 
-            if resp.status_code == 403:
-                # Rate limited
-                reset_time = resp.headers.get("X-RateLimit-Reset")
-                if reset_time:
-                    wait_time = int(reset_time) - int(time.time())
-                    logger.info("  GitHub rate limited, reset in %ss", wait_time)
-                return None
+                if resp.status_code == 403:
+                    # Rate limited
+                    reset_time = resp.headers.get("X-RateLimit-Reset")
+                    if reset_time:
+                        wait_time = max(int(reset_time) - int(time.time()), 1)
+                        logger.info("  GitHub rate limited, reset in %ss", wait_time)
+                    return None
 
-            if resp.status_code == 404:
-                return None
+                if resp.status_code == 404:
+                    return None
 
-            resp.raise_for_status()
-            return resp.json()
+                if resp.status_code >= 500:
+                    # Server error — retry
+                    if attempt < max_retries - 1:
+                        wait = 2 ** (attempt + 1)
+                        logger.warning("  GitHub %d, retry in %ds", resp.status_code, wait)
+                        time.sleep(wait)
+                        continue
+                    return None
 
-        except requests.RequestException as e:
-            logger.info("  GitHub API error: %s", e)
-            return None
+                resp.raise_for_status()
+                return resp.json()
+
+            except requests.RequestException as e:
+                if attempt < max_retries - 1:
+                    wait = 2 ** (attempt + 1)
+                    logger.warning("  GitHub API error, retry in %ds: %s", wait, e)
+                    time.sleep(wait)
+                else:
+                    logger.info("  GitHub API error (all retries failed): %s", e)
+                    return None
+        return None
 
     def get_org_repos(self, org_name: str, days: int = 7) -> list[dict]:
         """Get recently updated repos for an organization.

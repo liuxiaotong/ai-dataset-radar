@@ -287,6 +287,11 @@ class BlogTracker:
         articles = []
         cutoff = datetime.utcnow() - timedelta(days=days)
 
+        # Remove noise sections before selecting articles
+        for noise_sel in ["nav", ".nav", ".sidebar", "footer", ".footer", "header", ".header", ".comments"]:
+            for noise_elem in soup.select(noise_sel):
+                noise_elem.decompose()
+
         # Try to find articles with the selector
         elements = soup.select(selector)[:15]
 
@@ -392,18 +397,34 @@ class BlogTracker:
 
             try:
                 page = browser.new_page()
-                page.set_default_timeout(30000)
+                page.set_default_timeout(15000)  # Reduced from 30s for faster failure
 
                 # Navigate and wait for content
                 try:
-                    page.goto(url, wait_until="networkidle")
+                    page.goto(url, wait_until="networkidle", timeout=15000)
                 except Exception:
                     # Fallback: some sites (e.g. Webflow) never reach networkidle
-                    page.goto(url, wait_until="domcontentloaded")
-                page.wait_for_timeout(3000)  # Extra wait for dynamic content
+                    try:
+                        page.goto(url, wait_until="domcontentloaded", timeout=15000)
+                    except Exception:
+                        page.close()
+                        return [], f"Page load timeout: {url}"
+                page.wait_for_timeout(2000)  # Reduced from 3s
 
-                # Find all article elements
+                # Find all article elements, excluding nav/sidebar/footer noise
                 elements = page.query_selector_all(selector)
+                # Filter out elements inside nav, sidebar, footer, header
+                filtered_elements = []
+                for elem in elements:
+                    try:
+                        is_noise = elem.evaluate(
+                            "el => !!el.closest('nav, .nav, .sidebar, footer, .footer, header, .header, .comments')"
+                        )
+                        if not is_noise:
+                            filtered_elements.append(elem)
+                    except Exception:
+                        filtered_elements.append(elem)
+                elements = filtered_elements
                 if not elements:
                     browser.close()
                     return [], f"No elements found with selector: {selector}"
@@ -735,11 +756,21 @@ class BlogTracker:
 
             if shared_browser:
                 # Browser scraping is not thread-safe, run sequentially with shared browser
-                for cfg in browser_blogs:
+                # Restart browser every 5 pages to prevent memory leaks
+                for i, cfg in enumerate(browser_blogs):
                     try:
                         all_activities.append(self.fetch_blog(cfg, days, browser=shared_browser))
                     except Exception as e:
                         logger.warning("Error fetching %s: %s", cfg.get("name", "?"), e)
+                    # Restart browser every 5 pages
+                    if (i + 1) % 5 == 0 and i + 1 < len(browser_blogs):
+                        try:
+                            shared_browser.close()
+                            shared_browser = pw_context.chromium.launch(headless=True)
+                            logger.info("Browser restarted after %d pages", i + 1)
+                        except Exception as e:
+                            logger.warning("Browser restart failed: %s", e)
+                            break
                 shared_browser.close()
                 if pw_context:
                     pw_context.stop()
