@@ -97,8 +97,52 @@ class OrgTracker:
                 time.sleep(self._request_delay - elapsed)
             self._last_request = time.time()
 
+    def _request_with_retry(self, url: str, params: dict, cache_key: str,
+                            description: str, max_retries: int = 3) -> list[dict]:
+        """Make an HF API request with retry and cache fallback.
+
+        Args:
+            url: API endpoint URL.
+            params: Query parameters.
+            cache_key: Cache key for storing/retrieving results.
+            description: Description for logging.
+            max_retries: Maximum retry attempts.
+
+        Returns:
+            List of result dictionaries.
+        """
+        cached = self._cache.get(cache_key)
+        if cached is not None:
+            return cached
+
+        self._rate_limit()
+
+        for attempt in range(max_retries):
+            try:
+                response = self.session.get(url, params=params, timeout=30)
+                if response.status_code == 200:
+                    result = response.json()
+                    self._cache.set(cache_key, result, ttl=3600)
+                    return result
+                elif response.status_code >= 500:
+                    # Server error — retry
+                    if attempt < max_retries - 1:
+                        wait = 2 ** (attempt + 1)
+                        logger.warning("HF API %d for %s, retry in %ds", response.status_code, description, wait)
+                        time.sleep(wait)
+                        continue
+                return []
+            except requests.RequestException as e:
+                if attempt < max_retries - 1:
+                    wait = 2 ** (attempt + 1)
+                    logger.warning("HF request failed for %s, retry in %ds: %s", description, wait, e)
+                    time.sleep(wait)
+                else:
+                    logger.warning("All retries failed for %s: %s", description, e)
+        return []
+
     def _fetch_org_datasets(self, org_id: str, limit: int = 100) -> list[dict]:
-        """Fetch datasets from a specific organization (with caching).
+        """Fetch datasets from a specific organization (with caching + retry).
 
         Args:
             org_id: HuggingFace organization ID.
@@ -107,34 +151,15 @@ class OrgTracker:
         Returns:
             List of dataset dictionaries.
         """
-        cache_key = f"hf:datasets:{org_id}:{limit}"
-        cached = self._cache.get(cache_key)
-        if cached is not None:
-            return cached
-
-        self._rate_limit()
-
-        url = f"{self.HF_API_URL}/datasets"
-        params = {
-            "author": org_id,
-            "limit": limit,
-            "sort": "lastModified",
-            "direction": -1,
-        }
-
-        try:
-            response = self.session.get(url, params=params, timeout=30)
-            if response.status_code == 200:
-                result = response.json()
-                self._cache.set(cache_key, result, ttl=3600)
-                return result
-            else:
-                return []
-        except requests.RequestException:
-            return []
+        return self._request_with_retry(
+            url=f"{self.HF_API_URL}/datasets",
+            params={"author": org_id, "limit": limit, "sort": "lastModified", "direction": -1},
+            cache_key=f"hf:datasets:{org_id}:{limit}",
+            description=f"datasets/{org_id}",
+        )
 
     def _fetch_org_models(self, org_id: str, limit: int = 50) -> list[dict]:
-        """Fetch models from a specific organization (with caching).
+        """Fetch models from a specific organization (with caching + retry).
 
         Args:
             org_id: HuggingFace organization ID.
@@ -143,31 +168,12 @@ class OrgTracker:
         Returns:
             List of model dictionaries.
         """
-        cache_key = f"hf:models:{org_id}:{limit}"
-        cached = self._cache.get(cache_key)
-        if cached is not None:
-            return cached
-
-        self._rate_limit()
-
-        url = f"{self.HF_API_URL}/models"
-        params = {
-            "author": org_id,
-            "limit": limit,
-            "sort": "lastModified",
-            "direction": -1,
-        }
-
-        try:
-            response = self.session.get(url, params=params, timeout=30)
-            if response.status_code == 200:
-                result = response.json()
-                self._cache.set(cache_key, result, ttl=3600)
-                return result
-            else:
-                return []
-        except requests.RequestException:
-            return []
+        return self._request_with_retry(
+            url=f"{self.HF_API_URL}/models",
+            params={"author": org_id, "limit": limit, "sort": "lastModified", "direction": -1},
+            cache_key=f"hf:models:{org_id}:{limit}",
+            description=f"models/{org_id}",
+        )
 
     def _fetch_single_org(self, org_name: str, org_info: dict, cutoff: datetime) -> Optional[tuple]:
         """Fetch datasets and models for a single org.
