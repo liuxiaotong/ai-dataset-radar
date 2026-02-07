@@ -687,6 +687,31 @@ def main():
 
     # 7. Papers already fetched in parallel above (arXiv + HF Papers)
 
+    # 7.5 Data quality validation — warn if any source returned suspiciously low counts
+    anomalies = []
+    active_github = sum(1 for a in github_activity if a.get("repos_updated"))
+    active_blogs = sum(1 for a in blog_activity if a.get("articles"))
+    x_accounts = len(x_activity.get("accounts", []))
+
+    if not args.no_github and active_github == 0:
+        anomalies.append("GitHub: 0 active orgs (expected >0)")
+    if not args.no_blogs and active_blogs == 0:
+        anomalies.append("Blogs: 0 active blogs (expected >0)")
+    if x_tracker and x_accounts == 0:
+        anomalies.append("X/Twitter: 0 active accounts (check RSSHub/API connectivity)")
+    if not args.no_papers and len(papers) == 0:
+        anomalies.append("Papers: 0 results from arXiv + HF Papers (check network)")
+    if len(all_datasets) == 0 and not args.no_labs and not args.no_vendors:
+        anomalies.append("Datasets: 0 from all tracked orgs (check HuggingFace API)")
+
+    if anomalies:
+        logger.warning("=" * 60)
+        logger.warning("  DATA QUALITY WARNINGS")
+        logger.warning("=" * 60)
+        for a in anomalies:
+            logger.warning("  ⚠ %s", a)
+        logger.warning("=" * 60)
+
     # 8. Generate report
     logger.info("Generating intelligence report...")
 
@@ -709,6 +734,7 @@ def main():
         ]
 
     all_data = {
+        "data_quality_warnings": anomalies,
         "period": {
             "days": args.days,
             "start": None,
