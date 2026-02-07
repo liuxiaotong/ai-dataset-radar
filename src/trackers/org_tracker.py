@@ -43,7 +43,7 @@ class OrgTracker:
 
         # Thread-safe rate limiting
         self._last_request = 0
-        self._request_delay = 0.3  # seconds (reduced from 0.5)
+        self._request_delay = 0.1  # seconds (reduced from 0.3)
         self._rate_lock = Lock()
         self._cache = get_cache()
 

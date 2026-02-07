@@ -853,6 +853,8 @@ github:
       - mistralai
       - EleutherAI
       - allenai
+      - NousResearch
+      - NVIDIA
     # 中国开源大模型 GitHub 组织
     china_labs:
       - QwenLM
@@ -861,6 +863,8 @@ github:
       - baichuan-inc
       - 01-ai
       - InternLM
+      - stepfun-ai
+      - MiniMaxAI
     # Global tech companies - 全球科技巨头
     global_tech:
       - apple
@@ -870,11 +874,15 @@ github:
       - tiiuae
       - SakanaAI
       - LAION-AI
+      - databricks
+      - LiquidAI
     # Additional data vendors - 更多数据供应商
     data_vendors_extended:
       - Toloka
       - superannotateai
       - kakaobrain
+      - surge-ai
+      - EvidentlyAI
 
   hf_papers:
     enabled: true
