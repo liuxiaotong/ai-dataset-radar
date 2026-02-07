@@ -491,6 +491,24 @@ Radar (情报采集) → DataRecipe (逆向分析) → 复刻生产
 
 ---
 
+## AI Data Pipeline 生态
+
+> 5 个工具覆盖 AI 数据工程全流程，均支持 CLI + MCP，可独立使用也可组合成流水线。
+
+| Tool | Description | Link |
+|------|-------------|------|
+| **AI Dataset Radar** | Competitive intelligence for AI training datasets | You are here |
+| **DataRecipe** | Reverse-engineer datasets into annotation specs & cost models | [GitHub](https://github.com/liuxiaotong/data-recipe) |
+| **DataSynth** | Seed-to-scale synthetic data generation | [GitHub](https://github.com/liuxiaotong/data-synth) |
+| **DataLabel** | Lightweight, serverless HTML labeling tool | [GitHub](https://github.com/liuxiaotong/data-label) |
+| **DataCheck** | Automated quality checks & anomaly detection | [GitHub](https://github.com/liuxiaotong/data-check) |
+
+```
+Radar (发现) → Recipe (分析) → Synth (合成) → Label (标注) → Check (质检)
+```
+
+---
+
 ## 许可证
 
 [MIT](LICENSE)

@@ -172,7 +172,7 @@ class ValueReportGenerator:
 
                 lines.append(f"| {name} | {score} | {reason_str} | {potential} |")
         else:
-            lines.append("*本周暂无新发现的高价值数据集*")
+            lines.append("本周暂无新发现的高价值数据集")
 
         lines.append("")
         return lines
@@ -254,7 +254,7 @@ class ValueReportGenerator:
 
                 lines.append(f"| {name} | {count} | {areas} | {top_model} |")
         else:
-            lines.append("*暂无 SOTA 关联数据*")
+            lines.append("暂无 SOTA 关联数据")
 
         lines.append("")
         return lines
@@ -285,7 +285,7 @@ class ValueReportGenerator:
 
                 lines.append(f"| {title} | {citations} | +{growth:.1f} | {rate} |")
         else:
-            lines.append("*暂无显著引用增长数据*")
+            lines.append("暂无显著引用增长数据")
 
         lines.append("")
         return lines
@@ -313,7 +313,7 @@ class ValueReportGenerator:
 
                 lines.append(f"| {name} | {usage} | {downloads_str} | {top_model} |")
         else:
-            lines.append("*暂无模型使用数据*")
+            lines.append("暂无模型使用数据")
 
         lines.append("")
         return lines
@@ -355,7 +355,7 @@ class ValueReportGenerator:
 
                 lines.append(f"| {name} | {score} | {inst} | {link} |")
         else:
-            lines.append("*暂无新论文推荐*")
+            lines.append("暂无新论文推荐")
 
         lines.append("")
         return lines

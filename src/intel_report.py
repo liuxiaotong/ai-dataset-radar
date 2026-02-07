@@ -53,7 +53,7 @@ class IntelReportGenerator:
 
         # Header
         lines.append("# AI 数据情报周报")
-        lines.append(f"*Generated: {datetime.now().strftime('%Y-%m-%d %H:%M')}*")
+        lines.append(f"> Generated: {datetime.now().strftime('%Y-%m-%d %H:%M')}")
         lines.append("")
 
         # Executive Summary
@@ -257,7 +257,7 @@ class IntelReportGenerator:
             lines.append("")
 
         if not frontier and not emerging and not research:
-            lines.append("*本周无监控目标的新活动*")
+            lines.append("本周无监控目标的新活动")
             lines.append("")
 
         return lines
@@ -310,7 +310,7 @@ class IntelReportGenerator:
         )
 
         if not has_activity:
-            lines.append("*本周无监控供应商的公开动态*")
+            lines.append("本周无监控供应商的公开动态")
             lines.append("")
             return lines
 
@@ -423,7 +423,7 @@ class IntelReportGenerator:
             lines.append("")
 
         if not any(datasets_by_type.values()):
-            lines.append("*本周无新的高价值数据集*")
+            lines.append("本周无新的高价值数据集")
             lines.append("")
 
         return lines
@@ -435,7 +435,7 @@ class IntelReportGenerator:
         lines.append("")
 
         if not papers:
-            lines.append("*本周无高度相关论文*")
+            lines.append("本周无高度相关论文")
             lines.append("")
             return lines
 

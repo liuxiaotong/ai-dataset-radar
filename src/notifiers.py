@@ -189,7 +189,7 @@ class MarkdownNotifier:
                 tags = ", ".join(ds.get("tags", [])[:3])
                 lines.append(f"| {name} | {author} | {downloads} | {tags} |")
         else:
-            lines.append("*No datasets found*")
+            lines.append("No datasets found")
         lines.append("")
 
         # Papers with Code
@@ -206,7 +206,7 @@ class MarkdownNotifier:
                 papers = ds.get("paper_count", 0)
                 lines.append(f"| {name} | {desc} | {papers} |")
         else:
-            lines.append("*No datasets found*")
+            lines.append("No datasets found")
         lines.append("")
 
         # arXiv
@@ -232,7 +232,7 @@ class MarkdownNotifier:
                     lines.append(f"> {summary}\n")
                 lines.append("")
         else:
-            lines.append("*No papers found*")
+            lines.append("No papers found")
         lines.append("")
 
         # GitHub repos (early signal)
@@ -251,7 +251,7 @@ class MarkdownNotifier:
                 lang = repo.get("language", "N/A")
                 lines.append(f"| {name} | {desc} | {stars} | {lang} |")
         else:
-            lines.append("*No dataset-related repos found*")
+            lines.append("No dataset-related repos found")
         lines.append("")
 
         # HuggingFace Papers (early signal)
@@ -270,7 +270,7 @@ class MarkdownNotifier:
                 arxiv = paper.get("arxiv_id", "N/A")
                 lines.append(f"| {title_link} | {upvotes} | {arxiv} |")
         else:
-            lines.append("*No dataset-related papers found*")
+            lines.append("No dataset-related papers found")
 
         lines.append("")
         lines.append("---")
@@ -332,7 +332,7 @@ class BusinessIntelNotifier:
         date_str = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
 
         lines.append("# AI Dataset Radar 商业情报周报")
-        lines.append(f"*Generated: {date_str}*\n")
+        lines.append(f"> Generated: {date_str}\n")
 
         # Section 1: Top Growing Datasets
         lines.append("## 🔥 增长最快的数据集 (Top 10)\n")
@@ -349,7 +349,7 @@ class BusinessIntelNotifier:
                 domain_str = ", ".join(domains[:2]) if domains else "-"
                 lines.append(f"| {i} | {name_link} | {growth_str} | {downloads:,} | {domain_str} |")
         else:
-            lines.append("*需要多天数据才能计算增长趋势*")
+            lines.append("需要多天数据才能计算增长趋势")
         lines.append("")
 
         # Breakthrough datasets
@@ -381,7 +381,7 @@ class BusinessIntelNotifier:
                 org = factory.get("possible_org", "-") or "-"
                 lines.append(f"| {author} | {count} | {datasets_str} | {org} |")
         else:
-            lines.append("*本周未检测到数据工厂活动*")
+            lines.append("本周未检测到数据工厂活动")
         lines.append("")
 
         # Section 3: Domain Focus - Robotics
@@ -414,7 +414,7 @@ class BusinessIntelNotifier:
                 lines.append(f"| {name_link} | {task} | {size} | {growth_str} |")
         else:
             lines.append("### 新增机器人数据集\n")
-            lines.append("*本周无新增*")
+            lines.append("本周无新增")
         lines.append("")
 
         # Section 4: Papers with Annotation Signals
@@ -433,7 +433,7 @@ class BusinessIntelNotifier:
                 arxiv_link = f"[{arxiv_id}](https://arxiv.org/abs/{arxiv_id})" if arxiv_id else "-"
                 lines.append(f"| {title} | {signals} | {org} | {arxiv_link} |")
         else:
-            lines.append("*本周未检测到有标注需求的论文*")
+            lines.append("本周未检测到有标注需求的论文")
         lines.append("")
 
         # Section 5: Organization Activity
@@ -464,9 +464,9 @@ class BusinessIntelNotifier:
                 lines.append("")
 
             if not sorted_orgs:
-                lines.append("*本周未检测到大厂相关活动*")
+                lines.append("本周未检测到大厂相关活动")
         else:
-            lines.append("*本周未检测到大厂相关活动*")
+            lines.append("本周未检测到大厂相关活动")
         lines.append("")
 
         # Section 6: Statistics Summary

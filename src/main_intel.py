@@ -143,7 +143,7 @@ def format_insights_prompt(
                 # All models are zero-activity, just summarize
                 if model_list:
                     sample = model_list[0].get("id", "").split("/")[-1] if model_list else ""
-                    lines.append(f"- 🤖 *{len(model_list)} 个模型（均无下载/点赞，如 {sample} 等）*")
+                    lines.append(f"- 🤖 {len(model_list)} 个模型（均无下载/点赞，如 {sample} 等）")
                 model_list_to_show = []
             else:
                 top_models = sorted(notable_models, key=lambda m: -(m.get("downloads", 0) + m.get("likes", 0) * 100))
@@ -166,12 +166,12 @@ def format_insights_prompt(
                 if meaningful:
                     lines.append(f"  标签: {', '.join(meaningful)}")
             if len(notable_models) > 5:
-                lines.append(f"  *(另有 {len(notable_models) - 5} 个模型省略)*")
+                lines.append(f"  （另有 {len(notable_models) - 5} 个模型省略）")
 
             lines.append("")
 
     if not has_lab_activity:
-        lines.append("*本周无 AI Labs 新活动*\n")
+        lines.append("本周无 AI Labs 新活动\n")
 
     # ── Section 2: Vendor Activity ──
     lines.append("## 二、数据供应商动态（竞品）\n")
@@ -207,7 +207,7 @@ def format_insights_prompt(
             lines.append("")
 
     if not has_vendor_activity:
-        lines.append("*本周无供应商 HuggingFace 新活动*\n")
+        lines.append("本周无供应商 HuggingFace 新活动\n")
 
     # ── Section 3: Dataset Classification Results ──
     lines.append("## 三、数据集分类分析\n")
@@ -231,7 +231,7 @@ def format_insights_prompt(
             lines.append(f"- **未分类**: {len(other_list)} 个 — {', '.join(ds.get('id', '') for ds in other_list[:5])}")
         lines.append("")
     else:
-        lines.append("*无分类数据*\n")
+        lines.append("无分类数据\n")
 
     # ── Section 4: Blog Activity (full titles, more articles) ──
     lines.append("## 四、博客要闻\n")
@@ -254,9 +254,9 @@ def format_insights_prompt(
                             lines.append(f"  {summary}")
                     lines.append("")
         else:
-            lines.append("*无博客更新*\n")
+            lines.append("无博客更新\n")
     else:
-        lines.append("*无博客更新*\n")
+        lines.append("无博客更新\n")
 
     # ── Section 5: GitHub Activity (high + medium relevance) ──
     lines.append("## 五、GitHub 活动\n")
@@ -299,9 +299,9 @@ def format_insights_prompt(
         # Summary stats
         total_repos = len(all_repos)
         active_orgs = len([o for o in github_activity if o.get("repos_updated")])
-        lines.append(f"*共监控 {active_orgs} 个组织，{total_repos} 个活跃仓库*\n")
+        lines.append(f"共监控 {active_orgs} 个组织，{total_repos} 个活跃仓库\n")
     else:
-        lines.append("*无 GitHub 活动*\n")
+        lines.append("无 GitHub 活动\n")
 
     # ── Section 5.5: X/Twitter Activity ──
     lines.append("## 5.5、X/Twitter 动态\n")
@@ -333,7 +333,7 @@ def format_insights_prompt(
             lines.append(f"- [{query}] {text}")
         lines.append("")
     if not x_accounts and not x_search:
-        lines.append("*无 X/Twitter 动态*\n")
+        lines.append("无 X/Twitter 动态\n")
 
     # ── Section 6: Papers (full titles, longer abstracts) ──
     lines.append("## 六、相关论文\n")
@@ -366,7 +366,7 @@ def format_insights_prompt(
                     lines.append(f"  摘要: {abstract}")
             lines.append("")
     else:
-        lines.append("*无相关论文*\n")
+        lines.append("无相关论文\n")
 
     # ── Analysis Prompt ──
     lines.append("=" * 60)

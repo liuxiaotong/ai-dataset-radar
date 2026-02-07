@@ -811,7 +811,7 @@ async def call_tool(name: str, arguments: dict):
 
         # Add summary
         active_sources = len([b for b in blog_posts if b.get("articles")])
-        lines.insert(1, f"*共 {active_sources} 个活跃博客源，{total_articles} 篇文章*\n")
+        lines.insert(1, f"共 {active_sources} 个活跃博客源，{total_articles} 篇文章\n")
 
         return [TextContent(type="text", text="\n".join(lines))]
 
@@ -1006,7 +1006,7 @@ async def call_tool(name: str, arguments: dict):
             lines.append("")
             total += len(results["x"])
 
-        lines.insert(1, f"*共 {total} 条匹配结果*\n")
+        lines.insert(1, f"共 {total} 条匹配结果\n")
 
         return [TextContent(type="text", text="\n".join(lines))]
 
