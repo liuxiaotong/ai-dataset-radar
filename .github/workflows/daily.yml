@@ -9,6 +9,7 @@ on:
 jobs:
   fetch-datasets:
     runs-on: ubuntu-latest
+    timeout-minutes: 15
 
     steps:
       - name: Checkout repository
@@ -21,11 +22,13 @@ jobs:
           cache: 'pip'
 
       - name: Install dependencies
-        run: pip install -r requirements.txt
+        run: |
+          pip install -r requirements.txt
+          playwright install chromium --with-deps
 
       - name: Run AI Dataset Radar
         env:
-          # Optional: Configure these secrets in your repo settings
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           SMTP_SERVER: ${{ secrets.SMTP_SERVER }}
           SMTP_USERNAME: ${{ secrets.SMTP_USERNAME }}
           SMTP_PASSWORD: ${{ secrets.SMTP_PASSWORD }}
@@ -33,6 +36,7 @@ jobs:
           EMAIL_TO: ${{ secrets.EMAIL_TO }}
           WEBHOOK_URL: ${{ secrets.WEBHOOK_URL }}
         run: python src/main.py
+        continue-on-error: false
 
       - name: Commit and push changes
         run: |
