@@ -35,8 +35,21 @@ SIGNAL_KEYWORDS = [
     "instruction tuning", "alignment", "synthetic data",
     "pre-training", "pretraining", "language model", "llm",
     "multimodal", "vision-language", "reasoning",
+    # Scaling & Data Quality
+    "scaling law", "data scaling", "data quality", "data curation",
+    "data filtering", "decontamination", "deduplication",
+    # Methods & Techniques
+    "dpo", "direct preference", "reward model", "reward modeling",
+    "chain-of-thought", "distillation", "knowledge distillation",
+    "curriculum learning", "active learning", "contrastive learning",
+    "synthetic generation", "data augmentation",
+    # Modalities & Use Cases
+    "function calling", "tool use", "code generation",
+    "video understanding", "image-text", "speech data",
+    "embodied", "robotics data", "agent data",
     # Chinese keywords
     "开源", "发布", "数据集", "模型", "论文", "训练",
+    "合成数据", "数据质量", "标注", "蒸馏", "推理", "对齐",
 ]
 
 
