@@ -35,6 +35,8 @@ from scrapers.arxiv import ArxivScraper
 from scrapers.hf_papers import HFPapersScraper
 from scrapers.huggingface import HuggingFaceScraper
 from output_formatter import DualOutputFormatter
+from db import RadarDatabase
+from analyzers.trend import TrendAnalyzer
 
 
 def load_config(config_path: str = "config.yaml") -> dict:
@@ -781,6 +783,27 @@ def main():
         )
         logger.info("Report saved to: %s", md_path)
         logger.info("JSON data saved to: %s", json_path)
+
+    # 9. Record daily stats and calculate trends
+    try:
+        db_path = output_dir / "radar.db"
+        db = RadarDatabase(str(db_path))
+        trend_analyzer = TrendAnalyzer(db, config)
+
+        if all_datasets:
+            recorded = trend_analyzer.record_daily_stats(all_datasets)
+            logger.info("Recorded daily stats for %d datasets", recorded)
+
+            trend_summary = trend_analyzer.calculate_trends()
+            logger.info(
+                "Trends: %d calculated, %d with growth",
+                trend_summary["trends_calculated"],
+                trend_summary["datasets_with_growth"],
+            )
+
+        db.close()
+    except Exception as e:
+        logger.warning("Trend analysis skipped: %s", e)
 
     # Print console summary
     logger.info(report_generator.generate_console_summary(

@@ -442,8 +442,8 @@ class TestParameterExtensions:
         assert "radar_search" in tool_names
         assert "radar_diff" in tool_names
 
-    def test_all_9_tools_registered(self):
-        """Test all 9 tools are registered."""
+    def test_all_11_tools_registered(self):
+        """Test all 11 tools are registered."""
         from server import list_tools
         import asyncio
 
@@ -454,6 +454,7 @@ class TestParameterExtensions:
             "radar_scan", "radar_summary", "radar_datasets",
             "radar_github", "radar_papers", "radar_blogs",
             "radar_config", "radar_search", "radar_diff",
+            "radar_trend", "radar_history",
         }
         assert expected == tool_names
 
