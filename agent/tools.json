@@ -2,7 +2,7 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "name": "ai-dataset-radar",
   "description": "AI training data competitive intelligence tools",
-  "version": "1.0.0",
+  "version": "3.0.0",
   "tools": [
     {
       "name": "radar_scan",
@@ -16,6 +16,15 @@
             "default": 7,
             "minimum": 1,
             "maximum": 30
+          },
+          "sources": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "enum": ["github", "blogs", "papers", "labs", "vendors", "x"]
+            },
+            "description": "Only scan specified sources (default: all sources)",
+            "default": []
           }
         }
       },
@@ -51,7 +60,7 @@
     },
     {
       "name": "radar_datasets",
-      "description": "List datasets from the latest report, optionally filtered by category. Categories: sft, preference, synthetic, agent, multimodal, code, evaluation.",
+      "description": "List datasets from the latest report, optionally filtered by category or organization.",
       "parameters": {
         "type": "object",
         "properties": {
@@ -59,6 +68,10 @@
             "type": "string",
             "description": "Filter by dataset category",
             "enum": ["sft", "preference", "synthetic", "agent", "multimodal", "multilingual", "code", "evaluation", "all"]
+          },
+          "org": {
+            "type": "string",
+            "description": "Filter by organization/author (e.g. 'openai', 'meta-llama')"
           },
           "limit": {
             "type": "integer",
@@ -82,15 +95,19 @@
     },
     {
       "name": "radar_github",
-      "description": "Get GitHub repository activity from watched organizations. Filter by relevance to focus on dataset-related repos.",
+      "description": "Get GitHub repository activity from watched organizations. Filter by relevance or organization.",
       "parameters": {
         "type": "object",
         "properties": {
           "relevance": {
             "type": "string",
             "description": "Filter by relevance level",
-            "enum": ["high", "low", "all"],
+            "enum": ["high", "medium", "low", "all"],
             "default": "high"
+          },
+          "org": {
+            "type": "string",
+            "description": "Filter by GitHub organization (e.g. 'argilla-io', 'scaleapi')"
           },
           "limit": {
             "type": "integer",
@@ -150,7 +167,7 @@
     },
     {
       "name": "radar_blogs",
-      "description": "Get blog articles from 17 monitored sources including OpenAI, Anthropic, Google, Meta, and Chinese labs.",
+      "description": "Get blog articles from 46+ monitored sources including OpenAI, Anthropic, Google, Meta, Chinese labs, and researcher blogs.",
       "parameters": {
         "type": "object",
         "properties": {
@@ -200,6 +217,123 @@
       "returns": {
         "type": "object",
         "description": "Current radar configuration"
+      }
+    },
+    {
+      "name": "radar_search",
+      "description": "Full-text search across all data sources (datasets, GitHub repos, papers, blogs, X/Twitter). Supports keywords and regex patterns.",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "query": {
+            "type": "string",
+            "description": "Search keyword or regex pattern"
+          },
+          "sources": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "enum": ["datasets", "github", "papers", "blogs", "x"]
+            },
+            "description": "Limit search to specific data sources (default: all)",
+            "default": []
+          },
+          "limit": {
+            "type": "integer",
+            "description": "Maximum results per data source",
+            "default": 10
+          }
+        },
+        "required": ["query"]
+      },
+      "returns": {
+        "type": "object",
+        "description": "Search results grouped by data source",
+        "properties": {
+          "datasets": { "type": "array" },
+          "github": { "type": "array" },
+          "papers": { "type": "array" },
+          "blogs": { "type": "array" },
+          "x": { "type": "array" }
+        }
+      }
+    },
+    {
+      "name": "radar_trend",
+      "description": "Query dataset growth trends: top growing, rising (>50% growth), breakthroughs (0→1000+ downloads), or a specific dataset's history.",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "mode": {
+            "type": "string",
+            "description": "Query mode",
+            "enum": ["top_growing", "rising", "breakthroughs", "dataset"],
+            "default": "top_growing"
+          },
+          "dataset_id": {
+            "type": "string",
+            "description": "Dataset ID for mode=dataset (e.g. 'openai/gsm8k')"
+          },
+          "days": {
+            "type": "integer",
+            "description": "Trend period: 7 or 30 days",
+            "default": 7,
+            "enum": [7, 30]
+          },
+          "limit": {
+            "type": "integer",
+            "description": "Maximum results to return",
+            "default": 10
+          }
+        }
+      },
+      "returns": {
+        "type": "object",
+        "description": "Trend results depending on mode: list of datasets with growth info, or single dataset history"
+      }
+    },
+    {
+      "name": "radar_history",
+      "description": "View historical scan report timeline showing summary statistics and trends across reports.",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "limit": {
+            "type": "integer",
+            "description": "Number of recent reports to show",
+            "default": 10
+          }
+        }
+      },
+      "returns": {
+        "type": "object",
+        "description": "Timeline table with per-report stats and overall trend"
+      }
+    },
+    {
+      "name": "radar_diff",
+      "description": "Compare two intelligence reports to identify changes: new/removed datasets, repos, papers, and blog articles.",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "date_a": {
+            "type": "string",
+            "description": "Older report date (YYYY-MM-DD). Defaults to second latest report."
+          },
+          "date_b": {
+            "type": "string",
+            "description": "Newer report date (YYYY-MM-DD). Defaults to latest report."
+          }
+        }
+      },
+      "returns": {
+        "type": "object",
+        "description": "Diff results with summary changes, new items, and removed items",
+        "properties": {
+          "summary_changes": { "type": "object" },
+          "new_items": { "type": "object" },
+          "removed_items": { "type": "object" }
+        }
       }
     }
   ]

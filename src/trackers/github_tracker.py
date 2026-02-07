@@ -86,28 +86,44 @@ class GitHubTracker:
             DEFAULT_SIGNAL_KEYWORDS
         )
 
-    def _make_request(self, url: str, params: dict = None) -> Optional[dict]:
-        """Make a GitHub API request with rate limit handling."""
-        try:
-            resp = self.session.get(url, params=params, timeout=30)
+    def _make_request(self, url: str, params: dict = None, max_retries: int = 3) -> Optional[dict]:
+        """Make a GitHub API request with rate limit handling and retry."""
+        for attempt in range(max_retries):
+            try:
+                resp = self.session.get(url, params=params, timeout=30)
 
-            if resp.status_code == 403:
-                # Rate limited
-                reset_time = resp.headers.get("X-RateLimit-Reset")
-                if reset_time:
-                    wait_time = int(reset_time) - int(time.time())
-                    logger.info("  GitHub rate limited, reset in %ss", wait_time)
-                return None
+                if resp.status_code == 403:
+                    # Rate limited
+                    reset_time = resp.headers.get("X-RateLimit-Reset")
+                    if reset_time:
+                        wait_time = max(int(reset_time) - int(time.time()), 1)
+                        logger.info("  GitHub rate limited, reset in %ss", wait_time)
+                    return None
 
-            if resp.status_code == 404:
-                return None
+                if resp.status_code == 404:
+                    return None
 
-            resp.raise_for_status()
-            return resp.json()
+                if resp.status_code >= 500:
+                    # Server error — retry
+                    if attempt < max_retries - 1:
+                        wait = 2 ** (attempt + 1)
+                        logger.warning("  GitHub %d, retry in %ds", resp.status_code, wait)
+                        time.sleep(wait)
+                        continue
+                    return None
 
-        except requests.RequestException as e:
-            logger.info("  GitHub API error: %s", e)
-            return None
+                resp.raise_for_status()
+                return resp.json()
+
+            except requests.RequestException as e:
+                if attempt < max_retries - 1:
+                    wait = 2 ** (attempt + 1)
+                    logger.warning("  GitHub API error, retry in %ds: %s", wait, e)
+                    time.sleep(wait)
+                else:
+                    logger.info("  GitHub API error (all retries failed): %s", e)
+                    return None
+        return None
 
     def get_org_repos(self, org_name: str, days: int = 7) -> list[dict]:
         """Get recently updated repos for an organization.
@@ -155,7 +171,7 @@ class GitHubTracker:
             # Extract relevance signals from description and topics
             relevance_signals = self._extract_relevance_signals(repo_info)
             repo_info["relevance_signals"] = relevance_signals
-            repo_info["relevance"] = self._calculate_relevance(relevance_signals)
+            repo_info["relevance"] = self._calculate_relevance(relevance_signals, repo_info)
 
             # Keep legacy signals field for backward compat
             repo_info["signals"] = self._extract_signals(repo_info)
@@ -229,19 +245,53 @@ class GitHubTracker:
 
         return sorted(list(matched))
 
-    def _calculate_relevance(self, signals: list[str]) -> str:
-        """Calculate relevance level based on matched signals.
+    # Negative patterns — repos matching these are likely noise
+    NEGATIVE_PATTERNS = [
+        "example", "tutorial", "template", "demo", "starter",
+        "awesome-", "mirror", "fork-of",
+    ]
+
+    def _calculate_relevance(self, signals: list[str], repo: dict = None) -> str:
+        """Calculate relevance level using weighted scoring.
+
+        Score = (keyword_matches × 10) + (stars / 100) + recency_boost
+        - high: score >= 20
+        - medium: score >= 5
+        - low: score < 5
 
         Args:
             signals: List of matched keywords.
+            repo: Optional repo dict for star/recency weighting.
 
         Returns:
-            "high" if 2+ matches, "medium" if 1 match, "low" if none.
+            "high", "medium", or "low".
         """
-        count = len(signals)
-        if count >= 2:
+        score = len(signals) * 10
+
+        if repo:
+            # Star weight
+            score += repo.get("stars", 0) / 100
+
+            # Recency boost: updated within last 3 days
+            updated = repo.get("updated_at", "")
+            if updated:
+                try:
+                    days_ago = (datetime.utcnow() - datetime.strptime(updated, "%Y-%m-%d")).days
+                    if days_ago <= 3:
+                        score += 5
+                except ValueError:
+                    pass
+
+            # Negative pattern penalty
+            name = (repo.get("name") or "").lower()
+            for neg in self.NEGATIVE_PATTERNS:
+                if neg in name:
+                    score -= 15
+                    break
+
+        if score >= 20:
             return "high"
-        elif count == 1:
+        elif score >= 5:
             return "medium"
         else:
             return "low"

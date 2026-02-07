@@ -8,7 +8,7 @@
 [![License: MIT](https://img.shields.io/badge/License-MIT-green.svg)](LICENSE)
 [![Python 3.10+](https://img.shields.io/badge/python-3.10+-blue.svg)](https://www.python.org/downloads/)
 [![Agent Ready](https://img.shields.io/badge/Agent-Ready-orange.svg)](#agent-集成)
-[![MCP](https://img.shields.io/badge/MCP-7_Tools-purple.svg)](#mcp-server)
+[![MCP](https://img.shields.io/badge/MCP-11_Tools-purple.svg)](#mcp-server)
 
 [快速开始](#快速开始) · [Agent 集成](#agent-集成) · [数据源](#数据源) · [输出规范](#输出规范) · [配置](#配置)
 
@@ -265,15 +265,19 @@ tools = [
 }
 ```
 
-| 工具 | 功能 |
-|------|------|
-| `radar_scan` | 执行完整扫描 |
-| `radar_summary` | 获取报告摘要 |
-| `radar_datasets` | 按类别查询数据集 |
-| `radar_github` | 查询 GitHub 活动 |
-| `radar_papers` | 查询论文 |
-| `radar_blogs` | 查询博客文章 |
-| `radar_config` | 获取监控配置 |
+| 工具 | 功能 | 新增参数 |
+|------|------|----------|
+| `radar_scan` | 执行完整扫描 | `sources` — 只扫描指定数据源 |
+| `radar_summary` | 获取报告摘要 | |
+| `radar_datasets` | 按类别查询数据集 | `org` — 按组织过滤 |
+| `radar_github` | 查询 GitHub 活动 | `org` — 按组织过滤 |
+| `radar_papers` | 查询论文 | |
+| `radar_blogs` | 查询博客文章 | |
+| `radar_config` | 获取监控配置 | |
+| `radar_search` | **全文搜索** — 跨数据集/GitHub/论文/博客/X 搜索，支持正则 | `query`, `sources`, `limit` |
+| `radar_diff` | **报告对比** — 自动识别两期报告之间的新增/消失项 | `date_a`, `date_b` |
+| `radar_trend` | **趋势分析** — 增长最快/上升中/突破性数据集，支持单数据集历史曲线 | `mode`, `dataset_id`, `days`, `limit` |
+| `radar_history` | **历史时间线** — 跨期报告统计摘要对比表 + 整体变化趋势 | `limit` |
 
 ---
 
@@ -283,9 +287,9 @@ tools = [
 
 | 来源 | 覆盖范围 |
 |------|----------|
-| **HuggingFace** | 29 AI Labs + 19 数据供应商：OpenAI, DeepMind, Meta, Anthropic, Qwen, DeepSeek, NVIDIA, Scale AI, BAAI 等 |
-| **博客** | 38 来源：OpenAI, Anthropic (Research/News/Alignment/Red Team/API), Google AI, DeepMind, Mistral, Scale AI, Mercor, Surge AI, 海天瑞声, 整数智能, 智源 BAAI 等 |
-| **GitHub** | 13 组织：openai, anthropics, deepseek-ai, argilla-io, scaleapi, meta-llama 等 |
+| **HuggingFace** | 36+ AI Labs + 19 数据供应商：OpenAI, DeepMind, Meta, Anthropic, Qwen, DeepSeek, NVIDIA, Cerebras, Arcee AI, Gretel, Scale AI, BAAI 等 |
+| **博客** | 46+ 来源：OpenAI, Anthropic, Google AI, DeepMind, Mistral 等实验室 + Lil'Log, fast.ai, Interconnects, LessWrong, Alignment Forum 等研究者博客 |
+| **GitHub** | 31 组织：openai, anthropics, deepseek-ai, NousResearch, NVIDIA, databricks, argilla-io 等 |
 | **论文** | arXiv (cs.CL/AI/LG) + HuggingFace Daily Papers |
 | **X/Twitter** | ~100 账户：前沿实验室、开源社区、评估基准、数据供应商、安全/对齐、亚太/欧洲、研究者与影响者 |
 
@@ -458,15 +462,25 @@ Radar (情报采集) → DataRecipe (逆向分析) → 复刻生产
 - [x] 多源数据采集 (HuggingFace, GitHub, arXiv, Blogs)
 - [x] 双格式输出 (Markdown + JSON)
 - [x] Agent 集成层 (HTTP API, Function Calling, Schema)
-- [x] MCP Server (7 工具)
+- [x] MCP Server (11 工具: scan/summary/datasets/github/papers/blogs/config/search/diff/trend/history)
 - [x] 插件化采集器 (9 个)
 - [x] 性能优化 (并行采集、缓存、连接池)
-- [x] 测试覆盖 (198 用例)
+- [x] 测试覆盖 (390+ 用例: MCP 工具 86 + GitHub tracker 40 + Org tracker 27 + X tracker 27 + 既有 210)
 - [x] 博客抓取多策略降级 (RSS → HTML → Playwright, networkidle → domcontentloaded)
 - [x] 中国数据供应商监控 (海天瑞声、整数智能、数据堂、智源 BAAI)
 - [x] X/Twitter 监控 (~100 账户，12 类别，RSSHub/API 双后端，信号关键词过滤)
 - [x] Insights 分析提示生成 (`--insights` 模式)
 - [x] 异常报告独立输出
+- [x] 全链路指数退避重试 (3次, HF/GitHub/RSSHub 5xx 自动恢复)
+- [x] 数据质量校验 (各源 0 结果自动告警, JSON 输出 data_quality_warnings)
+- [x] 博客噪声过滤 (nav/sidebar/footer 自动排除, 浏览器每 5 页重启)
+- [x] GitHub 加权相关性评分 (keyword×10 + stars/100 + 近 3 天活跃加成 - 噪声惩罚)
+- [x] 研究者博客监控 (Lil'Log, fast.ai, Interconnects, LessWrong, Alignment Forum, The Gradient, Epoch AI)
+- [x] radar_search 全文搜索 (跨 5 类数据源, 支持正则, 按来源过滤)
+- [x] radar_diff 报告对比 (自动识别新增/消失的数据集、仓库、论文、博客)
+- [x] 工具参数扩展 (radar_scan sources 过滤, radar_datasets/github org 过滤)
+- [x] 趋势分析集成 (radar_trend 增长/上升/突破查询 + main_intel 每次扫描自动记录 daily_stats)
+- [x] 历史时间线 (radar_history 跨期报告统计对比 + 趋势线)
 - [ ] 定时任务与告警
 - [ ] Web 可视化界面
 

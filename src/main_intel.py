@@ -35,6 +35,8 @@ from scrapers.arxiv import ArxivScraper
 from scrapers.hf_papers import HFPapersScraper
 from scrapers.huggingface import HuggingFaceScraper
 from output_formatter import DualOutputFormatter
+from db import RadarDatabase
+from analyzers.trend import TrendAnalyzer
 
 
 def load_config(config_path: str = "config.yaml") -> dict:
@@ -687,6 +689,31 @@ def main():
 
     # 7. Papers already fetched in parallel above (arXiv + HF Papers)
 
+    # 7.5 Data quality validation — warn if any source returned suspiciously low counts
+    anomalies = []
+    active_github = sum(1 for a in github_activity if a.get("repos_updated"))
+    active_blogs = sum(1 for a in blog_activity if a.get("articles"))
+    x_accounts = len(x_activity.get("accounts", []))
+
+    if not args.no_github and active_github == 0:
+        anomalies.append("GitHub: 0 active orgs (expected >0)")
+    if not args.no_blogs and active_blogs == 0:
+        anomalies.append("Blogs: 0 active blogs (expected >0)")
+    if x_tracker and x_accounts == 0:
+        anomalies.append("X/Twitter: 0 active accounts (check RSSHub/API connectivity)")
+    if not args.no_papers and len(papers) == 0:
+        anomalies.append("Papers: 0 results from arXiv + HF Papers (check network)")
+    if len(all_datasets) == 0 and not args.no_labs and not args.no_vendors:
+        anomalies.append("Datasets: 0 from all tracked orgs (check HuggingFace API)")
+
+    if anomalies:
+        logger.warning("=" * 60)
+        logger.warning("  DATA QUALITY WARNINGS")
+        logger.warning("=" * 60)
+        for a in anomalies:
+            logger.warning("  ⚠ %s", a)
+        logger.warning("=" * 60)
+
     # 8. Generate report
     logger.info("Generating intelligence report...")
 
@@ -709,6 +736,7 @@ def main():
         ]
 
     all_data = {
+        "data_quality_warnings": anomalies,
         "period": {
             "days": args.days,
             "start": None,
@@ -755,6 +783,27 @@ def main():
         )
         logger.info("Report saved to: %s", md_path)
         logger.info("JSON data saved to: %s", json_path)
+
+    # 9. Record daily stats and calculate trends
+    try:
+        db_path = output_dir / "radar.db"
+        db = RadarDatabase(str(db_path))
+        trend_analyzer = TrendAnalyzer(db, config)
+
+        if all_datasets:
+            recorded = trend_analyzer.record_daily_stats(all_datasets)
+            logger.info("Recorded daily stats for %d datasets", recorded)
+
+            trend_summary = trend_analyzer.calculate_trends()
+            logger.info(
+                "Trends: %d calculated, %d with growth",
+                trend_summary["trends_calculated"],
+                trend_summary["datasets_with_growth"],
+            )
+
+        db.close()
+    except Exception as e:
+        logger.warning("Trend analysis skipped: %s", e)
 
     # Print console summary
     logger.info(report_generator.generate_console_summary(

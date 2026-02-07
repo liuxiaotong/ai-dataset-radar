@@ -86,6 +86,32 @@ class XTracker:
         self.session = requests.Session()
         self.session.headers["User-Agent"] = "AI-Dataset-Radar/5.0"
 
+    def _fetch_with_retry(self, fetch_fn, description: str, max_retries: int = 3):
+        """Execute a fetch function with exponential backoff retry.
+
+        Args:
+            fetch_fn: Callable that returns the result.
+            description: Description for logging.
+            max_retries: Maximum number of retry attempts.
+
+        Returns:
+            Result from fetch_fn, or None on failure.
+        """
+        for attempt in range(max_retries):
+            try:
+                return fetch_fn()
+            except Exception as e:
+                if attempt < max_retries - 1:
+                    wait = 2 ** (attempt + 1)
+                    logger.warning(
+                        "Retry %d/%d for %s (wait %ds): %s",
+                        attempt + 1, max_retries, description, wait, e,
+                    )
+                    time.sleep(wait)
+                else:
+                    logger.warning("All %d retries failed for %s: %s", max_retries, description, e)
+        return None
+
     def _fetch_rsshub_feed(self, username: str, days: int = 7) -> list[dict]:
         """Fetch tweets via RSSHub RSS feed.
 
@@ -100,10 +126,13 @@ class XTracker:
         # Also supports: /twitter/keyword/:keyword
         feed_url = f"{self.rsshub_base}/twitter/user/{username}"
 
-        try:
-            feed = feedparser.parse(feed_url)
-        except Exception as e:
-            logger.warning("Failed to parse RSSHub feed for @%s: %s", username, e)
+        def _do_fetch():
+            resp = self.session.get(feed_url, timeout=15)
+            resp.raise_for_status()
+            return feedparser.parse(resp.text)
+
+        feed = self._fetch_with_retry(_do_fetch, f"RSSHub @{username}")
+        if feed is None:
             return []
 
         if not feed.entries:
