@@ -9,6 +9,7 @@ Monitors GitHub organizations for:
 import os
 import re
 import time
+from concurrent.futures import ThreadPoolExecutor
 from datetime import datetime, timedelta
 from typing import Optional
 
@@ -280,8 +281,33 @@ class GitHubTracker:
             "has_activity": len(relevant_repos) > 0
         }
 
+    def _fetch_orgs_parallel(self, orgs: list[str], days: int) -> list[dict]:
+        """Fetch activity for a list of orgs in parallel.
+
+        Args:
+            orgs: List of GitHub org names.
+            days: Look back period in days.
+
+        Returns:
+            List of org activity summaries (only active ones).
+        """
+        results = []
+        with ThreadPoolExecutor(max_workers=4) as executor:
+            futures = {
+                executor.submit(self.get_org_activity, org, days): org
+                for org in orgs
+            }
+            for future in futures:
+                try:
+                    activity = future.result()
+                    if activity["has_activity"]:
+                        results.append(activity)
+                except Exception as e:
+                    logger.warning("Error fetching GitHub org %s: %s", futures[future], e)
+        return results
+
     def fetch_vendor_activity(self, days: int = 7) -> list[dict]:
-        """Fetch activity for all configured vendor organizations.
+        """Fetch activity for all configured vendor organizations (parallelized).
 
         Args:
             days: Look back period in days.
@@ -289,20 +315,11 @@ class GitHubTracker:
         Returns:
             List of org activity summaries.
         """
-        results = []
-
         logger.info("  Tracking %s vendor GitHub orgs...", len(self.vendor_orgs))
-
-        for org in self.vendor_orgs:
-            activity = self.get_org_activity(org, days)
-            if activity["has_activity"]:
-                results.append(activity)
-            time.sleep(0.5)  # Rate limit courtesy
-
-        return results
+        return self._fetch_orgs_parallel(self.vendor_orgs, days)
 
     def fetch_lab_activity(self, days: int = 7) -> list[dict]:
-        """Fetch activity for all configured AI lab organizations.
+        """Fetch activity for all configured AI lab organizations (parallelized).
 
         Args:
             days: Look back period in days.
@@ -310,20 +327,13 @@ class GitHubTracker:
         Returns:
             List of org activity summaries.
         """
-        results = []
-
         logger.info("  Tracking %s lab GitHub orgs...", len(self.lab_orgs))
-
-        for org in self.lab_orgs:
-            activity = self.get_org_activity(org, days)
-            if activity["has_activity"]:
-                results.append(activity)
-            time.sleep(0.5)  # Rate limit courtesy
-
-        return results
+        return self._fetch_orgs_parallel(self.lab_orgs, days)
 
     def fetch_all_orgs(self, days: int = 7) -> dict:
-        """Fetch activity for all configured organizations.
+        """Fetch activity for all configured organizations (parallelized).
+
+        All org categories are fetched concurrently.
 
         Args:
             days: Look back period in days.
@@ -331,7 +341,16 @@ class GitHubTracker:
         Returns:
             Dict with vendor and lab activities.
         """
+        all_orgs = list(set(self.vendor_orgs + self.lab_orgs))
+        logger.info("  Tracking %s total GitHub orgs...", len(all_orgs))
+
+        all_results = self._fetch_orgs_parallel(all_orgs, days)
+
+        # Split back into vendor vs lab
+        vendor_set = set(self.vendor_orgs)
+        lab_set = set(self.lab_orgs)
+
         return {
-            "vendors": self.fetch_vendor_activity(days),
-            "labs": self.fetch_lab_activity(days)
+            "vendors": [r for r in all_results if r["org"] in vendor_set],
+            "labs": [r for r in all_results if r["org"] in lab_set],
         }
