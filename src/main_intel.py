@@ -807,6 +807,7 @@ async def run_recipe_analysis(selected_datasets, reports_dir, config):
         )
         return {"error": "datarecipe not installed", "results": []}
 
+    date_str = datetime.now().strftime("%Y-%m-%d")
     recipe_dir = reports_dir / "recipe"
     recipe_dir.mkdir(parents=True, exist_ok=True)
 
