@@ -13,7 +13,6 @@ sys.path.insert(0, str(Path(__file__).parent.parent / "src"))
 from notifiers import (
     BusinessIntelNotifier,
     ConsoleNotifier,
-    EmailNotifier,
     MarkdownNotifier,
     WebhookNotifier,
     create_notifiers,

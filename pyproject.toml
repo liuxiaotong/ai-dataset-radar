@@ -75,5 +75,18 @@ include = ["src*", "mcp_server*", "agent*"]
 asyncio_mode = "auto"
 
 [tool.ruff]
-line-length = 100
+line-length = 120
 target-version = "py310"
+
+[tool.ruff.lint]
+select = ["E", "F", "W"]
+ignore = ["E402"]  # sys.path.insert before imports is intentional
+
+[tool.ruff.lint.per-file-ignores]
+"src/utils/llm_client.py" = ["E501"]  # Long Chinese prompts
+"src/notifiers.py" = ["E501"]  # Long formatted strings
+"src/intel_report.py" = ["E501"]  # Long report template strings
+"src/main_intel.py" = ["E501"]  # Long prompt text
+"src/db.py" = ["E501"]  # Long SQL statements
+"src/scrapers/semantic_scholar.py" = ["E501"]  # Long API URLs
+"src/main.py" = ["E501", "F841"]  # Legacy file

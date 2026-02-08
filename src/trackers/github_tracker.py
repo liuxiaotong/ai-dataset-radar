@@ -273,7 +273,8 @@ class GitHubTracker:
             updated = repo.get("updated_at", "")
             if updated:
                 try:
-                    days_ago = (datetime.now(timezone.utc).replace(tzinfo=None) - datetime.strptime(updated, "%Y-%m-%d")).days
+                    updated_dt = datetime.strptime(updated, "%Y-%m-%d")
+                    days_ago = (datetime.now(timezone.utc).replace(tzinfo=None) - updated_dt).days
                     if days_ago <= 3:
                         score += 5
                 except ValueError:

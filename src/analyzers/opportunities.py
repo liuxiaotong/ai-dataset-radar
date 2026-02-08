@@ -436,11 +436,9 @@ class OpportunityAnalyzer:
             for factory in individual_factories[:5]:
                 quality = factory.get("quality_stars", "")
                 lines.append(f"\n  {factory['author']} {quality}")
-                lines.append(
-                    f"    Published {factory['dataset_count']} datasets | Quality: {factory.get('avg_quality_score', 0)}/10"
-                )
-                # Show signals if any
-                signals = []
+                ds_count = factory['dataset_count']
+                quality_score = factory.get('avg_quality_score', 0)
+                lines.append(f"    Published {ds_count} datasets | Quality: {quality_score}/10")
                 for ds in factory["datasets"][:2]:
                     ds_name = ds.get("name", ds.get("id", "Unknown"))
                     lines.append(f"      - {ds_name}")

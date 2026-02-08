@@ -410,12 +410,6 @@ class BusinessIntelNotifier:
 
         # Filter to robotics datasets
         robotics_datasets = [ds for ds in robotics_data if ds.get("source") == "huggingface"]
-        robotics_papers = (
-            [p for p in robotics_data if p.get("source") in ("arxiv", "hf_papers")]
-            if robotics_data
-            else []
-        )
-
         if robotics_datasets:
             lines.append("### 新增机器人数据集\n")
             lines.append("| 数据集 | 任务类型 | 数据规模 | 增长趋势 |")
@@ -495,7 +489,6 @@ class BusinessIntelNotifier:
         lines.append("## 📊 统计摘要\n")
 
         hf_count = len(data.get("huggingface", []))
-        arxiv_count = len(data.get("arxiv", []))
         github_data = data.get("github", [])
         github_dataset_count = len([r for r in github_data if r.get("is_dataset")])
         hf_papers = data.get("hf_papers", [])

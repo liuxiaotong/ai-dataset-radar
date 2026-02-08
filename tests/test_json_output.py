@@ -61,7 +61,7 @@ class TestDualOutputFormatter:
         """Test that output directory is created."""
         with tempfile.TemporaryDirectory() as tmpdir:
             subdir = os.path.join(tmpdir, "nested", "reports")
-            formatter = DualOutputFormatter(output_dir=subdir)
+            DualOutputFormatter(output_dir=subdir)
             assert os.path.exists(subdir)
 
     def test_save_reports_creates_both_files(self, sample_data):
