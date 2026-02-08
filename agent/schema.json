@@ -13,8 +13,8 @@
     "period": {
       "type": "object",
       "properties": {
-        "start": { "type": "string", "format": "date" },
-        "end": { "type": "string", "format": "date" },
+        "start": { "type": "string", "format": "date-time" },
+        "end": { "type": "string", "format": "date-time" },
         "days": { "type": "integer" }
       }
     },
@@ -23,58 +23,65 @@
       "description": "Quick stats for decision making",
       "properties": {
         "total_datasets": { "type": "integer" },
+        "total_github_orgs": { "type": "integer" },
         "total_github_repos": { "type": "integer" },
+        "total_github_repos_high_relevance": { "type": "integer" },
         "total_papers": { "type": "integer" },
-        "total_blog_posts": { "type": "integer" }
+        "total_blog_posts": { "type": "integer" },
+        "total_x_tweets": { "type": "integer" }
       }
     },
     "datasets": {
       "type": "array",
       "description": "New datasets from watched organizations",
-      "items": {
-        "$ref": "#/definitions/Dataset"
-      }
+      "items": { "$ref": "#/definitions/Dataset" }
     },
-    "github_repos": {
+    "github_activity": {
       "type": "array",
-      "description": "GitHub repository activity",
-      "items": {
-        "$ref": "#/definitions/GitHubRepo"
-      }
+      "description": "GitHub repository activity grouped by organization",
+      "items": { "$ref": "#/definitions/GitHubOrgActivity" }
     },
     "papers": {
       "type": "array",
       "description": "Recent papers from arXiv and HuggingFace",
-      "items": {
-        "$ref": "#/definitions/Paper"
-      }
+      "items": { "$ref": "#/definitions/Paper" }
     },
     "blog_posts": {
       "type": "array",
       "description": "Blog articles grouped by source",
-      "items": {
-        "$ref": "#/definitions/BlogSource"
-      }
+      "items": { "$ref": "#/definitions/BlogSource" }
+    },
+    "x_activity": {
+      "type": "object",
+      "description": "X/Twitter activity from monitored accounts",
+      "$ref": "#/definitions/XActivity"
+    },
+    "labs_activity": {
+      "type": "object",
+      "description": "Activity summary per AI lab (datasets, repos, papers)"
+    },
+    "vendor_activity": {
+      "type": "object",
+      "description": "Activity summary per data vendor"
+    },
+    "datasets_by_type": {
+      "type": "object",
+      "description": "Dataset IDs grouped by classification type"
     }
   },
   "definitions": {
     "Dataset": {
       "type": "object",
-      "required": ["id", "source"],
+      "required": ["id"],
       "properties": {
         "id": {
           "type": "string",
           "description": "HuggingFace dataset ID (e.g., 'allenai/dolma')"
         },
-        "source": {
-          "type": "string",
-          "enum": ["huggingface"]
-        },
-        "name": { "type": "string" },
         "author": { "type": "string" },
         "category": {
           "type": "string",
-          "enum": ["sft_instruction", "preference", "synthetic", "agent", "multimodal", "multilingual", "code", "evaluation", "other"],
+          "enum": ["sft_instruction", "preference", "reward_model", "synthetic", "agent", "multimodal", "multilingual", "rl_environment", "code", "evaluation", "other"],
           "description": "Auto-classified dataset type"
         },
         "downloads": { "type": "integer" },
@@ -87,18 +94,35 @@
           "type": "array",
           "items": { "type": "string" }
         },
-        "license": { "type": "string" },
+        "license": {
+          "oneOf": [
+            { "type": "string" },
+            { "type": "array", "items": { "type": "string" } }
+          ]
+        },
         "task_categories": {
           "type": "array",
           "items": { "type": "string" }
         },
-        "created_at": {
+        "created_at": { "type": "string", "format": "date-time" },
+        "last_modified": { "type": "string", "format": "date-time" },
+        "description": { "type": "string" },
+        "size_category": { "type": "string" }
+      }
+    },
+    "GitHubOrgActivity": {
+      "type": "object",
+      "required": ["org"],
+      "properties": {
+        "org": {
           "type": "string",
-          "format": "date-time"
+          "description": "GitHub organization name"
         },
-        "url": {
-          "type": "string",
-          "format": "uri"
+        "repos_count": { "type": "integer" },
+        "has_activity": { "type": "boolean" },
+        "repos_updated": {
+          "type": "array",
+          "items": { "$ref": "#/definitions/GitHubRepo" }
         }
       }
     },
@@ -122,10 +146,12 @@
           "enum": ["high", "low"],
           "description": "Relevance to AI datasets based on keywords"
         },
-        "updated_at": {
-          "type": "string",
-          "format": "date-time"
-        }
+        "relevance_signals": {
+          "type": "array",
+          "items": { "type": "string" },
+          "description": "Keywords that triggered high relevance"
+        },
+        "updated_at": { "type": "string" }
       }
     },
     "Paper": {
@@ -134,6 +160,7 @@
       "properties": {
         "title": { "type": "string" },
         "url": { "type": "string", "format": "uri" },
+        "pdf_url": { "type": "string", "format": "uri" },
         "source": {
           "type": "string",
           "enum": ["arxiv", "huggingface"]
@@ -147,19 +174,24 @@
           "type": "array",
           "items": { "type": "string" }
         },
-        "published_at": {
+        "created_at": {
           "type": "string",
           "format": "date-time"
         },
         "is_dataset_paper": {
           "type": "boolean",
           "description": "Whether the paper introduces a new dataset"
+        },
+        "relevance_score": { "type": "integer" },
+        "category": {
+          "type": "string",
+          "description": "Paper topic category (e.g., '数据集构建')"
         }
       }
     },
     "BlogSource": {
       "type": "object",
-      "required": ["source", "articles"],
+      "required": ["source"],
       "properties": {
         "source": {
           "type": "string",
@@ -169,6 +201,9 @@
           "type": "string",
           "enum": ["us_frontier", "us_emerging", "china", "research", "data_vendor"]
         },
+        "has_activity": { "type": "boolean" },
+        "total_articles": { "type": "integer" },
+        "status": { "type": "string" },
         "articles": {
           "type": "array",
           "items": {
@@ -177,8 +212,43 @@
             "properties": {
               "title": { "type": "string" },
               "url": { "type": "string", "format": "uri" },
-              "published_at": { "type": "string" },
-              "summary": { "type": "string" }
+              "date": { "type": "string" },
+              "summary": { "type": "string" },
+              "signals": {
+                "type": "array",
+                "items": { "type": "string" }
+              }
+            }
+          }
+        }
+      }
+    },
+    "XActivity": {
+      "type": "object",
+      "properties": {
+        "accounts": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "username": { "type": "string" },
+              "category": { "type": "string" },
+              "relevant_tweets": {
+                "type": "array",
+                "items": {
+                  "type": "object",
+                  "properties": {
+                    "username": { "type": "string" },
+                    "text": { "type": "string" },
+                    "url": { "type": "string", "format": "uri" },
+                    "date": { "type": "string" },
+                    "signals": {
+                      "type": "array",
+                      "items": { "type": "string" }
+                    }
+                  }
+                }
+              }
             }
           }
         }

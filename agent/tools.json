@@ -102,7 +102,7 @@
           "relevance": {
             "type": "string",
             "description": "Filter by relevance level",
-            "enum": ["high", "medium", "low", "all"],
+            "enum": ["high", "low", "all"],
             "default": "high"
           },
           "org": {
@@ -167,7 +167,7 @@
     },
     {
       "name": "radar_blogs",
-      "description": "Get blog articles from 46+ monitored sources including OpenAI, Anthropic, Google, Meta, Chinese labs, and researcher blogs.",
+      "description": "Get blog articles from 62+ monitored sources including OpenAI, Anthropic, Google, Meta, Chinese labs, and researcher blogs.",
       "parameters": {
         "type": "object",
         "properties": {

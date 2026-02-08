@@ -410,9 +410,12 @@ tools = [
   "generated_at": "2026-02-07T14:22:03",
   "summary": {
     "total_datasets": 14,
+    "total_github_orgs": 14,
     "total_github_repos": 136,
+    "total_github_repos_high_relevance": 80,
     "total_papers": 22,
-    "total_blog_posts": 93
+    "total_blog_posts": 93,
+    "total_x_tweets": 47
   },
   "datasets": [{
     "id": "allenai/Dolci-Instruct-SFT",
@@ -436,13 +439,20 @@ tools = [
   }],
   "papers": [{
     "title": "...",
-    "published_at": "2026-02-04",
+    "created_at": "2026-02-04T16:53:47",
+    "source": "arxiv",
     "is_dataset_paper": true
   }],
   "blog_posts": [{
     "source": "OpenAI Blog",
-    "articles": [{"title": "...", "url": "..."}]
-  }]
+    "articles": [{"title": "...", "url": "...", "date": "2026-02-05", "summary": "..."}]
+  }],
+  "x_activity": {
+    "accounts": [{
+      "username": "karpathy",
+      "relevant_tweets": [{"text": "...", "url": "...", "date": "2026-02-06"}]
+    }]
+  }
 }
 ```
 
@@ -591,6 +601,7 @@ graph LR
 - [ ] 定时任务与告警
 - [x] Web 可视化仪表盘 (`/dashboard`: 概览/数据集/GitHub/论文/博客 5 视图，Chart.js 图表，深色主题，`python agent/api.py` 一键启动)
 - [x] 博客抓取修复 (移除过度激进的信号关键词过滤，保留所有已监控 AI 实验室的博客文章)
+- [x] MCP/Schema 数据管道修复 (X/Twitter 数据写入 JSON 报告, 博客搜索字段名修正, radar_papers source+dataset_only 过滤, schema.json 全面同步实际结构)
 
 ---
 

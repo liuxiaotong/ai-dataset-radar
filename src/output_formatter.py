@@ -97,6 +97,7 @@ class DualOutputFormatter:
         github_activity = data.get("github_activity", [])
         papers = data.get("papers", [])
         blog_posts = data.get("blog_posts", [])
+        x_activity = data.get("x_activity", {})
         labs_activity = data.get("labs_activity", {})
         vendor_activity = data.get("vendor_activity", {})
         datasets_by_type = data.get("datasets_by_type", {})
@@ -142,6 +143,10 @@ class DualOutputFormatter:
                 "total_github_repos_high_relevance": github_stats["high_relevance"],
                 "total_papers": len(papers),
                 "total_blog_posts": self._count_blog_posts(blog_posts),
+                "total_x_tweets": sum(
+                    len(a.get("relevant_tweets", []))
+                    for a in x_activity.get("accounts", [])
+                ),
             },
             "labs_activity": cleaned_labs,
             "vendor_activity": cleaned_vendor,
@@ -150,6 +155,7 @@ class DualOutputFormatter:
             "github_activity": github_activity,
             "papers": cleaned_papers,
             "blog_posts": blog_posts,
+            "x_activity": x_activity,
         }
 
     def _count_github_stats(self, github_activity: list) -> dict:

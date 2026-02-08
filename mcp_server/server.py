@@ -67,7 +67,8 @@ async def list_tools():
                 "properties": {
                     "category": {
                         "type": "string",
-                        "description": "按类型过滤: synthetic, sft, preference, evaluation, multimodal, multilingual, code, agent",
+                        "description": "按类型过滤: synthetic, sft, preference, "
+                        "evaluation, multimodal, multilingual, code, agent",
                         "default": "",
                     },
                     "org": {
@@ -161,7 +162,8 @@ async def list_tools():
                 "properties": {
                     "mode": {
                         "type": "string",
-                        "description": "查询模式: top_growing (增长最快), rising (上升中), breakthroughs (突破), dataset (指定数据集)",
+                        "description": "查询模式: top_growing (增长最快), "
+                        "rising (上升中), breakthroughs (突破), dataset (指定数据集)",
                         "enum": ["top_growing", "rising", "breakthroughs", "dataset"],
                         "default": "top_growing",
                     },
@@ -384,7 +386,7 @@ def search_in_report(report: dict, query: str, sources: list[str], limit: int) -
                     [
                         source_name,
                         article.get("title", ""),
-                        article.get("snippet", ""),
+                        article.get("summary", ""),
                         " ".join(article.get("signals", [])),
                     ]
                 )
@@ -570,7 +572,8 @@ async def call_tool(name: str, arguments: dict):
 **统计摘要:**
 - 数据集: {summary.get("total_datasets", 0)} 个
 - GitHub 组织: {summary.get("total_github_orgs", 0)} 个
-- GitHub 仓库: {summary.get("total_github_repos", 0)} 个 ({summary.get("total_github_repos_high_relevance", 0)} 个高相关)
+- GitHub 仓库: {summary.get("total_github_repos", 0)} 个 \
+({summary.get("total_github_repos_high_relevance", 0)} 个高相关)
 - 论文: {summary.get("total_papers", 0)} 篇
 - 博客文章: {summary.get("total_blog_posts", 0)} 篇
 
@@ -718,7 +721,14 @@ async def call_tool(name: str, arguments: dict):
             return [TextContent(type="text", text="没有找到报告，请先运行 `radar_scan`。")]
 
         papers = report.get("papers", [])
+        source = arguments.get("source", "all")
+        dataset_only = arguments.get("dataset_only", False)
         limit = arguments.get("limit", 10)
+
+        if source != "all":
+            papers = [p for p in papers if p.get("source") == source]
+        if dataset_only:
+            papers = [p for p in papers if p.get("is_dataset_paper")]
         papers = papers[:limit]
 
         if not papers:
