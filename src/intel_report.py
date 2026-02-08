@@ -34,6 +34,7 @@ class IntelReportGenerator:
         papers: list[dict],
         github_activity: list[dict] = None,
         blog_activity: list[dict] = None,
+        x_activity: dict = None,
     ) -> str:
         """Generate the full intelligence report.
 
@@ -44,6 +45,7 @@ class IntelReportGenerator:
             papers: Relevant research papers.
             github_activity: GitHub organization activities.
             blog_activity: Blog/RSS activities.
+            x_activity: X/Twitter activity data.
 
         Returns:
             Markdown formatted report.
@@ -75,6 +77,9 @@ class IntelReportGenerator:
 
         # Papers (categorized)
         lines.extend(self._generate_papers_section(papers))
+
+        # X/Twitter Activity
+        lines.extend(self._generate_x_section(x_activity))
 
         # Footer
         lines.append("---")
@@ -484,6 +489,42 @@ class IntelReportGenerator:
 
                 lines.append(f"| {title} | {highlight} | {link} |")
 
+            lines.append("")
+
+        return lines
+
+    def _generate_x_section(self, x_activity: dict = None) -> list[str]:
+        """Generate X/Twitter activity section."""
+        lines = []
+        if not x_activity:
+            return lines
+
+        accounts = x_activity.get("accounts", [])
+        active = [a for a in accounts if a.get("relevant_tweets")]
+        if not active:
+            return lines
+
+        total_tweets = sum(len(a.get("relevant_tweets", [])) for a in active)
+        lines.append("## X/Twitter 动态")
+        lines.append("")
+        lines.append(f"监控 {len(accounts)} 个账户，{len(active)} 个有相关推文，共 {total_tweets} 条。")
+        lines.append("")
+
+        limit = self.limits.get("x_accounts", 10)
+        for account in active[:limit]:
+            username = account.get("username", "unknown")
+            tweets = account.get("relevant_tweets", [])
+            lines.append(f"### @{username} ({len(tweets)} 条)")
+            lines.append("")
+            for tweet in tweets[:3]:
+                text = tweet.get("text", "")[:120]
+                url = tweet.get("url", "")
+                date = tweet.get("date", "")
+                meta = f" ({date})" if date else ""
+                if url:
+                    lines.append(f"- [{text}]({url}){meta}")
+                else:
+                    lines.append(f"- {text}{meta}")
             lines.append("")
 
         return lines

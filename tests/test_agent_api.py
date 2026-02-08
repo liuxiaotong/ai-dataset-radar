@@ -39,9 +39,9 @@ SAMPLE_REPORT = {
         "total_blog_posts": 20,
     },
     "datasets": [
-        {"name": "alpha-sft-v1", "category": "sft", "downloads": 5000, "org": "openai"},
-        {"name": "beta-preference-v2", "category": "preference", "downloads": 3000, "org": "anthropic"},
-        {"name": "gamma-code-v3", "category": "code", "downloads": 100, "org": "meta"},
+        {"id": "openai/alpha-sft-v1", "category": "sft_instruction", "downloads": 5000, "org": "openai"},
+        {"id": "anthropic/beta-preference-v2", "category": "rlhf_preference", "downloads": 3000, "org": "anthropic"},
+        {"id": "meta/gamma-code-v3", "category": "code", "downloads": 100, "org": "meta"},
     ],
     "github_activity": [
         {
@@ -344,7 +344,7 @@ class TestDatasetsEndpoint:
             resp = client.get("/datasets?category=sft")
         body = resp.json()
         assert body["count"] == 1
-        assert body["datasets"][0]["name"] == "alpha-sft-v1"
+        assert body["datasets"][0]["id"] == "openai/alpha-sft-v1"
 
     def test_datasets_filter_by_min_downloads(self, client):
         """GET /datasets?min_downloads=1000 excludes low-download datasets."""

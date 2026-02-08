@@ -900,6 +900,7 @@ async def async_main(args):
             papers=papers,
             github_activity=github_activity,
             blog_activity=blog_activity,
+            x_activity=x_activity,
         )
 
         # Prepare structured data for JSON output
@@ -1223,6 +1224,7 @@ async def run_intel_scan(days: int = 7) -> dict:
             papers=papers,
             github_activity=github_activity,
             blog_activity=blog_activity,
+            x_activity=x_activity,
         )
 
         output_dir = Path(config.get("report", {}).get("output_dir", "data"))

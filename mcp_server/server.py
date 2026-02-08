@@ -105,7 +105,17 @@ async def list_tools():
             inputSchema={
                 "type": "object",
                 "properties": {
-                    "limit": {"type": "integer", "description": "返回数量限制", "default": 10}
+                    "source": {
+                        "type": "string",
+                        "description": "按来源过滤: arxiv, huggingface, 或 all",
+                        "default": "all",
+                    },
+                    "dataset_only": {
+                        "type": "boolean",
+                        "description": "仅显示发布数据集的论文",
+                        "default": False,
+                    },
+                    "limit": {"type": "integer", "description": "返回数量限制", "default": 10},
                 },
             },
         ),

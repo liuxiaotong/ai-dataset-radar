@@ -159,6 +159,7 @@
         <option value="arxiv">arXiv</option>
         <option value="huggingface">HuggingFace</option>
       </select>
+      <label class="flex items-center gap-1 text-xs text-slate-400 cursor-pointer"><input type="checkbox" id="pp-dataset" onchange="loadPapers()"> 仅数据集论文</label>
       <span id="pp-count" class="text-xs text-slate-500 ml-auto"></span>
     </div>
     <div id="pp-list" class="space-y-3"></div>
@@ -168,6 +169,14 @@
   <!-- Blogs Panel -->
   <div id="panel-blogs" class="panel">
     <div class="flex gap-3 mb-4 items-center">
+      <select id="bl-category" onchange="loadBlogs()">
+        <option value="all">全部分类</option>
+        <option value="us_frontier">US Frontier</option>
+        <option value="us_emerging">US Emerging</option>
+        <option value="china">China</option>
+        <option value="research">Research</option>
+        <option value="data_vendor">Data Vendor</option>
+      </select>
       <span id="bl-count" class="text-xs text-slate-500 ml-auto"></span>
     </div>
     <div id="bl-list" class="space-y-2"></div>
@@ -396,7 +405,8 @@ async function loadPapers() {
   const el = document.getElementById('pp-loading');
   el.style.display = 'block';
   const src = document.getElementById('pp-source').value;
-  const data = await fetchAPI(`/papers?source=${src}&limit=200`);
+  const dsOnly = document.getElementById('pp-dataset').checked;
+  const data = await fetchAPI(`/papers?source=${src}&dataset_only=${dsOnly}&limit=200`);
   el.style.display = 'none';
   if (!data) return;
   const papers = data.papers || [];
@@ -428,7 +438,8 @@ async function loadPapers() {
 async function loadBlogs() {
   const el = document.getElementById('bl-loading');
   el.style.display = 'block';
-  const data = await fetchAPI('/blogs?limit=500');
+  const cat = document.getElementById('bl-category').value;
+  const data = await fetchAPI(`/blogs?category=${cat}&limit=500`);
   el.style.display = 'none';
   if (!data) return;
 
