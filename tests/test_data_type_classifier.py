@@ -158,18 +158,8 @@ class TestClassify:
         result = clf.classify(ds)
         assert result == [DataType.OTHER]
 
-    @pytest.mark.xfail(
-        reason="Bug: classify() crashes when both id and name are None "
-        "(NoneType has no attribute 'lower')",
-        raises=AttributeError,
-        strict=True,
-    )
     def test_none_values_do_not_crash(self, clf):
-        """None values in fields should not raise exceptions.
-
-        Currently fails because ``(None or None).lower()`` raises
-        AttributeError in classify().  Marked xfail until the source is fixed.
-        """
+        """None values in fields should not raise exceptions."""
         ds = {
             "id": None,
             "name": None,

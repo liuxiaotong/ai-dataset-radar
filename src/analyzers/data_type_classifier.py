@@ -268,7 +268,7 @@ class DataTypeClassifier:
         """
         # Build search text
         text = self._build_search_text(dataset)
-        name = (dataset.get("id", "") or dataset.get("name", "")).lower()
+        name = (dataset.get("id") or dataset.get("name") or "").lower()
         tags = self._normalize_tags(dataset.get("tags", []))
         features = str(dataset.get("features", "")).lower()
 

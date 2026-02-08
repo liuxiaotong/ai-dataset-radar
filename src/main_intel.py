@@ -900,5 +900,128 @@ def main():
             logger.info(">>> %s", insights_path)
 
 
+def run_intel_scan(days: int = 7) -> dict:
+    """Run an intelligence scan programmatically (used by the API).
+
+    Args:
+        days: Look back period in days.
+
+    Returns:
+        Summary dict with scan results.
+    """
+    setup_logging(level="INFO")
+    config = load_config()
+
+    org_tracker = OrgTracker(config)
+    github_tracker = GitHubTracker(config)
+    blog_tracker = BlogTracker(config)
+    data_classifier = DataTypeClassifier(config)
+    paper_filter = PaperFilter(config)
+    report_generator = IntelReportGenerator(config)
+    hf_scraper = HuggingFaceScraper(config)
+
+    # Fetch data sources in parallel
+    lab_activity = {"labs": {}}
+    vendor_activity = {"vendors": {}}
+    github_activity = []
+    blog_activity = []
+    papers = []
+
+    arxiv_config = config.get("sources", {}).get("arxiv", {})
+    arxiv_scraper = ArxivScraper(limit=50, config=config) if arxiv_config.get("enabled", True) else None
+    hf_config = config.get("sources", {}).get("hf_papers", {})
+    hf_papers_scraper = (
+        HFPapersScraper(limit=50, days=hf_config.get("days", 7))
+        if hf_config.get("enabled", True)
+        else None
+    )
+
+    futures = {}
+    with ThreadPoolExecutor(max_workers=6, thread_name_prefix="radar") as executor:
+        futures["labs"] = executor.submit(org_tracker.fetch_lab_activity, days=days)
+        futures["vendors"] = executor.submit(org_tracker.fetch_vendor_activity, days=days)
+        futures["github"] = executor.submit(github_tracker.fetch_all_orgs, days=days)
+        futures["blogs"] = executor.submit(blog_tracker.fetch_all_blogs, days=days)
+        if arxiv_scraper:
+            futures["arxiv"] = executor.submit(arxiv_scraper.fetch)
+        if hf_papers_scraper:
+            futures["hf_papers"] = executor.submit(hf_papers_scraper.fetch)
+
+        for key, future in futures.items():
+            try:
+                result = future.result()
+                if key == "labs":
+                    lab_activity = {"labs": result}
+                elif key == "vendors":
+                    vendor_activity = {"vendors": result}
+                elif key == "github":
+                    github_activity = result.get("vendors", []) + result.get("labs", [])
+                elif key == "blogs":
+                    blog_activity = result
+                elif key == "arxiv":
+                    papers.extend(paper_filter.filter_papers(result))
+                elif key == "hf_papers":
+                    papers.extend(paper_filter.filter_papers(result))
+            except Exception as e:
+                logger.warning("Error fetching %s: %s", key, e)
+
+    # Collect and classify datasets
+    all_datasets = []
+    for category in lab_activity.get("labs", {}).values():
+        for org_data in category.values():
+            all_datasets.extend(org_data.get("datasets", []))
+    for tier in vendor_activity.get("vendors", {}).values():
+        for vendor_data in tier.values():
+            all_datasets.extend(vendor_data.get("datasets", []))
+
+    if all_datasets:
+        all_datasets = fetch_dataset_readmes(all_datasets, hf_scraper)
+
+    datasets_by_type = data_classifier.group_by_type(all_datasets)
+    summary = data_classifier.summarize(all_datasets)
+
+    # Generate and save report
+    report = report_generator.generate(
+        lab_activity=lab_activity,
+        vendor_activity=vendor_activity,
+        datasets_by_type=datasets_by_type,
+        papers=papers,
+        github_activity=github_activity,
+        blog_activity=blog_activity,
+    )
+
+    output_dir = Path(config.get("report", {}).get("output_dir", "data"))
+    output_dir.mkdir(parents=True, exist_ok=True)
+    formatter = DualOutputFormatter(output_dir=str(output_dir / "reports"))
+
+    datasets_json = {}
+    for dtype, ds_list in datasets_by_type.items():
+        key = dtype.value if isinstance(dtype, DataType) else str(dtype)
+        datasets_json[key] = [
+            {k: v for k, v in ds.items() if not k.startswith("_")} for ds in ds_list
+        ]
+
+    all_data = {
+        "period": {"days": days, "end": datetime.now().isoformat()},
+        "labs_activity": lab_activity,
+        "vendor_activity": vendor_activity,
+        "github_activity": github_activity,
+        "blog_posts": blog_activity,
+        "datasets": all_datasets,
+        "datasets_by_type": datasets_json,
+        "papers": papers,
+    }
+
+    formatter.save_reports(markdown_content=report, data=all_data, filename_prefix="intel_report")
+
+    return {
+        "datasets": len(all_datasets),
+        "papers": len(papers),
+        "blogs": sum(len(b.get("articles", [])) for b in blog_activity),
+        "github_repos": sum(len(a.get("repos_updated", [])) for a in github_activity),
+        "classification": summary,
+    }
+
+
 if __name__ == "__main__":
     main()
