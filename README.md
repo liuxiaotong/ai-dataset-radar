@@ -5,8 +5,10 @@
 **面向 AI Agent 的训练数据竞争情报系统**  
 **Competitive intelligence feed for AI training datasets (Agent-ready)**
 
+[![CI](https://github.com/liuxiaotong/ai-dataset-radar/actions/workflows/ci.yml/badge.svg)](https://github.com/liuxiaotong/ai-dataset-radar/actions/workflows/ci.yml)
 [![License: MIT](https://img.shields.io/badge/License-MIT-green.svg)](LICENSE)
 [![Python 3.10+](https://img.shields.io/badge/python-3.10+-blue.svg)](https://www.python.org/downloads/)
+[![Tests](https://img.shields.io/badge/tests-641_passed-brightgreen.svg)](#开发路线)
 [![Agent Ready](https://img.shields.io/badge/Agent-Ready-orange.svg)](#agent-集成)
 [![MCP](https://img.shields.io/badge/MCP-11_Tools-purple.svg)](#mcp-server)
 
@@ -43,7 +45,9 @@ graph LR
 | **多框架兼容** | HTTP API (LangChain)、MCP (Claude)、原生 SDK |
 | **开箱即用** | 预置 System Prompt、完整类型定义 |
 | **人机兼顾** | 同时输出 Markdown (人类) 与 JSON (智能体) |
+| **高性能异步** | 全链路 aiohttp + asyncio.gather，400+ 请求并发执行 |
 | **时间感知** | 数据集/模型/论文全链路采集并展示发布日期 |
+| **生产就绪** | Docker 部署、CI 流水线、641 测试用例、配置校验 |
 | **环境原生 LLM** | `--insights` 模式利用 Claude Code/App 原生能力分析 |
 
 ### 适用场景 / Use Cases
@@ -73,6 +77,8 @@ graph LR
 
 ## 安装部署 / Installation
 
+### pip 安装
+
 ```bash
 git clone https://github.com/liuxiaotong/ai-dataset-radar.git
 cd ai-dataset-radar
@@ -80,6 +86,25 @@ pip install -r requirements.txt
 
 # 可选：Agent API 服务
 pip install fastapi uvicorn
+```
+
+### Docker 部署
+
+```bash
+# 运行一次扫描
+docker compose run scan
+
+# 启动 API 服务
+docker compose up api -d
+# API: http://localhost:8080/docs
+```
+
+环境变量通过 `.env` 文件或 `docker compose` 的 `environment` 传入：
+
+```bash
+GITHUB_TOKEN=ghp_...
+ANTHROPIC_API_KEY=sk-ant-...
+RADAR_API_KEY=your-secret-key   # API 认证密钥
 ```
 
 ### X/Twitter 数据源设置（RSSHub）
@@ -188,12 +213,14 @@ uvicorn agent.api:app --port 8080
 
 | 端点 | 方法 | 功能 |
 |------|------|------|
+| `/health` | GET | 健康检查（认证状态、报告可用性） |
 | `/summary` | GET | 获取最新报告摘要 |
 | `/datasets` | GET | 数据集列表 (支持 category 筛选) |
 | `/github` | GET | GitHub 仓库活动 (支持 relevance 筛选) |
 | `/papers` | GET | 论文列表 (支持 dataset_only 筛选) |
 | `/blogs` | GET | 博客文章 |
 | `/scan` | POST | 执行新扫描 |
+| `/config` | GET | 监控配置（敏感信息自动脱敏） |
 | `/schema` | GET | 输出规范 |
 | `/tools` | GET | 工具定义 |
 
@@ -451,21 +478,27 @@ priority_data_types:
 ```
 ai-dataset-radar/
 ├── src/                        # 核心模块
-│   ├── main_intel.py           # 主入口（扫描 + insights 提示生成）
-│   ├── trackers/               # 数据追踪器
+│   ├── main_intel.py           # 主入口（async 编排 + insights 提示生成）
+│   ├── trackers/               # 数据追踪器（全异步 aiohttp）
 │   │   ├── org_tracker.py      # HuggingFace 组织追踪
-│   │   ├── blog_tracker.py     # 博客监控（RSS/HTML/Playwright）
+│   │   ├── blog_tracker.py     # 博客监控（RSS/HTML/Playwright async）
 │   │   ├── github_tracker.py   # GitHub 组织活动
 │   │   ├── x_tracker.py        # X/Twitter 账户监控（RSSHub / API）
 │   │   └── paper_tracker.py    # arXiv + HF Papers
-│   ├── analyzers/              # 分类器
+│   ├── scrapers/               # 数据采集器
+│   ├── analyzers/              # 分类器与质量评分
 │   └── utils/                  # 工具库
+│       ├── async_http.py       # AsyncHTTPClient（连接池 + 重试 + 限速）
+│       └── cache.py            # FileCache（TTL + LRU 驱逐）
 ├── agent/                      # Agent 集成层
-│   ├── api.py                  # REST API
+│   ├── api.py                  # REST API（认证 + 限速 + 健康检查）
 │   ├── tools.json              # 工具定义
 │   ├── schema.json             # 输出规范
 │   └── prompts.md              # 系统提示词
 ├── mcp_server/                 # MCP 服务
+├── .github/workflows/ci.yml    # CI：ruff lint + pytest
+├── Dockerfile                  # 容器镜像（含 Playwright）
+├── docker-compose.yml          # scan + api 服务编排
 ├── config.yaml                 # 监控配置（组织/供应商/博客/关键词）
 └── data/reports/               # 输出目录
 ```
@@ -520,8 +553,10 @@ graph LR
 - [x] Agent 集成层 (HTTP API, Function Calling, Schema)
 - [x] MCP Server (11 工具: scan/summary/datasets/github/papers/blogs/config/search/diff/trend/history)
 - [x] 插件化采集器 (9 个)
-- [x] 性能优化 (并行采集、缓存、连接池)
-- [x] 测试覆盖 (524 用例: MCP 86 + GitHub 40 + Org 27 + X tracker 45 + API 27 + Notifier 30 + Classifier 34 + 既有 235)
+- [x] 全链路异步 I/O (aiohttp + asyncio.gather 替代 requests + ThreadPoolExecutor，~2x 提速)
+- [x] CI 流水线 (GitHub Actions: ruff lint + pytest, push/PR 触发)
+- [x] Docker 容器化 (Dockerfile + docker-compose: scan 扫描 + api 服务)
+- [x] 测试覆盖 (641 用例: async_http 49 + blog_tracker 46 + intel_report 22 + MCP 86 + GitHub 44 + X 45 + Org 30 + 其余 319)
 - [x] 博客抓取多策略降级 (RSS → HTML → Playwright, networkidle → domcontentloaded)
 - [x] 中国数据供应商监控 (海天瑞声、整数智能、数据堂、智源 BAAI)
 - [x] X/Twitter 监控 (101 账户，9 类别，自托管 RSSHub + 多实例 fallback + 连续失败阈值保护)
@@ -532,8 +567,10 @@ graph LR
 - [x] 全链路指数退避重试 (HF/GitHub/RSSHub 5xx 自动恢复)
 - [x] 数据质量校验 (各源 0 结果自动告警, JSON 输出 data_quality_warnings)
 - [x] 博客噪声过滤 (nav/sidebar/footer 自动排除, 浏览器每 5 页重启)
-- [x] API 安全加固 (Bearer Token 认证 + 速率限制 + 输入校验)
+- [x] API 安全加固 (Bearer Token 认证 + 速率限制 + 输入校验 + /health 端点 + /config 敏感信息脱敏)
 - [x] datetime 全面修复 (21 处 utcnow() 替换为 timezone-aware)
+- [x] 启动配置校验 (validate_config: 必需配置段 + 类型检查 + 缺失警告)
+- [x] 缓存大小限制 (FileCache LRU 驱逐，max_entries=1000)
 - [x] 时间信息全链路贯通 (HF camelCase→snake_case 归一化, HF Papers 页面 `<time>` 提取, insights 数据集/模型/论文均带日期, 新增时间线章节)
 - [x] GitHub 加权相关性评分 (keyword×10 + stars/100 + 近 3 天活跃加成 - 噪声惩罚)
 - [x] 研究者博客监控 (Lil'Log, fast.ai, Interconnects, LessWrong, Alignment Forum, The Gradient, Epoch AI)
