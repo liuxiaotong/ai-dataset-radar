@@ -588,7 +588,7 @@ graph LR
 - [x] X 账号自动修正 (5 个改名/格式错误账号修复，URL 日期提取防止旧博客文章泄漏)
 - [x] 全链路指数退避重试 (HF/GitHub/RSSHub 5xx 自动恢复)
 - [x] 数据质量校验 (各源 0 结果自动告警, JSON 输出 data_quality_warnings)
-- [x] 博客噪声过滤 (nav/sidebar/footer 自动排除, 浏览器每 5 页重启)
+- [x] 博客噪声过滤 (nav/sidebar/footer 自动排除, 浏览器每 15 页重启)
 - [x] API 安全加固 (Bearer Token 认证 + 速率限制 + 输入校验 + /health 端点 + /config 敏感信息脱敏)
 - [x] datetime 全面修复 (21 处 utcnow() 替换为 timezone-aware)
 - [x] 启动配置校验 (validate_config: 必需配置段 + 类型检查 + 缺失警告)
@@ -611,6 +611,7 @@ graph LR
 - [x] Markdown 报告 X/Twitter 章节 (IntelReportGenerator 新增 _generate_x_section，CLI 与 API 报告均含推文动态)
 - [x] Dashboard 筛选增强 (论文「仅数据集」复选框 + 博客分类下拉 + MCP radar_blogs category 参数)
 - [x] 健壮性加固 (asyncio.get_running_loop 替代已弃用 API, open() 统一 UTF-8 编码, JSON 加载异常处理)
+- [x] 全链路性能优化 (OrgTracker 组织内并行化, feedparser→线程池, 并发上限调优 blog25/x20/github15, 超时 30→20s/重试 3→2, X HEAD 跳过)
 
 ---
 
