@@ -18,7 +18,7 @@
 
 **GitHub Topics**: `ai-agent`, `competitive-intelligence`, `dataset-monitoring`, `mcp`, `function-calling`
 
-监控 50 家 AI Labs、27 家数据供应商、62 个博客源、15 个 GitHub 组织、98 个 X/Twitter 账户的训练数据动态，提供结构化输出供智能体消费。支持 Function Calling、MCP、REST API 多种接入方式。
+监控 50 家 AI Labs、27 家数据供应商、62 个博客源、15 个 GitHub 组织、101 个 X/Twitter 账户的训练数据动态，提供结构化输出供智能体消费。支持 Function Calling、MCP、REST API 多种接入方式。
 
 ## 系统概述 / System Overview
 
@@ -30,7 +30,7 @@
 
 ```mermaid
 graph LR
-    A["数据源监控<br/>77 orgs, 98 X accounts, 62 blogs"] --> B["语义分类<br/>LLM+规则"]
+    A["数据源监控<br/>77 orgs, 101 X accounts, 62 blogs"] --> B["语义分类<br/>LLM+规则"]
     B --> C["报告生成<br/>JSON+MD"]
     C --> D["Agent / 人类<br/>消费/决策"]
 ```
@@ -321,7 +321,7 @@ tools = [
 | **博客** | 62 源 | 实验室 + 研究者 + 独立博客 |
 | **GitHub** | 15 orgs | openai, deepseek-ai, NVIDIA 等 |
 | **论文** | 2 源 | arXiv (cs.CL/AI/LG) + HF Papers |
-| **X/Twitter** | 98 账户 | 9 类别，RSSHub 自托管 + fallback |
+| **X/Twitter** | 101 账户 | 9 类别，RSSHub 自托管 + fallback |
 
 ### 数据供应商分类
 
@@ -347,7 +347,7 @@ tools = [
 | 数据供应商 | 9 | scale_AI, HelloSurgeAI, argilla_io, LabelBox |
 | 基准/MLOps | 7 | lmarena_ai, ArtificialAnlys, kaggle, modal_labs |
 | 安全/对齐 | 4 | ai_risks, JaredKaplan |
-| 研究者 | 28 | karpathy, ylecun, jimfan, AndrewYNg, lilianweng |
+| 研究者 | 31 | karpathy, ylecun, jimfan, emollick, Hesamation |
 
 信号关键词过滤：dataset, training data, benchmark, RLHF, synthetic data, fine-tuning 等。完整列表见 `config.yaml`。
 
@@ -524,7 +524,7 @@ graph LR
 - [x] 测试覆盖 (524 用例: MCP 86 + GitHub 40 + Org 27 + X tracker 45 + API 27 + Notifier 30 + Classifier 34 + 既有 235)
 - [x] 博客抓取多策略降级 (RSS → HTML → Playwright, networkidle → domcontentloaded)
 - [x] 中国数据供应商监控 (海天瑞声、整数智能、数据堂、智源 BAAI)
-- [x] X/Twitter 监控 (98 账户，9 类别，自托管 RSSHub + 多实例 fallback + 连续失败阈值保护)
+- [x] X/Twitter 监控 (101 账户，9 类别，自托管 RSSHub + 多实例 fallback + 连续失败阈值保护)
 - [x] Insights 分析提示生成 (`--insights` 模式)
 - [x] 异常报告独立输出 (`_anomalies.md` 与 `_insights.md` 分离，工程信息不进管理层报告)
 - [x] 分类器增强 (覆盖率 37%→84%：新增机器人/具身、文档理解、语音、形式化验证、安全评估等关键词)

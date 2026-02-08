@@ -1101,7 +1101,7 @@ x_tracker:
     - ShayneRedford
     - sayashk
     - JaredKaplan
-    # ── Researchers & Influencers (28) ──
+    # ── Researchers & Influencers (31) ──
     - karpathy
     - ylecun
     - jimfan
@@ -1130,6 +1130,9 @@ x_tracker:
     - markchen90
     - karlcobbe
     - aidangomez
+    - emollick
+    - Hesamation
+    - vasuman
 
   # Search keywords (API backend only)
   search_keywords:
