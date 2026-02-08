@@ -60,6 +60,50 @@ def load_config(config_path: str = "config.yaml") -> dict:
         return {}
 
 
+def validate_config(config: dict) -> list[str]:
+    """Validate config structure and warn about missing sections.
+
+    Args:
+        config: Loaded configuration dictionary.
+
+    Returns:
+        List of warning messages (empty if all OK).
+    """
+    warnings = []
+
+    expected_sections = {
+        "watched_orgs": dict,
+        "sources": dict,
+        "github": dict,
+    }
+    for section, expected_type in expected_sections.items():
+        val = config.get(section)
+        if val is None:
+            warnings.append(f"Missing config section: '{section}'")
+        elif not isinstance(val, expected_type):
+            warnings.append(f"Config '{section}' should be {expected_type.__name__}, got {type(val).__name__}")
+
+    # Check blog sources exist
+    blogs = (
+        config.get("data_vendors", {}).get("blogs", [])
+        or config.get("watched_vendors", {}).get("blogs", [])
+        or config.get("blogs", [])
+    )
+    if not blogs:
+        warnings.append("No blog sources configured (checked data_vendors.blogs, watched_vendors.blogs, blogs)")
+
+    # Check GitHub orgs
+    github = config.get("github", {})
+    orgs = github.get("orgs", {})
+    if not orgs.get("ai_labs") and not orgs.get("data_vendors"):
+        warnings.append("No GitHub orgs configured in github.orgs.ai_labs or github.orgs.data_vendors")
+
+    for msg in warnings:
+        logger.warning("Config: %s", msg)
+
+    return warnings
+
+
 def format_insights_prompt(
     all_datasets: list,
     blog_activity: list,
@@ -600,39 +644,6 @@ def format_anomalies_report(
     return "\n".join(lines)
 
 
-def validate_config(config: dict) -> list[str]:
-    """Validate configuration has required sections.
-
-    Args:
-        config: Configuration dictionary.
-
-    Returns:
-        List of warning messages.
-    """
-    warnings = []
-
-    if not config:
-        warnings.append("Configuration is empty, using defaults")
-        return warnings
-
-    # Check for watched orgs
-    watched_orgs = config.get("watched_orgs", {})
-    if not watched_orgs:
-        warnings.append("No watched_orgs configured - no HuggingFace orgs will be tracked")
-
-    # Check for watched vendors
-    watched_vendors = config.get("watched_vendors", {})
-    if not watched_vendors:
-        warnings.append("No watched_vendors configured - no vendors will be tracked")
-
-    # Check for blogs
-    blogs = watched_vendors.get("blogs", [])
-    if not blogs:
-        warnings.append("No blogs configured - blog tracking disabled")
-
-    return warnings
-
-
 async def fetch_dataset_readmes(datasets: list[dict], hf_scraper: HuggingFaceScraper) -> list[dict]:
     """Fetch README content for datasets to improve classification.
 
@@ -698,6 +709,7 @@ async def async_main(args):
     logger.info("=" * 60)
 
     config = load_config(args.config)
+    validate_config(config)
 
     # Create shared async HTTP client
     http_client = AsyncHTTPClient()
@@ -1117,6 +1129,7 @@ async def run_intel_scan(days: int = 7) -> dict:
     """
     setup_logging(level="INFO")
     config = load_config()
+    validate_config(config)
 
     http_client = AsyncHTTPClient()
     try:

@@ -173,7 +173,7 @@ class BlogTracker:
                         or "<feed" in text[:200]
                     ):
                         return feed_url
-            except Exception:
+            except (OSError, asyncio.TimeoutError):
                 pass
             return None
 
@@ -200,8 +200,8 @@ class BlogTracker:
                                 href = urljoin(base_url, href)
                             self._rss_cache[base_url] = href
                             return href
-        except Exception:
-            pass
+        except (OSError, asyncio.TimeoutError) as e:
+            logger.debug("Failed to fetch HTML for feed discovery %s: %s", base_url, e)
 
         self._rss_cache[base_url] = None
         return None
@@ -482,10 +482,10 @@ class BlogTracker:
                 # Navigate and wait for content
                 try:
                     await page.goto(url, wait_until="networkidle", timeout=15000)
-                except Exception:
+                except PlaywrightTimeout:
                     try:
                         await page.goto(url, wait_until="domcontentloaded", timeout=15000)
-                    except Exception:
+                    except PlaywrightTimeout:
                         await page.close()
                         return [], f"Page load timeout: {url}"
                 await page.wait_for_timeout(1000)
@@ -501,7 +501,7 @@ class BlogTracker:
                         )
                         if not is_noise:
                             filtered_elements.append(elem)
-                    except Exception:
+                    except (PlaywrightTimeout, ValueError):
                         filtered_elements.append(elem)
                 elements = filtered_elements
                 if not elements:
@@ -614,7 +614,8 @@ class BlogTracker:
                                     await page.wait_for_timeout(1000)
                                 except PlaywrightTimeout:
                                     item["link"] = url
-                        except Exception:
+                        except (PlaywrightTimeout, ValueError) as e:
+                            logger.debug("Click-to-discover failed for %s: %s", item["title"][:30], e)
                             item["link"] = url
 
                 await page.close()

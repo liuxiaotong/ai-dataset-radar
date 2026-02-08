@@ -17,16 +17,18 @@ class FileCache:
     Stores cached data as JSON files in a cache directory.
     """
 
-    def __init__(self, cache_dir: str = "data/cache", default_ttl: int = 3600):
+    def __init__(self, cache_dir: str = "data/cache", default_ttl: int = 3600, max_entries: int = 1000):
         """Initialize cache.
 
         Args:
             cache_dir: Directory to store cache files.
             default_ttl: Default time-to-live in seconds (1 hour).
+            max_entries: Maximum number of cache entries. Oldest are evicted when exceeded.
         """
         self.cache_dir = Path(cache_dir)
         self.cache_dir.mkdir(parents=True, exist_ok=True)
         self.default_ttl = default_ttl
+        self.max_entries = max_entries
 
     def _get_cache_path(self, key: str) -> Path:
         """Get cache file path for a key."""
@@ -65,6 +67,8 @@ class FileCache:
     def set(self, key: str, value: Any, ttl: Optional[int] = None) -> None:
         """Set cached value with TTL.
 
+        Evicts oldest entries if max_entries is exceeded.
+
         Args:
             key: Cache key.
             value: Value to cache (must be JSON-serializable).
@@ -86,6 +90,33 @@ class FileCache:
                 json.dump(data, f, ensure_ascii=False)
         except (IOError, TypeError) as e:
             logger.warning("Cache write error for %s: %s", key, e)
+            return
+
+        self._evict_if_needed()
+
+    def _evict_if_needed(self) -> int:
+        """Evict oldest cache entries if over max_entries limit.
+
+        Returns:
+            Number of entries evicted.
+        """
+        cache_files = list(self.cache_dir.glob("*.json"))
+        if len(cache_files) <= self.max_entries:
+            return 0
+
+        # Sort by modification time (oldest first)
+        cache_files.sort(key=lambda f: f.stat().st_mtime)
+        to_remove = len(cache_files) - self.max_entries
+        evicted = 0
+        for f in cache_files[:to_remove]:
+            try:
+                f.unlink()
+                evicted += 1
+            except OSError:
+                pass
+        if evicted:
+            logger.debug("Cache eviction: removed %d oldest entries", evicted)
+        return evicted
 
     def delete(self, key: str) -> bool:
         """Delete cached value.

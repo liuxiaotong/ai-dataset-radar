@@ -103,6 +103,14 @@ app = FastAPI(
 
 app.add_middleware(RateLimitMiddleware)
 
+if not API_KEY:
+    import logging
+
+    logging.getLogger("uvicorn").warning(
+        "RADAR_API_KEY not set — API is open without authentication. "
+        "Set RADAR_API_KEY env var to enable API key auth."
+    )
+
 
 # ============================================================
 # Models
@@ -165,21 +173,34 @@ def get_latest_report_path() -> Optional[Path]:
 # ============================================================
 
 
+@app.get("/health")
+async def health():
+    """Health check endpoint for monitoring and container orchestration."""
+    report = get_latest_report()
+    return {
+        "status": "ok",
+        "auth_enabled": bool(API_KEY),
+        "has_report": report is not None,
+        "report_generated_at": report.get("generated_at") if report else None,
+    }
+
+
 @app.get("/")
 async def root():
     """API info and available endpoints."""
     return {
         "name": "AI Dataset Radar API",
-        "version": "1.0.0",
+        "version": "1.1.0",
         "description": "REST API for AI agents to access dataset intelligence",
         "endpoints": {
+            "/health": "GET - Health check",
             "/scan": "POST - Run a new intelligence scan",
             "/summary": "GET - Get latest report summary",
             "/datasets": "GET - List datasets with optional filters",
             "/github": "GET - Get GitHub repository activity",
             "/papers": "GET - Get recent papers",
             "/blogs": "GET - Get blog articles",
-            "/config": "GET - Get monitoring configuration",
+            "/config": "GET - Get monitoring configuration (secrets redacted)",
             "/schema": "GET - Get JSON schema for report format",
             "/tools": "GET - Get tool definitions for function calling",
         },
@@ -386,10 +407,22 @@ async def list_blogs(
     }
 
 
+def _redact_secrets(obj, sensitive_keys=("token", "api_key", "secret", "password", "credential")):
+    """Recursively redact sensitive values from config."""
+    if isinstance(obj, dict):
+        return {
+            k: ("***" if any(s in k.lower() for s in sensitive_keys) and v else _redact_secrets(v, sensitive_keys))
+            for k, v in obj.items()
+        }
+    if isinstance(obj, list):
+        return [_redact_secrets(item, sensitive_keys) for item in obj]
+    return obj
+
+
 @app.get("/config")
 async def get_config():
     """
-    Get current monitoring configuration.
+    Get current monitoring configuration (sensitive values redacted).
 
     Shows watched organizations, blog sources, and classification keywords.
     """
@@ -403,10 +436,9 @@ async def get_config():
 
         with open(config_path) as f:
             config = yaml.safe_load(f)
-        return config
+        return _redact_secrets(config)
     except ImportError:
-        # Return raw text if yaml not available
-        return {"raw": config_path.read_text()}
+        raise HTTPException(status_code=500, detail="YAML parser not available")
 
 
 @app.get("/schema")
