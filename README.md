@@ -572,10 +572,12 @@ pip install -e /path/to/data-recipe
 
 | 维度 | 权重 | 说明 |
 |------|------|------|
-| 下载量 | max 30 | log10 缩放，覆盖 10~100k+ 量级 |
-| 信号强度 | max 25 | 有意义分类信号越多越优先 |
-| 分类优先级 | max 30 | preference > reward > sft > code/agent > synthetic > ... |
-| 新鲜度 | max 15 | ≤14 天 +15，≤30 天 +8 |
+| 下载量 | max 25 | log10 缩放，覆盖 10~100k+ 量级 |
+| 社区认可 | max 10 | sqrt(likes) 缩放，社区 star 越多分越高 |
+| 信号强度 | max 18 | 有意义分类信号越多越优先 |
+| 分类优先级 | max 20 | preference > reward > sft > code/agent > synthetic > ... |
+| 新鲜度 | max 12 | ≤7 天 +12，≤14 天 +8，≤30 天 +4（渐进衰减） |
+| 低下载惩罚 | ×0.5 | <50 次下载的数据集总分减半，过滤噪声 |
 
 **输出位于同一日期目录下：**
 ```
@@ -662,6 +664,7 @@ Claude Desktop 中同时配置两个 MCP Server，可自然语言驱动端到端
 - [x] Insights API 集成 (run_intel_scan API 路径复用 LLM insights 生成, 返回 insights 文本; CLI 无 API key 时 stdout 输出 prompt)
 - [x] 报告按日期子目录组织 (`data/reports/YYYY-MM-DD/`, MCP/API 兼容新旧两种布局)
 - [x] DataRecipe 自动衔接 (`--recipe` 智能评分选 Top N 数据集, 自动调用 DeepAnalyzerCore 深度分析, 输出聚合报告)
+- [x] Recipe 评分公式优化 (新增 likes 社区认可维度, 降低类别权重占比, 渐进式新鲜度衰减, <50 下载半分门槛)
 
 ---
 
