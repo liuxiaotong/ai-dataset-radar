@@ -29,7 +29,8 @@ sys.path.insert(0, str(Path(__file__).parent.parent / "src"))
 
 try:
     from fastapi import FastAPI, HTTPException, Query, Request, Security
-    from fastapi.responses import JSONResponse
+    from fastapi.responses import JSONResponse, RedirectResponse
+    from fastapi.staticfiles import StaticFiles
     from fastapi.security import APIKeyHeader, APIKeyQuery
     from pydantic import BaseModel, Field
     from starlette.middleware.base import BaseHTTPMiddleware
@@ -173,6 +174,12 @@ def get_latest_report_path() -> Optional[Path]:
 # ============================================================
 
 
+@app.get("/ui")
+async def redirect_to_dashboard():
+    """Redirect to the web dashboard."""
+    return RedirectResponse(url="/dashboard")
+
+
 @app.get("/health")
 async def health():
     """Health check endpoint for monitoring and container orchestration."""
@@ -193,6 +200,7 @@ async def root():
         "version": "1.1.0",
         "description": "REST API for AI agents to access dataset intelligence",
         "endpoints": {
+            "/dashboard": "GET - Web visualization dashboard",
             "/health": "GET - Health check",
             "/scan": "POST - Run a new intelligence scan",
             "/summary": "GET - Get latest report summary",
@@ -472,6 +480,15 @@ async def get_tools():
 
     with open(tools_path) as f:
         return json.load(f)
+
+
+# ============================================================
+# Static Dashboard
+# ============================================================
+
+_static_dir = Path(__file__).parent / "static"
+if _static_dir.is_dir():
+    app.mount("/dashboard", StaticFiles(directory=str(_static_dir), html=True), name="dashboard")
 
 
 # ============================================================

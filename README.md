@@ -181,7 +181,8 @@ data/reports/
 
 ```bash
 uvicorn agent.api:app --port 8080
-# 接口文档: http://localhost:8080/docs
+# 可视化仪表盘: http://localhost:8080/dashboard
+# 接口文档:     http://localhost:8080/docs
 ```
 
 ### 智能体调用 / Agent Usage
@@ -580,7 +581,7 @@ graph LR
 - [x] 趋势分析集成 (radar_trend 增长/上升/突破查询 + main_intel 每次扫描自动记录 daily_stats)
 - [x] 历史时间线 (radar_history 跨期报告统计对比 + 趋势线)
 - [ ] 定时任务与告警
-- [ ] Web 可视化界面
+- [x] Web 可视化仪表盘 (`/dashboard`: 概览/数据集/GitHub/论文/博客 5 视图，Chart.js 图表，深色主题)
 
 ---
 

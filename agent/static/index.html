@@ -1,0 +1,479 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>AI Dataset Radar</title>
+<script src="https://cdn.tailwindcss.com"></script>
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4"></script>
+<script>tailwind.config={theme:{extend:{colors:{bg:'#0f172a',card:'#1e293b',border:'#334155',accent:'#38bdf8'}}}}</script>
+<style>
+  body { background: #0f172a; color: #e2e8f0; font-family: system-ui, sans-serif; }
+  .tab-btn { padding: 0.5rem 1.25rem; border-radius: 0.5rem; cursor: pointer; transition: all 0.2s; }
+  .tab-btn.active { background: #38bdf8; color: #0f172a; font-weight: 600; }
+  .tab-btn:not(.active):hover { background: #1e293b; }
+  table { width: 100%; border-collapse: collapse; }
+  th { cursor: pointer; user-select: none; text-align: left; padding: 0.625rem 0.75rem; color: #94a3b8; font-size: 0.75rem; text-transform: uppercase; letter-spacing: 0.05em; border-bottom: 1px solid #334155; }
+  th:hover { color: #e2e8f0; }
+  td { padding: 0.625rem 0.75rem; border-bottom: 1px solid #1e293b; font-size: 0.875rem; }
+  tr:hover td { background: #1e293b; }
+  a { color: #38bdf8; text-decoration: none; }
+  a:hover { text-decoration: underline; }
+  .badge { display: inline-block; padding: 0.125rem 0.5rem; border-radius: 9999px; font-size: 0.7rem; font-weight: 500; }
+  .badge-blue { background: #1e3a5f; color: #7dd3fc; }
+  .badge-green { background: #14532d; color: #86efac; }
+  .badge-purple { background: #3b0764; color: #d8b4fe; }
+  .badge-orange { background: #431407; color: #fdba74; }
+  .badge-gray { background: #1e293b; color: #94a3b8; }
+  .card { background: #1e293b; border: 1px solid #334155; border-radius: 0.75rem; padding: 1.25rem; }
+  .metric { font-size: 2rem; font-weight: 700; color: #f1f5f9; }
+  .metric-label { font-size: 0.8rem; color: #94a3b8; margin-top: 0.25rem; }
+  select, input[type=text] { background: #1e293b; border: 1px solid #334155; color: #e2e8f0; padding: 0.375rem 0.75rem; border-radius: 0.375rem; font-size: 0.875rem; }
+  select:focus, input:focus { outline: none; border-color: #38bdf8; }
+  .loading { text-align: center; padding: 3rem; color: #64748b; }
+  .panel { display: none; }
+  .panel.active { display: block; }
+  .blog-group { border: 1px solid #334155; border-radius: 0.5rem; margin-bottom: 0.5rem; }
+  .blog-header { padding: 0.75rem 1rem; cursor: pointer; display: flex; justify-content: space-between; align-items: center; }
+  .blog-header:hover { background: #1e293b; }
+  .blog-body { display: none; padding: 0 1rem 0.75rem; }
+  .blog-body.open { display: block; }
+</style>
+</head>
+<body class="min-h-screen">
+
+<!-- Header -->
+<header class="border-b border-border px-6 py-4 flex items-center justify-between">
+  <div class="flex items-center gap-3">
+    <div class="text-xl font-bold text-accent">AI Dataset Radar</div>
+    <div class="text-sm text-slate-500">竞争情报仪表盘</div>
+  </div>
+  <div class="flex items-center gap-3">
+    <span id="scan-time" class="text-xs text-slate-500"></span>
+    <span id="health-dot" class="w-2.5 h-2.5 rounded-full bg-slate-600 inline-block"></span>
+  </div>
+</header>
+
+<!-- Tabs -->
+<nav class="px-6 py-3 flex gap-2 border-b border-border">
+  <button class="tab-btn active" onclick="switchTab('overview')">概览</button>
+  <button class="tab-btn" onclick="switchTab('datasets')">数据集</button>
+  <button class="tab-btn" onclick="switchTab('github')">GitHub</button>
+  <button class="tab-btn" onclick="switchTab('papers')">论文</button>
+  <button class="tab-btn" onclick="switchTab('blogs')">博客</button>
+</nav>
+
+<!-- Content -->
+<main class="px-6 py-5 max-w-[1400px] mx-auto">
+
+  <!-- Overview Panel -->
+  <div id="panel-overview" class="panel active">
+    <div class="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">
+      <div class="card"><div class="metric" id="m-datasets">-</div><div class="metric-label">数据集</div></div>
+      <div class="card"><div class="metric" id="m-repos">-</div><div class="metric-label">GitHub 仓库</div></div>
+      <div class="card"><div class="metric" id="m-papers">-</div><div class="metric-label">论文</div></div>
+      <div class="card"><div class="metric" id="m-blogs">-</div><div class="metric-label">博客文章</div></div>
+    </div>
+    <div class="grid md:grid-cols-2 gap-6">
+      <div class="card">
+        <h3 class="text-sm font-semibold text-slate-400 mb-3">数据集分类分布</h3>
+        <div style="max-height:320px;display:flex;justify-content:center;"><canvas id="chart-categories"></canvas></div>
+      </div>
+      <div class="card">
+        <h3 class="text-sm font-semibold text-slate-400 mb-3">热门数据集 Top 10</h3>
+        <table>
+          <thead><tr><th>数据集</th><th>类别</th><th>下载量</th></tr></thead>
+          <tbody id="top-datasets"></tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+
+  <!-- Datasets Panel -->
+  <div id="panel-datasets" class="panel">
+    <div class="flex gap-3 mb-4 flex-wrap items-center">
+      <select id="ds-category" onchange="loadDatasets()">
+        <option value="">全部类别</option>
+        <option value="sft">SFT</option>
+        <option value="preference">Preference</option>
+        <option value="synthetic">Synthetic</option>
+        <option value="agent">Agent</option>
+        <option value="multimodal">Multimodal</option>
+        <option value="multilingual">Multilingual</option>
+        <option value="code">Code</option>
+        <option value="evaluation">Evaluation</option>
+      </select>
+      <input id="ds-search" type="text" placeholder="搜索数据集..." oninput="filterDatasets()" class="w-56">
+      <span id="ds-count" class="text-xs text-slate-500 ml-auto"></span>
+    </div>
+    <div class="card overflow-x-auto">
+      <table>
+        <thead><tr>
+          <th onclick="sortDatasets('id')">ID</th>
+          <th onclick="sortDatasets('author')">作者</th>
+          <th onclick="sortDatasets('category')">类别</th>
+          <th onclick="sortDatasets('downloads')">下载量</th>
+          <th onclick="sortDatasets('likes')">点赞</th>
+          <th>语言</th>
+          <th>许可证</th>
+        </tr></thead>
+        <tbody id="ds-tbody"></tbody>
+      </table>
+      <div id="ds-loading" class="loading">加载中...</div>
+    </div>
+  </div>
+
+  <!-- GitHub Panel -->
+  <div id="panel-github" class="panel">
+    <div class="flex gap-3 mb-4 items-center">
+      <select id="gh-relevance" onchange="loadGithub()">
+        <option value="all">全部相关性</option>
+        <option value="high" selected>高相关</option>
+        <option value="low">低相关</option>
+      </select>
+      <span id="gh-count" class="text-xs text-slate-500 ml-auto"></span>
+    </div>
+    <div class="card overflow-x-auto">
+      <table>
+        <thead><tr>
+          <th onclick="sortGithub('full_name')">仓库</th>
+          <th onclick="sortGithub('stars')">Stars</th>
+          <th>语言</th>
+          <th>更新时间</th>
+          <th>相关信号</th>
+        </tr></thead>
+        <tbody id="gh-tbody"></tbody>
+      </table>
+      <div id="gh-loading" class="loading">加载中...</div>
+    </div>
+  </div>
+
+  <!-- Papers Panel -->
+  <div id="panel-papers" class="panel">
+    <div class="flex gap-3 mb-4 items-center">
+      <select id="pp-source" onchange="loadPapers()">
+        <option value="all">全部来源</option>
+        <option value="arxiv">arXiv</option>
+        <option value="huggingface">HuggingFace</option>
+      </select>
+      <span id="pp-count" class="text-xs text-slate-500 ml-auto"></span>
+    </div>
+    <div id="pp-list" class="space-y-3"></div>
+    <div id="pp-loading" class="loading">加载中...</div>
+  </div>
+
+  <!-- Blogs Panel -->
+  <div id="panel-blogs" class="panel">
+    <div class="flex gap-3 mb-4 items-center">
+      <span id="bl-count" class="text-xs text-slate-500 ml-auto"></span>
+    </div>
+    <div id="bl-list" class="space-y-2"></div>
+    <div id="bl-loading" class="loading">加载中...</div>
+  </div>
+
+</main>
+
+<script>
+// ========================================
+// State
+// ========================================
+const API = window.location.origin;
+let summaryData = null;
+let allDatasets = [];
+let allRepos = [];
+let dsSortKey = 'downloads', dsSortAsc = false;
+let ghSortKey = 'stars', ghSortAsc = false;
+let categoryChart = null;
+const loaded = { overview: false, datasets: false, github: false, papers: false, blogs: false };
+
+// ========================================
+// API
+// ========================================
+async function fetchAPI(path) {
+  try {
+    const res = await fetch(API + path);
+    if (!res.ok) return null;
+    return await res.json();
+  } catch (e) { console.error('Fetch error:', path, e); return null; }
+}
+
+// ========================================
+// Tab switching
+// ========================================
+function switchTab(name) {
+  document.querySelectorAll('.tab-btn').forEach((b, i) => {
+    b.classList.toggle('active', ['overview','datasets','github','papers','blogs'][i] === name);
+  });
+  document.querySelectorAll('.panel').forEach(p => p.classList.remove('active'));
+  document.getElementById('panel-' + name).classList.add('active');
+  if (!loaded[name]) {
+    loaded[name] = true;
+    if (name === 'overview') loadOverview();
+    else if (name === 'datasets') loadDatasets();
+    else if (name === 'github') loadGithub();
+    else if (name === 'papers') loadPapers();
+    else if (name === 'blogs') loadBlogs();
+  }
+}
+
+// ========================================
+// Health check
+// ========================================
+async function checkHealth() {
+  const data = await fetchAPI('/health');
+  const dot = document.getElementById('health-dot');
+  if (data && data.status === 'ok') {
+    dot.className = 'w-2.5 h-2.5 rounded-full bg-green-500 inline-block';
+    if (data.report_generated_at) {
+      const t = new Date(data.report_generated_at);
+      document.getElementById('scan-time').textContent = '最近扫描: ' + t.toLocaleString('zh-CN');
+    }
+  } else {
+    dot.className = 'w-2.5 h-2.5 rounded-full bg-red-500 inline-block';
+  }
+}
+
+// ========================================
+// Overview
+// ========================================
+async function loadOverview() {
+  const data = await fetchAPI('/summary');
+  if (!data || !data.summary) {
+    document.getElementById('panel-overview').innerHTML = '<div class="loading">暂无报告数据。请先运行扫描：<code>POST /scan</code></div>';
+    return;
+  }
+  summaryData = data;
+  const s = data.summary;
+  document.getElementById('m-datasets').textContent = s.total_datasets || 0;
+  document.getElementById('m-repos').textContent = s.total_github_repos || 0;
+  document.getElementById('m-papers').textContent = s.total_papers || 0;
+  document.getElementById('m-blogs').textContent = s.total_blog_posts || 0;
+
+  // Load datasets for chart + top 10
+  const dsData = await fetchAPI('/datasets?limit=500');
+  if (dsData && dsData.datasets) {
+    renderCategoryChart(dsData.datasets);
+    renderTopDatasets(dsData.datasets);
+  }
+}
+
+function renderCategoryChart(datasets) {
+  const counts = {};
+  datasets.forEach(d => {
+    const cat = d.category || 'other';
+    counts[cat] = (counts[cat] || 0) + 1;
+  });
+  const labels = Object.keys(counts);
+  const values = Object.values(counts);
+  const colors = ['#38bdf8','#a78bfa','#f472b6','#fb923c','#4ade80','#fbbf24','#f87171','#94a3b8','#2dd4bf','#818cf8'];
+
+  const ctx = document.getElementById('chart-categories').getContext('2d');
+  if (categoryChart) categoryChart.destroy();
+  categoryChart = new Chart(ctx, {
+    type: 'doughnut',
+    data: {
+      labels: labels.map(l => l.replace(/_/g, ' ')),
+      datasets: [{ data: values, backgroundColor: colors.slice(0, labels.length), borderWidth: 0 }]
+    },
+    options: {
+      responsive: true, maintainAspectRatio: true,
+      plugins: {
+        legend: { position: 'right', labels: { color: '#94a3b8', font: { size: 11 }, padding: 8, boxWidth: 12 } }
+      },
+      cutout: '55%'
+    }
+  });
+}
+
+function renderTopDatasets(datasets) {
+  const sorted = [...datasets].sort((a, b) => (b.downloads || 0) - (a.downloads || 0)).slice(0, 10);
+  const tbody = document.getElementById('top-datasets');
+  tbody.innerHTML = sorted.map(d => `<tr>
+    <td><a href="https://huggingface.co/datasets/${d.id}" target="_blank">${d.id || '-'}</a></td>
+    <td><span class="badge badge-blue">${(d.category || 'other').replace(/_/g, ' ')}</span></td>
+    <td>${fmtNum(d.downloads)}</td>
+  </tr>`).join('');
+}
+
+// ========================================
+// Datasets
+// ========================================
+async function loadDatasets() {
+  const el = document.getElementById('ds-loading');
+  el.style.display = 'block';
+  const cat = document.getElementById('ds-category').value;
+  const q = cat ? `?category=${cat}&limit=500` : '?limit=500';
+  const data = await fetchAPI('/datasets' + q);
+  el.style.display = 'none';
+  if (!data) return;
+  allDatasets = data.datasets || [];
+  renderDatasets();
+}
+
+function filterDatasets() {
+  renderDatasets();
+}
+
+function sortDatasets(key) {
+  if (dsSortKey === key) dsSortAsc = !dsSortAsc;
+  else { dsSortKey = key; dsSortAsc = false; }
+  renderDatasets();
+}
+
+function renderDatasets() {
+  const search = (document.getElementById('ds-search').value || '').toLowerCase();
+  let ds = allDatasets;
+  if (search) ds = ds.filter(d => (d.id || '').toLowerCase().includes(search) || (d.author || '').toLowerCase().includes(search) || (d.description || '').toLowerCase().includes(search));
+
+  ds = [...ds].sort((a, b) => {
+    let va = a[dsSortKey] ?? '', vb = b[dsSortKey] ?? '';
+    if (typeof va === 'number') return dsSortAsc ? va - vb : vb - va;
+    return dsSortAsc ? String(va).localeCompare(String(vb)) : String(vb).localeCompare(String(va));
+  });
+
+  document.getElementById('ds-count').textContent = `共 ${ds.length} 个数据集`;
+  const tbody = document.getElementById('ds-tbody');
+  tbody.innerHTML = ds.slice(0, 200).map(d => `<tr>
+    <td><a href="https://huggingface.co/datasets/${d.id}" target="_blank">${d.id || '-'}</a></td>
+    <td>${d.author || '-'}</td>
+    <td><span class="badge badge-blue">${(d.category || 'other').replace(/_/g, ' ')}</span></td>
+    <td>${fmtNum(d.downloads)}</td>
+    <td>${fmtNum(d.likes)}</td>
+    <td>${(d.languages || []).join(', ') || '-'}</td>
+    <td class="text-xs">${Array.isArray(d.license) ? d.license[0] : (d.license || '-')}</td>
+  </tr>`).join('');
+}
+
+// ========================================
+// GitHub
+// ========================================
+async function loadGithub() {
+  const el = document.getElementById('gh-loading');
+  el.style.display = 'block';
+  const rel = document.getElementById('gh-relevance').value;
+  const data = await fetchAPI(`/github?relevance=${rel}&limit=500`);
+  el.style.display = 'none';
+  if (!data) return;
+  allRepos = data.repos || [];
+  renderGithub();
+}
+
+function sortGithub(key) {
+  if (ghSortKey === key) ghSortAsc = !ghSortAsc;
+  else { ghSortKey = key; ghSortAsc = false; }
+  renderGithub();
+}
+
+function renderGithub() {
+  let repos = [...allRepos].sort((a, b) => {
+    let va = a[ghSortKey] ?? '', vb = b[ghSortKey] ?? '';
+    if (typeof va === 'number') return ghSortAsc ? va - vb : vb - va;
+    return ghSortAsc ? String(va).localeCompare(String(vb)) : String(vb).localeCompare(String(va));
+  });
+
+  document.getElementById('gh-count').textContent = `共 ${repos.length} 个仓库`;
+  const tbody = document.getElementById('gh-tbody');
+  tbody.innerHTML = repos.slice(0, 200).map(r => `<tr>
+    <td><a href="${r.url || '#'}" target="_blank">${r.full_name || r.name || '-'}</a></td>
+    <td>${fmtNum(r.stars)}</td>
+    <td>${r.language || '-'}</td>
+    <td class="text-xs">${r.updated_at || '-'}</td>
+    <td>${(r.relevance_signals || r.signals || []).slice(0, 3).map(s => `<span class="badge badge-green">${s}</span>`).join(' ')}</td>
+  </tr>`).join('');
+}
+
+// ========================================
+// Papers
+// ========================================
+async function loadPapers() {
+  const el = document.getElementById('pp-loading');
+  el.style.display = 'block';
+  const src = document.getElementById('pp-source').value;
+  const data = await fetchAPI(`/papers?source=${src}&limit=200`);
+  el.style.display = 'none';
+  if (!data) return;
+  const papers = data.papers || [];
+  document.getElementById('pp-count').textContent = `共 ${papers.length} 篇论文`;
+
+  document.getElementById('pp-list').innerHTML = papers.map(p => {
+    const srcBadge = p.source === 'arxiv'
+      ? '<span class="badge badge-orange">arXiv</span>'
+      : '<span class="badge badge-purple">HuggingFace</span>';
+    const authors = Array.isArray(p.authors) ? p.authors.slice(0, 3).join(', ') : (p.authors || '');
+    return `<div class="card">
+      <div class="flex items-start justify-between gap-4">
+        <div>
+          <a href="${p.url || p.pdf_url || '#'}" target="_blank" class="font-medium">${p.title || '-'}</a>
+          <div class="text-xs text-slate-500 mt-1">${authors}${p.authors && p.authors.length > 3 ? ' ...' : ''}</div>
+        </div>
+        <div class="flex items-center gap-2 shrink-0">
+          ${srcBadge}
+          <span class="text-xs text-slate-500">${p.created_at || p.published_at || ''}</span>
+        </div>
+      </div>
+    </div>`;
+  }).join('');
+}
+
+// ========================================
+// Blogs
+// ========================================
+async function loadBlogs() {
+  const el = document.getElementById('bl-loading');
+  el.style.display = 'block';
+  const data = await fetchAPI('/blogs?limit=500');
+  el.style.display = 'none';
+  if (!data) return;
+
+  const articles = data.articles || [];
+  // Group by source
+  const groups = {};
+  articles.forEach(a => {
+    const src = a.source || '未知';
+    if (!groups[src]) groups[src] = [];
+    groups[src].push(a);
+  });
+
+  const totalSources = Object.keys(groups).length;
+  document.getElementById('bl-count').textContent = `共 ${articles.length} 篇文章，来自 ${totalSources} 个来源`;
+
+  const listEl = document.getElementById('bl-list');
+  listEl.innerHTML = Object.entries(groups).map(([src, arts], idx) => `
+    <div class="blog-group">
+      <div class="blog-header" onclick="this.nextElementSibling.classList.toggle('open')">
+        <div class="flex items-center gap-2">
+          <span class="font-medium text-sm">${src}</span>
+          <span class="badge badge-gray">${arts.length} 篇</span>
+        </div>
+        <svg class="w-4 h-4 text-slate-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/></svg>
+      </div>
+      <div class="blog-body${idx < 3 ? ' open' : ''}">
+        ${arts.map(a => `<div class="py-2 border-t border-border/50">
+          <a href="${a.url || '#'}" target="_blank" class="text-sm">${a.title || '-'}</a>
+          <div class="text-xs text-slate-500 mt-0.5">${a.date || a.published_at || ''}</div>
+          ${a.summary ? `<div class="text-xs text-slate-400 mt-1">${a.summary.slice(0, 150)}</div>` : ''}
+        </div>`).join('')}
+      </div>
+    </div>
+  `).join('');
+}
+
+// ========================================
+// Helpers
+// ========================================
+function fmtNum(n) {
+  if (n == null) return '-';
+  if (n >= 1000000) return (n / 1000000).toFixed(1) + 'M';
+  if (n >= 1000) return (n / 1000).toFixed(1) + 'K';
+  return String(n);
+}
+
+// ========================================
+// Init
+// ========================================
+checkHealth();
+loaded.overview = true;
+loadOverview();
+</script>
+</body>
+</html>
