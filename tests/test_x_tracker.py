@@ -273,7 +273,7 @@ class TestFetchRSSHubFeed:
 
         tweets = tracker._fetch_rsshub_feed("testuser")
         assert tweets == []
-        assert tracker._rsshub_healthy is False
+        assert tracker._rsshub_consecutive_fails == 1
 
 
 class TestFetchAPIUserTweets:
@@ -627,8 +627,8 @@ class TestMultiInstanceFallback:
         assert len(tweets) == 1
         assert tracker._last_working_rsshub == "https://good-instance.example.com"
 
-    def test_rsshub_all_fail_marks_unhealthy(self):
-        """All RSSHub instances fail → _rsshub_healthy becomes False."""
+    def test_rsshub_all_fail_increments_counter(self):
+        """All RSSHub instances fail → consecutive fail counter increases."""
         tracker = XTracker({
             "x_tracker": {
                 "rsshub_urls": [
@@ -643,17 +643,47 @@ class TestMultiInstanceFallback:
 
         tweets = tracker._fetch_rsshub_feed("testuser")
         assert tweets == []
-        assert tracker._rsshub_healthy is False
+        assert tracker._rsshub_consecutive_fails == 1
 
-    def test_rsshub_unhealthy_skips_immediately(self):
-        """Once marked unhealthy, _fetch_rsshub_feed returns [] without HTTP calls."""
+    def test_rsshub_threshold_skips_immediately(self):
+        """Once fail threshold reached, _fetch_rsshub_feed returns [] without HTTP calls."""
         tracker = XTracker({})
-        tracker._rsshub_healthy = False
+        tracker._rsshub_consecutive_fails = tracker._rsshub_fail_threshold
         tracker.session.get = MagicMock()
 
         tweets = tracker._fetch_rsshub_feed("testuser")
         assert tweets == []
         tracker.session.get.assert_not_called()
+
+    def test_rsshub_success_resets_consecutive_fails(self):
+        """A successful fetch resets the consecutive failure counter."""
+        tracker = XTracker({
+            "x_tracker": {
+                "rsshub_urls": ["https://good.example.com"],
+            }
+        })
+        tracker._rsshub_consecutive_fails = 3
+
+        now = datetime.now(timezone.utc).replace(tzinfo=None)
+        mock_entry = MagicMock()
+        mock_entry.published_parsed = now.timetuple()[:6] + (0, 0, 0)
+        mock_entry.get = lambda key, default="": {
+            "title": "Test", "summary": "Test", "link": "https://x.com/t/1",
+        }.get(key, default)
+        mock_feed = MagicMock()
+        mock_feed.entries = [mock_entry]
+
+        ok_resp = MagicMock()
+        ok_resp.status_code = 200
+        ok_resp.text = "<rss>mock</rss>"
+        ok_resp.raise_for_status = MagicMock()
+        tracker.session.get = MagicMock(return_value=ok_resp)
+
+        with patch("trackers.x_tracker.feedparser.parse", return_value=mock_feed):
+            tweets = tracker._fetch_rsshub_feed("testuser", days=7)
+            assert len(tweets) == 1
+            assert tracker._rsshub_consecutive_fails == 0
+            assert tracker._rsshub_success_count == 1
 
     @patch.object(XTracker, "_fetch_api_user_tweets")
     @patch.object(XTracker, "_fetch_rsshub_feed")
@@ -666,9 +696,9 @@ class TestMultiInstanceFallback:
                 "accounts": ["testuser"],
             }
         })
-        # RSSHub returns nothing and marks unhealthy
+        # RSSHub returns nothing and threshold reached
         mock_rss.return_value = []
-        tracker._rsshub_healthy = False
+        tracker._rsshub_consecutive_fails = tracker._rsshub_fail_threshold
 
         mock_api.return_value = [
             {"text": "New dataset via API", "signals": ["dataset"]},
@@ -706,7 +736,7 @@ class TestMultiInstanceFallback:
             }
         })
         mock_rss.return_value = []
-        tracker._rsshub_healthy = False
+        tracker._rsshub_consecutive_fails = tracker._rsshub_fail_threshold
 
         result = tracker.fetch_account("testuser")
         assert result["has_activity"] is False

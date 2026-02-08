@@ -129,9 +129,11 @@ class XTracker:
 
         # Track which RSSHub instance works (optimization: try last working one first)
         self._last_working_rsshub = None
-        # Flag: set to True once all RSSHub instances confirmed dead
-        self._rsshub_healthy = True
-        self._rsshub_fail_logged = False
+        # Consecutive failure counter — disable RSSHub only after N consecutive failures
+        self._rsshub_consecutive_fails = 0
+        self._rsshub_fail_threshold = 5
+        self._rsshub_success_count = 0
+        self._rsshub_fail_count = 0
 
         # X API v2 settings
         self.bearer_token = x_config.get("bearer_token", "")
@@ -185,10 +187,11 @@ class XTracker:
         Returns:
             List of tweet dicts.
         """
-        if not self._rsshub_healthy:
+        # Skip RSSHub if too many consecutive failures (likely all instances truly down)
+        if self._rsshub_consecutive_fails >= self._rsshub_fail_threshold:
             return []
 
-        # Build ordered list of instances to try (last working one first)
+        # Build ordered list: last working instance first, then the rest
         instances = list(self.rsshub_urls)
         if self._last_working_rsshub and self._last_working_rsshub in instances:
             instances.remove(self._last_working_rsshub)
@@ -199,7 +202,7 @@ class XTracker:
             feed_url = f"{base_url}/twitter/user/{username}"
 
             def _do_fetch(url=feed_url):
-                resp = self.session.get(url, timeout=10, allow_redirects=False)
+                resp = self.session.get(url, timeout=15, allow_redirects=False)
                 # Detect redirect to error pages (e.g. rsshub.app → google.com/404)
                 if resp.status_code in (301, 302, 303, 307, 308):
                     raise requests.HTTPError(
@@ -211,19 +214,22 @@ class XTracker:
             result = self._fetch_with_retry(_do_fetch, f"RSSHub({base_url}) @{username}", max_retries=1)
             if result is not None:
                 self._last_working_rsshub = base_url
+                self._rsshub_consecutive_fails = 0
+                self._rsshub_success_count += 1
                 feed = result
                 break
 
         if feed is None:
-            # All instances failed — mark unhealthy and log once
-            self._rsshub_healthy = False
-            if not self._rsshub_fail_logged:
+            self._rsshub_consecutive_fails += 1
+            self._rsshub_fail_count += 1
+            if self._rsshub_consecutive_fails == self._rsshub_fail_threshold:
                 logger.warning(
-                    "All RSSHub instances unreachable: %s. "
-                    "X/Twitter tracking via RSSHub disabled for this run.",
-                    ", ".join(self.rsshub_urls),
+                    "RSSHub: %d consecutive failures, disabling for remaining accounts. "
+                    "(success: %d, fail: %d)",
+                    self._rsshub_fail_threshold,
+                    self._rsshub_success_count,
+                    self._rsshub_fail_count,
                 )
-                self._rsshub_fail_logged = True
             return []
 
         if not feed.entries:
@@ -428,9 +434,9 @@ class XTracker:
         if self.backend == "api":
             tweets = self._fetch_api_user_tweets(username, days) if self.bearer_token else []
         elif self.backend == "auto":
-            # Try RSSHub first, fallback to API
+            # Try RSSHub first, fallback to API if RSSHub disabled
             tweets = self._fetch_rsshub_feed(username, days)
-            if not tweets and not self._rsshub_healthy and self.bearer_token:
+            if not tweets and self._rsshub_consecutive_fails >= self._rsshub_fail_threshold and self.bearer_token:
                 tweets = self._fetch_api_user_tweets(username, days)
         else:
             # Default: rsshub only
@@ -464,7 +470,7 @@ class XTracker:
 
         # Fetch accounts in parallel
         if self.accounts:
-            with ThreadPoolExecutor(max_workers=4) as executor:
+            with ThreadPoolExecutor(max_workers=2) as executor:
                 futures = {
                     executor.submit(self.fetch_account, acct, days): acct for acct in self.accounts
                 }
@@ -488,6 +494,13 @@ class XTracker:
 
         active = len(results["accounts"])
         tweet_count = sum(len(a["relevant_tweets"]) for a in results["accounts"])
-        logger.info("Found %d active accounts with %d relevant tweets", active, tweet_count)
+        logger.info(
+            "Found %d active accounts with %d relevant tweets "
+            "(RSSHub: %d ok / %d fail)",
+            active,
+            tweet_count,
+            self._rsshub_success_count,
+            self._rsshub_fail_count,
+        )
 
         return results

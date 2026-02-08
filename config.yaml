@@ -1010,12 +1010,13 @@ x_tracker:
   # Public instances may be unreliable — self-host for best results:
   #   docker run -p 1200:1200 diygod/rsshub
   rsshub_urls:
+    - "http://localhost:1200"
     - "https://rsshub.app"
     - "https://rsshub.rssforever.com"
     - "https://rsshub.ktachibana.party"
   # X API v2 bearer token (fallback when RSSHub fails, or primary when backend=api)
-  # Get one at https://developer.x.com — free tier: 1500 reads/month
-  bearer_token: "${X_BEARER_TOKEN}"
+  # Get one at https://developer.x.com (requires paid plan)
+  bearer_token: ""
 
   # Monitored accounts - AI labs, researchers, data vendors
   # Total: ~100 accounts across 12 categories
