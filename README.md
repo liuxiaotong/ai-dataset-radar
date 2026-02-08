@@ -49,6 +49,7 @@ graph LR
 | **时间感知** | 数据集/模型/论文全链路采集并展示发布日期 |
 | **生产就绪** | Docker 部署、CI 流水线、708 测试用例、配置校验 |
 | **环境原生 LLM** | `--insights` 模式利用 Claude Code/App 原生能力分析 |
+| **Skill 驱动** | 7 个 Claude Code Skills 覆盖采集→查询→分析→深潜完整工作流 |
 
 ### 适用场景 / Use Cases
 
@@ -350,6 +351,51 @@ tools = [
 
 ---
 
+## Claude Code Skills
+
+在 Claude Code 中输入 `/` 即可调用，覆盖完整的竞争情报工作流：
+
+| 命令 | 用途 | 类型 | 是否联网 |
+|------|------|------|----------|
+| `/scan` | 运行扫描 + 自动生成 AI 分析报告 | 采集 | 是 |
+| `/brief` | 快速情报简报（5 条发现 + 行动建议） | 阅读 | 否 |
+| `/search 关键词` | 跨 5 源搜索（数据集/GitHub/论文/博客/X） | 查询 | 否 |
+| `/diff` | 对比两次报告（新增/消失/变化） | 对比 | 否 |
+| `/deep-dive 目标` | 组织/数据集/分类深度分析 | 分析 | 否 |
+| `/recipe 数据集ID` | DataRecipe 逆向分析（成本/Schema/难度） | 深潜 | 是 |
+| `/radar` | 通用情报助手（路由到其他 Skill） | 入口 | — |
+
+### 典型工作流
+
+```bash
+# 1. 每周采集（自动分析 + DataRecipe Top 5）
+/scan --days 7 --recipe
+
+# 2. 晨会快速浏览
+/brief
+
+# 3. 按主题搜索
+/search RLHF
+/search 机器人数据集
+
+# 4. 聚焦某组织
+/deep-dive NVIDIA
+
+# 5. 深入某数据集
+/recipe allenai/Dolci-Instruct-SFT
+
+# 6. 周对比变化
+/diff
+```
+
+### Skill 设计原则
+
+- **环境 LLM 接管**：当 `ANTHROPIC_API_KEY` 未设置时，`/scan` 会让 Claude Code 自身作为分析引擎生成 insights 报告
+- **纯本地读取**：`/brief`、`/search`、`/diff`、`/deep-dive` 不触发网络请求，只解析本地 JSON 报告
+- **交叉引用**：每个 Skill 的输出中会推荐相关的后续 Skill（如 `/search` 结果建议 `/deep-dive`）
+
+---
+
 ## 数据源
 
 ### 监控范围
@@ -528,6 +574,14 @@ ai-dataset-radar/
 │   ├── tools.json              # 工具定义
 │   ├── schema.json             # 输出规范
 │   └── prompts.md              # 系统提示词
+├── .claude/commands/            # Claude Code Skills（7 个）
+│   ├── scan.md                # /scan — 扫描 + 自动分析
+│   ├── brief.md               # /brief — 快速情报简报
+│   ├── search.md              # /search — 跨源智能搜索
+│   ├── diff.md                # /diff — 报告对比
+│   ├── deep-dive.md           # /deep-dive — 深度分析
+│   ├── recipe.md              # /recipe — DataRecipe 逆向分析
+│   └── radar.md               # /radar — 通用情报助手
 ├── mcp_server/                 # MCP 服务
 ├── .github/workflows/ci.yml    # CI：ruff lint + pytest
 ├── Dockerfile                  # 容器镜像（含 Playwright）
@@ -665,6 +719,7 @@ Claude Desktop 中同时配置两个 MCP Server，可自然语言驱动端到端
 - [x] 报告按日期子目录组织 (`data/reports/YYYY-MM-DD/`, MCP/API 兼容新旧两种布局)
 - [x] DataRecipe 自动衔接 (`--recipe` 智能评分选 Top N 数据集, 自动调用 DeepAnalyzerCore 深度分析, 输出聚合报告)
 - [x] Recipe 评分公式优化 (新增 likes 社区认可维度, 降低类别权重占比, 渐进式新鲜度衰减, <50 下载半分门槛)
+- [x] Claude Code Skills 深化 (7 个: scan/brief/search/diff/deep-dive/recipe/radar，覆盖采集→查询→分析→深潜完整工作流)
 
 ---
 
