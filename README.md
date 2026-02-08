@@ -8,7 +8,7 @@
 [![CI](https://github.com/liuxiaotong/ai-dataset-radar/actions/workflows/ci.yml/badge.svg)](https://github.com/liuxiaotong/ai-dataset-radar/actions/workflows/ci.yml)
 [![License: MIT](https://img.shields.io/badge/License-MIT-green.svg)](LICENSE)
 [![Python 3.10+](https://img.shields.io/badge/python-3.10+-blue.svg)](https://www.python.org/downloads/)
-[![Tests](https://img.shields.io/badge/tests-641_passed-brightgreen.svg)](#开发路线)
+[![Tests](https://img.shields.io/badge/tests-706_passed-brightgreen.svg)](#开发路线)
 [![Agent Ready](https://img.shields.io/badge/Agent-Ready-orange.svg)](#agent-集成)
 [![MCP](https://img.shields.io/badge/MCP-11_Tools-purple.svg)](#mcp-server)
 
@@ -47,7 +47,7 @@ graph LR
 | **人机兼顾** | 同时输出 Markdown (人类) 与 JSON (智能体) |
 | **高性能异步** | 全链路 aiohttp + asyncio.gather，400+ 请求并发执行 |
 | **时间感知** | 数据集/模型/论文全链路采集并展示发布日期 |
-| **生产就绪** | Docker 部署、CI 流水线、641 测试用例、配置校验 |
+| **生产就绪** | Docker 部署、CI 流水线、706 测试用例、配置校验 |
 | **环境原生 LLM** | `--insights` 模式利用 Claude Code/App 原生能力分析 |
 
 ### 适用场景 / Use Cases
@@ -213,6 +213,8 @@ uvicorn agent.api:app --port 8080
 
 | 端点 | 方法 | 功能 |
 |------|------|------|
+| `/dashboard` | GET | Web 可视化仪表盘（5 视图） |
+| `/ui` | GET | 重定向至仪表盘 |
 | `/health` | GET | 健康检查（认证状态、报告可用性） |
 | `/summary` | GET | 获取最新报告摘要 |
 | `/datasets` | GET | 数据集列表 (支持 category 筛选) |
@@ -421,10 +423,16 @@ tools = [
     "languages": ["en", "zh"],
     "license": "odc-by"
   }],
-  "github_repos": [{
-    "name": "open-instruct",
-    "stars": 1500,
-    "relevance": "high"
+  "github_activity": [{
+    "org": "openai",
+    "repos_count": 12,
+    "repos_updated": [{
+      "name": "open-instruct",
+      "full_name": "openai/open-instruct",
+      "stars": 1500,
+      "relevance": "high",
+      "relevance_signals": ["dataset", "instruction"]
+    }]
   }],
   "papers": [{
     "title": "...",
@@ -492,6 +500,7 @@ ai-dataset-radar/
 │       └── cache.py            # FileCache（TTL + LRU 驱逐）
 ├── agent/                      # Agent 集成层
 │   ├── api.py                  # REST API（认证 + 限速 + 健康检查）
+│   ├── static/index.html       # Web 仪表盘（单文件，Tailwind + Chart.js）
 │   ├── tools.json              # 工具定义
 │   ├── schema.json             # 输出规范
 │   └── prompts.md              # 系统提示词
@@ -556,7 +565,7 @@ graph LR
 - [x] 全链路异步 I/O (aiohttp + asyncio.gather 替代 requests + ThreadPoolExecutor，~2x 提速)
 - [x] CI 流水线 (GitHub Actions: ruff lint + pytest, push/PR 触发)
 - [x] Docker 容器化 (Dockerfile + docker-compose: scan 扫描 + api 服务)
-- [x] 测试覆盖 (641 用例: async_http 49 + blog_tracker 46 + intel_report 22 + MCP 86 + GitHub 44 + X 45 + Org 30 + 其余 319)
+- [x] 测试覆盖 (706 用例: API 65 + async_http 49 + blog_tracker 46 + intel_report 22 + MCP 86 + GitHub 44 + X 45 + Org 30 + 其余 319)
 - [x] 博客抓取多策略降级 (RSS → HTML → Playwright, networkidle → domcontentloaded)
 - [x] 中国数据供应商监控 (海天瑞声、整数智能、数据堂、智源 BAAI)
 - [x] X/Twitter 监控 (101 账户，9 类别，自托管 RSSHub + 多实例 fallback + 连续失败阈值保护)
@@ -580,7 +589,8 @@ graph LR
 - [x] 趋势分析集成 (radar_trend 增长/上升/突破查询 + main_intel 每次扫描自动记录 daily_stats)
 - [x] 历史时间线 (radar_history 跨期报告统计对比 + 趋势线)
 - [ ] 定时任务与告警
-- [x] Web 可视化仪表盘 (`/dashboard`: 概览/数据集/GitHub/论文/博客 5 视图，Chart.js 图表，深色主题)
+- [x] Web 可视化仪表盘 (`/dashboard`: 概览/数据集/GitHub/论文/博客 5 视图，Chart.js 图表，深色主题，`python agent/api.py` 一键启动)
+- [x] 博客抓取修复 (移除过度激进的信号关键词过滤，保留所有已监控 AI 实验室的博客文章)
 
 ---
 

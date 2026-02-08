@@ -9,7 +9,7 @@ import sys
 import time
 from pathlib import Path
 from types import ModuleType
-from unittest.mock import MagicMock, mock_open, patch
+from unittest.mock import AsyncMock, mock_open, patch
 
 import pytest
 
@@ -43,10 +43,17 @@ SAMPLE_REPORT = {
         {"name": "beta-preference-v2", "category": "preference", "downloads": 3000, "org": "anthropic"},
         {"name": "gamma-code-v3", "category": "code", "downloads": 100, "org": "meta"},
     ],
-    "github_repos": [
-        {"name": "repo-a", "stars": 1200, "relevance": "high"},
-        {"name": "repo-b", "stars": 300, "relevance": "low"},
-        {"name": "repo-c", "stars": 900, "relevance": "high"},
+    "github_activity": [
+        {
+            "org": "test-org",
+            "repos_count": 3,
+            "repos_updated": [
+                {"name": "repo-a", "full_name": "test-org/repo-a", "stars": 1200, "relevance": "high"},
+                {"name": "repo-b", "full_name": "test-org/repo-b", "stars": 300, "relevance": "low"},
+                {"name": "repo-c", "full_name": "test-org/repo-c", "stars": 900, "relevance": "high"},
+            ],
+            "has_activity": True,
+        },
     ],
     "papers": [
         {"title": "Paper A", "source": "arxiv", "is_dataset_paper": True},
@@ -127,7 +134,7 @@ def _mock_main_intel():
     ``sys.modules`` so the local import resolves without touching disk.
     """
     fake_module = ModuleType("main_intel")
-    fake_module.run_intel_scan = MagicMock(return_value=None)
+    fake_module.run_intel_scan = AsyncMock(return_value=None)
     return patch.dict("sys.modules", {"main_intel": fake_module}), fake_module
 
 
@@ -748,8 +755,8 @@ class TestEdgeCases:
         assert resp.json()["count"] == 0
 
     def test_github_empty_repos(self, client):
-        """GET /github returns 0 results when report has no github_repos."""
-        report = {**SAMPLE_REPORT, "github_repos": []}
+        """GET /github returns 0 results when report has no github_activity."""
+        report = {**SAMPLE_REPORT, "github_activity": []}
         with patch("agent.api.get_latest_report", return_value=report):
             resp = client.get("/github?relevance=all")
         assert resp.status_code == 200

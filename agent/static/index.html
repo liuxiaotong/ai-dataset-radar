@@ -373,6 +373,10 @@ function renderGithub() {
 
   document.getElementById('gh-count').textContent = `共 ${repos.length} 个仓库`;
   const tbody = document.getElementById('gh-tbody');
+  if (repos.length === 0) {
+    tbody.innerHTML = '<tr><td colspan="5" class="text-center text-slate-500 py-6">无匹配仓库</td></tr>';
+    return;
+  }
   tbody.innerHTML = repos.slice(0, 200).map(r => `<tr>
     <td><a href="${r.url || '#'}" target="_blank">${r.full_name || r.name || '-'}</a></td>
     <td>${fmtNum(r.stars)}</td>
@@ -438,6 +442,10 @@ async function loadBlogs() {
   document.getElementById('bl-count').textContent = `共 ${articles.length} 篇文章，来自 ${totalSources} 个来源`;
 
   const listEl = document.getElementById('bl-list');
+  if (articles.length === 0) {
+    listEl.innerHTML = '<div class="card text-center text-slate-500 py-8">本次扫描未发现新博客文章</div>';
+    return;
+  }
   listEl.innerHTML = Object.entries(groups).map(([src, arts], idx) => `
     <div class="blog-group">
       <div class="blog-header" onclick="this.nextElementSibling.classList.toggle('open')">

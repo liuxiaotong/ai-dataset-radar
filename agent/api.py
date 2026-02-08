@@ -325,7 +325,15 @@ async def list_github_repos(
     if not report:
         raise HTTPException(status_code=404, detail="No report found. Run /scan first.")
 
-    repos = report.get("github_repos", [])
+    # Flatten repos from github_activity[].repos_updated
+    github_activity = report.get("github_activity", [])
+    repos = []
+    for org_data in github_activity:
+        org_name = org_data.get("org", "")
+        for repo in org_data.get("repos_updated", []):
+            if "org" not in repo:
+                repo["org"] = org_name
+            repos.append(repo)
 
     if relevance != "all":
         repos = [r for r in repos if r.get("relevance") == relevance]
@@ -336,6 +344,7 @@ async def list_github_repos(
     return {
         "count": len(repos[:limit]),
         "filter": {"relevance": relevance},
+        "orgs": len(github_activity),
         "repos": repos[:limit],
     }
 

@@ -789,12 +789,11 @@ class BlogTracker:
             if articles:
                 result["render_method"] = "browser"
 
-        # Process results
+        # Process results — keep all articles, signals are bonus metadata
         if articles:
             result["total_articles"] = len(articles)
-            relevant = [a for a in articles if a.get("signals")]
-            result["articles"] = relevant
-            result["has_activity"] = len(relevant) > 0
+            result["articles"] = articles
+            result["has_activity"] = len(articles) > 0
             result["status"] = "success"
             result["error"] = None
         else:
