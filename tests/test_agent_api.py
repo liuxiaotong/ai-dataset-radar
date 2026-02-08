@@ -34,9 +34,12 @@ SAMPLE_REPORT = {
     "period": {"start": "2025-04-24", "end": "2025-05-01", "days": 7},
     "summary": {
         "total_datasets": 42,
-        "total_repos": 15,
+        "total_github_orgs": 1,
+        "total_github_repos": 3,
+        "total_github_repos_high_relevance": 2,
         "total_papers": 8,
         "total_blog_posts": 20,
+        "total_x_tweets": 0,
     },
     "datasets": [
         {"id": "openai/alpha-sft-v1", "category": "sft_instruction", "downloads": 5000, "org": "openai"},

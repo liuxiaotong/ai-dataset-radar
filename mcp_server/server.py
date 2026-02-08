@@ -126,13 +126,18 @@ async def list_tools():
         ),
         Tool(
             name="radar_blogs",
-            description="获取最新博客文章（来自 OpenAI、Anthropic、Mistral、Scale AI、Stanford HAI 等 17 个博客源）",
+            description="获取最新博客文章（来自 62+ 个博客源）",
             inputSchema={
                 "type": "object",
                 "properties": {
                     "source": {
                         "type": "string",
                         "description": "按博客源过滤，如 'OpenAI Blog', 'Mistral AI', 'Stanford HAI'",
+                        "default": "",
+                    },
+                    "category": {
+                        "type": "string",
+                        "description": "按分类过滤: us_frontier, us_emerging, china, research, data_vendor",
                         "default": "",
                     },
                     "limit": {"type": "integer", "description": "返回数量限制", "default": 20},
@@ -805,6 +810,7 @@ async def call_tool(name: str, arguments: dict):
 
         blog_posts = report.get("blog_posts", [])
         source_filter = arguments.get("source", "")
+        category_filter = arguments.get("category", "")
         limit = arguments.get("limit", 20)
 
         lines = ["**博客文章动态:**\n"]
@@ -820,6 +826,10 @@ async def call_tool(name: str, arguments: dict):
 
             # Filter by source if specified
             if source_filter and source_filter.lower() not in source.lower():
+                continue
+
+            # Filter by category if specified
+            if category_filter and blog.get("category", "") != category_filter:
                 continue
 
             total_articles += len(articles)
