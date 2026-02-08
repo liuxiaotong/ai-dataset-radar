@@ -7,6 +7,8 @@ from unittest.mock import patch
 
 import pytest
 
+pytest.importorskip("mcp", reason="mcp package not installed")
+
 # Add project root to path
 PROJECT_ROOT = Path(__file__).parent.parent
 sys.path.insert(0, str(PROJECT_ROOT / "mcp_server"))
