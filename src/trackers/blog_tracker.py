@@ -220,7 +220,8 @@ class BlogTracker:
             text = await self._http.get_text(url, max_retries=2)
             if not text:
                 return [], "Failed to fetch RSS feed"
-            feed = feedparser.parse(text)
+            loop = asyncio.get_running_loop()
+            feed = await loop.run_in_executor(None, feedparser.parse, text)
         except Exception as e:
             return [], f"RSS parse error: {e}"
 
@@ -828,7 +829,7 @@ class BlogTracker:
 
         async def _fetch_auto_blogs():
             """Fetch auto/RSS blogs concurrently with semaphore."""
-            sem = asyncio.Semaphore(15)
+            sem = asyncio.Semaphore(25)
 
             async def _bounded(cfg):
                 async with sem:
@@ -871,8 +872,8 @@ class BlogTracker:
                             )
                         except Exception as e:
                             logger.warning("Error fetching %s: %s", cfg.get("name", "?"), e)
-                        # Restart browser every 5 pages
-                        if (i + 1) % 5 == 0 and i + 1 < len(browser_blogs):
+                        # Restart browser every 15 pages to reclaim memory
+                        if (i + 1) % 15 == 0 and i + 1 < len(browser_blogs):
                             try:
                                 await shared_browser.close()
                                 shared_browser = await pw_context.chromium.launch(headless=True)

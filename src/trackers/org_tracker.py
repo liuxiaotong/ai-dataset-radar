@@ -174,8 +174,21 @@ class OrgTracker:
             "priority": org_info["priority"],
         }
 
+        # Fetch all datasets + models for all hf_ids in parallel
+        fetch_tasks = []
+        hf_id_list = []
         for hf_id in org_info["hf_ids"]:
-            datasets = await self._fetch_org_datasets(hf_id)
+            fetch_tasks.append(self._fetch_org_datasets(hf_id))
+            fetch_tasks.append(self._fetch_org_models(hf_id))
+            hf_id_list.append(hf_id)
+
+        fetch_results = await asyncio.gather(*fetch_tasks, return_exceptions=True)
+
+        for i, hf_id in enumerate(hf_id_list):
+            ds_result = fetch_results[i * 2]
+            model_result = fetch_results[i * 2 + 1]
+
+            datasets = ds_result if not isinstance(ds_result, Exception) else []
             for ds in datasets:
                 ds["_org"] = org_name
                 ds["_hf_id"] = hf_id
@@ -192,7 +205,7 @@ class OrgTracker:
                 else:
                     org_data["datasets"].append(ds)
 
-            models = await self._fetch_org_models(hf_id)
+            models = model_result if not isinstance(model_result, Exception) else []
             for model in models:
                 model["_org"] = org_name
                 model["_hf_id"] = hf_id

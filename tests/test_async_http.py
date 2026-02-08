@@ -559,17 +559,17 @@ class TestAsyncHTTPClientModuleConstants:
 
     def test_default_timeout(self):
         """DEFAULT_TIMEOUT has expected values."""
-        assert DEFAULT_TIMEOUT.total == 30
+        assert DEFAULT_TIMEOUT.total == 20
         assert DEFAULT_TIMEOUT.connect == 5
-        assert DEFAULT_TIMEOUT.sock_read == 15
+        assert DEFAULT_TIMEOUT.sock_read == 12
 
     def test_default_retries(self):
-        """DEFAULT_RETRIES is 3."""
-        assert DEFAULT_RETRIES == 3
+        """DEFAULT_RETRIES is 2."""
+        assert DEFAULT_RETRIES == 2
 
     def test_default_backoff_factor(self):
-        """DEFAULT_BACKOFF_FACTOR is 0.5."""
-        assert DEFAULT_BACKOFF_FACTOR == 0.5
+        """DEFAULT_BACKOFF_FACTOR is 0.3."""
+        assert DEFAULT_BACKOFF_FACTOR == 0.3
 
     def test_retry_status_codes(self):
         """RETRY_STATUS_CODES contains the expected codes."""

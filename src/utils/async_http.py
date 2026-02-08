@@ -11,11 +11,11 @@ from utils.logging_config import get_logger
 logger = get_logger("async_http")
 
 # Default timeout configuration
-DEFAULT_TIMEOUT = aiohttp.ClientTimeout(total=30, connect=5, sock_read=15)
+DEFAULT_TIMEOUT = aiohttp.ClientTimeout(total=20, connect=5, sock_read=12)
 
 # Retry configuration
-DEFAULT_RETRIES = 3
-DEFAULT_BACKOFF_FACTOR = 0.5
+DEFAULT_RETRIES = 2
+DEFAULT_BACKOFF_FACTOR = 0.3
 RETRY_STATUS_CODES = {429, 500, 502, 503, 504}
 
 

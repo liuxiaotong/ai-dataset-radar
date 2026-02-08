@@ -209,16 +209,18 @@ class XTracker:
         for base_url in instances:
             feed_url = f"{base_url}/twitter/user/{username}"
 
-            async def _do_fetch(url=feed_url):
-                # Check for redirect first (error pages, domain parking, etc.)
-                status = await self._http.head(url, allow_redirects=False, timeout=10)
-                if status is not None and status in (301, 302, 303, 307, 308):
-                    raise RuntimeError(f"Redirect {status} for {url}")
+            async def _do_fetch(url=feed_url, base=base_url):
+                # Skip HEAD check for known-good RSSHub instance (saves 1 RTT)
+                if base != self._last_working_rsshub:
+                    status = await self._http.head(url, allow_redirects=False, timeout=10)
+                    if status is not None and status in (301, 302, 303, 307, 308):
+                        raise RuntimeError(f"Redirect {status} for {url}")
 
                 text = await self._http.get_text(url, max_retries=1)
                 if text is None:
                     raise RuntimeError(f"Failed to fetch {url}")
-                return feedparser.parse(text)
+                loop = asyncio.get_running_loop()
+                return await loop.run_in_executor(None, feedparser.parse, text)
 
             result = await self._fetch_with_retry(
                 _do_fetch, f"RSSHub({base_url}) @{username}", max_retries=1
@@ -489,7 +491,7 @@ class XTracker:
         # Fetch accounts concurrently with bounded parallelism
         failed_accounts = []
         if self.accounts:
-            sem = asyncio.Semaphore(10)
+            sem = asyncio.Semaphore(20)
 
             async def _bounded(acct):
                 async with sem:

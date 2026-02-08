@@ -344,7 +344,7 @@ class GitHubTracker:
         Returns:
             List of org activity summaries (only active ones).
         """
-        sem = asyncio.Semaphore(8)
+        sem = asyncio.Semaphore(15)
 
         async def _bounded(org):
             async with sem:
