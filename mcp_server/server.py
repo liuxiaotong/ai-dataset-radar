@@ -394,6 +394,7 @@ def search_in_report(report: dict, query: str, sources: list[str], limit: int) -
                     matched.append(
                         {
                             "source": source_name,
+                            "category": blog.get("category", ""),
                             "title": article.get("title"),
                             "url": article.get("url"),
                             "date": article.get("date", ""),
@@ -813,7 +814,9 @@ async def call_tool(name: str, arguments: dict):
 
             total_articles += len(articles)
 
-            lines.append(f"### {source} ({len(articles)} 篇)")
+            category = blog.get("category", "")
+            cat_label = f" [{category}]" if category else ""
+            lines.append(f"### {source}{cat_label} ({len(articles)} 篇)")
             for article in articles[:5]:  # Max 5 per source
                 if shown_articles >= limit:
                     break

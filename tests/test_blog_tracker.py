@@ -570,6 +570,41 @@ class TestFetchBlog:
         assert result["total_articles"] >= 1
         assert result["feed_url"] == "https://lab.com/feed.xml"
 
+    async def test_fetch_blog_includes_category(self):
+        """Blog fetch result includes category from config."""
+        mock_http = _make_http_mock()
+        tracker = BlogTracker({}, http_client=mock_http)
+
+        yesterday = datetime.now(timezone.utc).replace(tzinfo=None) - timedelta(days=1)
+        rss_xml = f"""<?xml version="1.0"?>
+        <rss version="2.0">
+          <channel>
+            <item>
+              <title>Test Post</title>
+              <link>https://lab.com/post</link>
+              <description>Test.</description>
+              <pubDate>{yesterday.strftime('%a, %d %b %Y %H:%M:%S')} GMT</pubDate>
+            </item>
+          </channel>
+        </rss>"""
+        mock_http.get_text.return_value = rss_xml
+
+        blog_cfg = {
+            "name": "AI Lab",
+            "url": "https://lab.com/blog",
+            "rss_url": "https://lab.com/feed.xml",
+            "category": "us_frontier",
+        }
+        result = await tracker.fetch_blog(blog_cfg)
+        assert result["category"] == "us_frontier"
+
+    async def test_fetch_blog_category_default_empty(self):
+        """Blog without category in config defaults to empty string."""
+        mock_http = _make_http_mock()
+        tracker = BlogTracker({}, http_client=mock_http)
+        result = await tracker.fetch_blog({"name": "No Cat", "url": "https://x.com"})
+        assert result["category"] == ""
+
 
 # ===========================================================================
 # 10. map_blog_to_vendor

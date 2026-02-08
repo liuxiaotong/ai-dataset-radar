@@ -452,6 +452,7 @@ async function loadBlogs() {
       <div class="blog-header" onclick="this.nextElementSibling.classList.toggle('open')">
         <div class="flex items-center gap-2">
           <span class="font-medium text-sm">${src}</span>
+          ${arts[0].category ? `<span class="badge badge-blue">${arts[0].category}</span>` : ''}
           <span class="badge badge-gray">${arts.length} 篇</span>
         </div>
         <svg class="w-4 h-4 text-slate-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/></svg>
