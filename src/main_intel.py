@@ -1216,6 +1216,26 @@ async def run_intel_scan(days: int = 7) -> dict:
         datasets_by_type = data_classifier.group_by_type(all_datasets)
         summary = data_classifier.summarize(all_datasets)
 
+        # Data quality validation
+        anomalies = []
+        active_github = sum(1 for a in github_activity if a.get("repos_updated"))
+        active_blogs = sum(1 for a in blog_activity if a.get("articles"))
+        x_accounts = len(x_activity.get("accounts", []))
+
+        if active_github == 0:
+            anomalies.append("GitHub: 0 active orgs (expected >0)")
+        if active_blogs == 0:
+            anomalies.append("Blogs: 0 active blogs (expected >0)")
+        if x_tracker and x_accounts == 0:
+            anomalies.append("X/Twitter: 0 active accounts (check RSSHub/API connectivity)")
+        if len(papers) == 0:
+            anomalies.append("Papers: 0 results from arXiv + HF Papers (check network)")
+        if len(all_datasets) == 0:
+            anomalies.append("Datasets: 0 from all tracked orgs (check HuggingFace API)")
+
+        if anomalies:
+            logger.warning("Data quality warnings: %s", "; ".join(anomalies))
+
         # Generate and save report
         report = report_generator.generate(
             lab_activity=lab_activity,
@@ -1239,6 +1259,7 @@ async def run_intel_scan(days: int = 7) -> dict:
             ]
 
         all_data = {
+            "data_quality_warnings": anomalies,
             "period": {"days": days, "end": datetime.now().isoformat()},
             "labs_activity": lab_activity,
             "vendor_activity": vendor_activity,
