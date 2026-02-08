@@ -114,11 +114,15 @@ def format_insights_prompt(
                 ds_id = ds.get("id", "")
                 downloads = ds.get("downloads", 0)
                 likes = ds.get("likes", 0)
+                created = ds.get("created_at") or ds.get("createdAt") or ""
+                if created:
+                    created = created[:10]
                 desc = ds.get("description", "")
                 # Clean up description whitespace
                 if desc:
                     desc = " ".join(desc.split())[:300]
-                lines.append(f"- 📦 **{ds_id}** (downloads: {downloads:,}, likes: {likes})")
+                date_str = f" ({created})" if created else ""
+                lines.append(f"- 📦 **{ds_id}**{date_str} downloads: {downloads:,}, likes: {likes}")
                 if desc:
                     lines.append(f"  {desc}")
                 # Show meaningful tags (filter out noise)
@@ -161,6 +165,9 @@ def format_insights_prompt(
                 downloads = model.get("downloads", 0)
                 likes = model.get("likes", 0)
                 pipeline = model.get("pipeline_tag", "")
+                created = model.get("created_at") or model.get("createdAt") or ""
+                if created:
+                    created = created[:10]
                 model_tags = model.get("tags", [])
                 # Extract meaningful tags for models
                 meaningful = [
@@ -179,8 +186,9 @@ def format_insights_prompt(
                         "pytorch_model_hub_mixin",
                     )
                 ][:6]
+                model_date_str = f" ({created})" if created else ""
                 lines.append(
-                    f"- 🤖 **{model_id}** (downloads: {downloads:,}, likes: {likes}, pipeline: {pipeline})"
+                    f"- 🤖 **{model_id}**{model_date_str} downloads: {downloads:,}, likes: {likes}, pipeline: {pipeline}"
                 )
                 if meaningful:
                     lines.append(f"  标签: {', '.join(meaningful)}")
@@ -216,10 +224,14 @@ def format_insights_prompt(
             for ds in ds_list:
                 ds_id = ds.get("id", "")
                 downloads = ds.get("downloads", 0)
+                created = ds.get("created_at") or ds.get("createdAt") or ""
+                if created:
+                    created = created[:10]
                 desc = ds.get("description", "")
                 if desc:
                     desc = " ".join(desc.split())[:300]
-                lines.append(f"- 📦 **{ds_id}** (downloads: {downloads:,})")
+                date_str = f" ({created})" if created else ""
+                lines.append(f"- 📦 **{ds_id}**{date_str} downloads: {downloads:,}")
                 if desc:
                     lines.append(f"  {desc}")
             lines.append("")
@@ -389,9 +401,13 @@ def format_insights_prompt(
                 if abstract:
                     abstract = " ".join(abstract.split())[:400]
                 matched_kw = paper.get("_matched_keywords", [])
+                pub_date = paper.get("published_at") or paper.get("created_at") or ""
+                if pub_date and len(pub_date) >= 10:
+                    pub_date = pub_date[:10]
 
                 link_str = f"[{source}]({url})" if url else f"[{source}]"
-                lines.append(f"- **{title}** {link_str}")
+                paper_date_str = f"({pub_date}) " if pub_date else ""
+                lines.append(f"- **{title}** {paper_date_str}{link_str}")
                 if matched_kw:
                     lines.append(f"  关键词命中: {', '.join(matched_kw[:5])}")
                 if abstract:
@@ -406,10 +422,13 @@ def format_insights_prompt(
     lines.append("=" * 60 + "\n")
     lines.append("""背景：你是 AI 训练数据行业的竞争情报分析师。读者是一家数据服务公司的管理层，需要从以上数据中获取可执行的商业洞察。
 
+注意：上方数据中，数据集和模型名称后的括号内日期为发布/更新时间（YYYY-MM-DD），论文标题后的括号内日期为发表时间。请在分析中引用具体日期。
+
 请提供以下分析：
 
 ### 1. 关键发现（Key Findings）
-- 本周最值得关注的 3-5 个事件（数据集发布、模型动态、工具更新），逐条说明原因和商业意义
+- 本周最值得关注的 3-5 个事件（数据集发布、模型动态、工具更新），标注具体日期，逐条说明原因和商业意义
+- 按时间顺序排列，突出最新动态
 - 特别关注：新发布的高价值训练数据集、RLHF/对齐相关动态、合成数据方向
 
 ### 2. 组织动态图谱
@@ -427,7 +446,11 @@ def format_insights_prompt(
 - 有哪些值得警惕的竞争威胁？
 - 建议优先关注的数据类型或技术方向
 
-请用中文回答。分析应该具体、可执行，避免泛泛而谈。引用具体的数据集名称、组织名称和论文标题。
+### 5. 时间线（Timeline）
+- 按日期列出本周重要事件时间线（数据集发布、模型发布、论文发表）
+- 标注日期和关联组织
+
+请用中文回答。分析应该具体、可执行，避免泛泛而谈。引用具体的数据集名称、组织名称、论文标题和日期。
 """)
 
     return "\n".join(lines)

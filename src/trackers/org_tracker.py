@@ -206,6 +206,8 @@ class OrgTracker:
             for ds in datasets:
                 ds["_org"] = org_name
                 ds["_hf_id"] = hf_id
+                ds["created_at"] = ds.get("createdAt", "")
+                ds["last_modified"] = ds.get("lastModified", "")
                 modified = ds.get("lastModified", "")
                 if modified:
                     try:
@@ -221,6 +223,8 @@ class OrgTracker:
             for model in models:
                 model["_org"] = org_name
                 model["_hf_id"] = hf_id
+                model["created_at"] = model.get("createdAt", "")
+                model["last_modified"] = model.get("lastModified", "")
                 modified = model.get("lastModified", "")
                 if modified:
                     try:
@@ -307,6 +311,8 @@ class OrgTracker:
                 for ds in datasets:
                     ds["_vendor"] = vendor_name
                     ds["_hf_id"] = hf_id
+                    ds["created_at"] = ds.get("createdAt", "")
+                    ds["last_modified"] = ds.get("lastModified", "")
                     modified = ds.get("lastModified", "")
                     if modified:
                         try:

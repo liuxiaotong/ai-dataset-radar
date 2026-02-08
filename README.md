@@ -23,7 +23,7 @@
 ## 系统概述 / System Overview
 
 ```
-多源采集 → 智能分类 → 结构化输出 → 智能体消费
+多源采集 → 时间归一 → 智能分类 → 结构化输出 → 智能体消费
 ```
 
 ### 运行全景 / End-to-end Flow
@@ -43,6 +43,7 @@ graph LR
 | **多框架兼容** | HTTP API (LangChain)、MCP (Claude)、原生 SDK |
 | **开箱即用** | 预置 System Prompt、完整类型定义 |
 | **人机兼顾** | 同时输出 Markdown (人类) 与 JSON (智能体) |
+| **时间感知** | 数据集/模型/论文全链路采集并展示发布日期 |
 | **环境原生 LLM** | `--insights` 模式利用 Claude Code/App 原生能力分析 |
 
 ### 适用场景 / Use Cases
@@ -61,7 +62,7 @@ graph LR
 |------|------|--------|
 | 情报报告 (JSON) | `data/reports/intel_report_*.json` | AI Agent |
 | 情报报告 (MD) | `data/reports/intel_report_*.md` | 人类 |
-| AI 分析报告 | `data/reports/intel_report_*_insights.md` | 决策层 |
+| AI 分析报告 | `data/reports/intel_report_*_insights.md` | 决策层（含时间线） |
 | 分析提示词 | `data/reports/intel_report_*_insights_prompt.md` | LLM 输入 |
 | 异常排查报告 | `data/reports/intel_report_*_anomalies.md` | 运维 |
 | 工具定义 | `agent/tools.json` | Function Calling |
@@ -133,7 +134,7 @@ python src/main_intel.py --days 7
 python src/main_intel.py --days 7 --no-insights
 ```
 
-**AI 分析报告自动生成**：扫描完成后自动调用 Anthropic API 生成竞争情报分析报告。
+**AI 分析报告自动生成**：扫描完成后自动调用 Anthropic API 生成竞争情报分析报告（含关键发现、组织图谱、需求信号、行动建议、时间线 5 个章节）。
 
 | 环境 | 行为 |
 |------|------|
@@ -387,6 +388,8 @@ tools = [
   "datasets": [{
     "id": "allenai/Dolci-Instruct-SFT",
     "category": "sft_instruction",
+    "created_at": "2025-11-18T00:00:00.000Z",
+    "last_modified": "2026-02-03T12:34:56.000Z",
     "downloads": 2610,
     "languages": ["en", "zh"],
     "license": "odc-by"
@@ -398,6 +401,7 @@ tools = [
   }],
   "papers": [{
     "title": "...",
+    "published_at": "2026-02-04",
     "is_dataset_paper": true
   }],
   "blog_posts": [{
@@ -508,6 +512,7 @@ Radar (情报采集) → DataRecipe (逆向分析) → 复刻生产
 - [x] 博客噪声过滤 (nav/sidebar/footer 自动排除, 浏览器每 5 页重启)
 - [x] API 安全加固 (Bearer Token 认证 + 速率限制 + 输入校验)
 - [x] datetime 全面修复 (21 处 utcnow() 替换为 timezone-aware)
+- [x] 时间信息全链路贯通 (HF camelCase→snake_case 归一化, HF Papers 页面 `<time>` 提取, insights 数据集/模型/论文均带日期, 新增时间线章节)
 - [x] GitHub 加权相关性评分 (keyword×10 + stars/100 + 近 3 天活跃加成 - 噪声惩罚)
 - [x] 研究者博客监控 (Lil'Log, fast.ai, Interconnects, LessWrong, Alignment Forum, The Gradient, Epoch AI)
 - [x] radar_search 全文搜索 (跨 5 类数据源, 支持正则, 按来源过滤)

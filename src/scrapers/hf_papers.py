@@ -210,6 +210,14 @@ class HFPapersScraper:
                 except ValueError:
                     pass
 
+            # Extract date from <time> element
+            published_at = None
+            time_elem = article.select_one("time")
+            if time_elem:
+                datetime_attr = time_elem.get("datetime", "")
+                if datetime_attr:
+                    published_at = datetime_attr[:10]
+
             return {
                 "source": "hf_papers",
                 "id": arxiv_id,
@@ -219,7 +227,7 @@ class HFPapersScraper:
                 "authors": [],
                 "upvotes": upvotes,
                 "comments": 0,
-                "published_at": None,
+                "published_at": published_at,
                 "url": f"https://huggingface.co/papers/{arxiv_id}",
                 "arxiv_url": f"https://arxiv.org/abs/{arxiv_id}",
             }
