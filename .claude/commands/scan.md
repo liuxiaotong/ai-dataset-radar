@@ -4,7 +4,7 @@
 
 ## 参数
 
-$ARGUMENTS - 可选参数，如 `--days 14` 或 `--no-blogs`
+$ARGUMENTS - 可选参数，如 `--days 14`、`--no-blogs`、`--recipe`、`--recipe-limit 3`
 
 ## 执行步骤
 
@@ -14,12 +14,14 @@ $ARGUMENTS - 可选参数，如 `--days 14` 或 `--no-blogs`
 cd /Users/liukai/ai-dataset-radar && .venv/bin/python src/main_intel.py $ARGUMENTS
 ```
 
+扫描完成后，报告按日期子目录组织在 `data/reports/YYYY-MM-DD/` 下。
+
 ### 第二步：读取报告并展示关键发现
 
-找到最新的 JSON 报告：
+找到最新的 JSON 报告（日期子目录结构）：
 
 ```bash
-ls -t data/reports/intel_report_*.json | head -1
+ls -t data/reports/*/intel_report_*.json 2>/dev/null | head -1
 ```
 
 解析 JSON 报告，用简洁的表格向用户展示：
@@ -33,11 +35,11 @@ ls -t data/reports/intel_report_*.json | head -1
 
 检查是否需要生成 insights 分析：
 
-1. 找到最新的 `_insights_prompt.md` 文件
-2. 检查对应的 `_insights.md` 是否已存在（如果程序通过 API 已生成，则跳过）
+1. 在最新日期子目录中找到 `*_insights_prompt.md` 文件
+2. 检查对应的 `*_insights.md` 是否已存在（如果程序通过 API 已生成，则跳过）
 3. 如果 `_insights.md` 不存在：
    - 读取 `_insights_prompt.md` 的全部内容
-   - 作为环境中的 AI，根据 prompt 中的分析要求生成竞争情报分析（只生成第 1-4 节，不含异常与待排查）
+   - 作为环境中的 AI，根据 prompt 中的分析要求生成竞争情报分析
    - 将分析结果写入对应的 `_insights.md` 文件
    - 这就是"环境 LLM 接管"——你（Claude Code）就是环境中的 AI 能力
 
@@ -56,9 +58,16 @@ ls -t data/reports/intel_report_*.json | head -1
 
 注意：异常报告是给工程团队优化程序用的，不是竞争情报内容。
 
+### 第六步：展示 Recipe 分析（如启用）
+
+如果参数中包含 `--recipe`，读取日期子目录下的 `recipe/recipe_analysis_summary.md`，展示：
+- 被选中分析的数据集列表（含评分和类别）
+- 每个数据集的复刻成本和难度
+- 聚合统计（总成本、人工/API 占比）
+
 ## 注意
 
 - 如果设置了 `ANTHROPIC_API_KEY`，程序会自动通过 API 生成 insights，第三步可跳过
 - 如果没有 API Key，程序只保存 prompt 文件，第三步由你（环境 AI）完成分析
-- 分析报告应保存为 `data/reports/intel_report_{日期}_insights.md`
-- 异常报告由程序自动生成为 `data/reports/intel_report_{日期}_anomalies.md`
+- 报告目录结构：`data/reports/YYYY-MM-DD/intel_report_YYYY-MM-DD{_suffix}.{md,json}`
+- 相关命令：`/brief` 查看简报、`/search` 搜索情报、`/diff` 对比报告
