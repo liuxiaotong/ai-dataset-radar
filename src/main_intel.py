@@ -893,11 +893,10 @@ def main():
                 f.write(insights_result)
             logger.info("Insights report saved to: %s", insights_path)
         else:
-            # No API key — fall back to printing prompt for environment LLM
-            print(insights_content)
-            logger.info("")
-            logger.info(">>> AI 分析完成后，请将分析结果保存到:")
-            logger.info(">>> %s", insights_path)
+            # No API key — prompt saved to file for environment LLM (e.g. Claude Code)
+            logger.info("No ANTHROPIC_API_KEY — insights prompt saved for environment LLM")
+            logger.info("INSIGHTS_PROMPT_PATH=%s", insights_prompt_path)
+            logger.info("INSIGHTS_OUTPUT_PATH=%s", insights_path)
 
 
 def run_intel_scan(days: int = 7) -> dict:
