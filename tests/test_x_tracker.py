@@ -6,6 +6,7 @@ from pathlib import Path
 from unittest.mock import patch, MagicMock
 
 import pytest
+import requests
 
 # Add src to path
 sys.path.insert(0, str(Path(__file__).parent.parent / "src"))
@@ -151,13 +152,19 @@ class TestFetchRSSHubFeed:
         mock_feed.entries = [mock_entry]
         mock_parse.return_value = mock_feed
 
+        # Mock the HTTP session to avoid real network requests
+        mock_resp = MagicMock()
+        mock_resp.text = "<rss>mock</rss>"
+        mock_resp.raise_for_status = MagicMock()
+        tracker.session.get = MagicMock(return_value=mock_resp)
+
         tweets = tracker._fetch_rsshub_feed("testuser", days=7)
 
         assert len(tweets) == 1
         assert tweets[0]["username"] == "testuser"
         assert tweets[0]["source"] == "x_rsshub"
         assert "dataset" in tweets[0]["signals"]
-        mock_parse.assert_called_once_with("https://rsshub.app/twitter/user/testuser")
+        mock_parse.assert_called_once_with(mock_resp.text)
 
     @patch("trackers.x_tracker.feedparser.parse")
     def test_fetch_rsshub_feed_empty(self, mock_parse, tracker):
@@ -165,6 +172,11 @@ class TestFetchRSSHubFeed:
         mock_feed = MagicMock()
         mock_feed.entries = []
         mock_parse.return_value = mock_feed
+
+        mock_resp = MagicMock()
+        mock_resp.text = "<rss></rss>"
+        mock_resp.raise_for_status = MagicMock()
+        tracker.session.get = MagicMock(return_value=mock_resp)
 
         tweets = tracker._fetch_rsshub_feed("testuser")
         assert tweets == []
@@ -185,13 +197,19 @@ class TestFetchRSSHubFeed:
         mock_feed.entries = [mock_entry]
         mock_parse.return_value = mock_feed
 
+        mock_resp = MagicMock()
+        mock_resp.text = "<rss>mock</rss>"
+        mock_resp.raise_for_status = MagicMock()
+        tracker.session.get = MagicMock(return_value=mock_resp)
+
         tweets = tracker._fetch_rsshub_feed("testuser", days=7)
         assert tweets == []
 
-    @patch("trackers.x_tracker.feedparser.parse")
-    def test_fetch_rsshub_feed_parse_error(self, mock_parse, tracker):
-        """Test handling of feed parse errors."""
-        mock_parse.side_effect = Exception("Feed parse error")
+    def test_fetch_rsshub_feed_http_error(self, tracker):
+        """Test handling of HTTP request errors."""
+        tracker.session.get = MagicMock(
+            side_effect=requests.exceptions.ConnectionError("Connection refused")
+        )
 
         tweets = tracker._fetch_rsshub_feed("testuser")
         assert tweets == []
@@ -211,6 +229,11 @@ class TestFetchRSSHubFeed:
         mock_feed = MagicMock()
         mock_feed.entries = [mock_entry]
         mock_parse.return_value = mock_feed
+
+        mock_resp = MagicMock()
+        mock_resp.text = "<rss>mock</rss>"
+        mock_resp.raise_for_status = MagicMock()
+        tracker.session.get = MagicMock(return_value=mock_resp)
 
         tweets = tracker._fetch_rsshub_feed("testuser", days=7)
         assert len(tweets) == 1

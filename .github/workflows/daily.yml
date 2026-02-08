@@ -6,6 +6,9 @@ on:
     - cron: '0 8 * * *'
   workflow_dispatch:  # Allow manual trigger
 
+permissions:
+  contents: write
+
 jobs:
   fetch-datasets:
     runs-on: ubuntu-latest
@@ -35,7 +38,7 @@ jobs:
           EMAIL_FROM: ${{ secrets.EMAIL_FROM }}
           EMAIL_TO: ${{ secrets.EMAIL_TO }}
           WEBHOOK_URL: ${{ secrets.WEBHOOK_URL }}
-        run: python src/main.py
+        run: python src/main_intel.py --days 7
         continue-on-error: false
 
       - name: Commit and push changes

@@ -380,9 +380,16 @@ class BusinessIntelNotifier:
         # Section 2: Data Factories
         lines.append("## 🏭 数据工厂动态\n")
         if opportunity_results and opportunity_results.get("data_factories"):
+            data_factories = opportunity_results["data_factories"]
+            if isinstance(data_factories, dict):
+                all_factories = data_factories.get(
+                    "org_factories", []
+                ) + data_factories.get("individual_factories", [])
+            else:
+                all_factories = data_factories
             lines.append("| 作者/机构 | 本周发布数量 | 数据集列表 | 可能归属 |")
             lines.append("|-----------|--------------|------------|----------|")
-            for factory in opportunity_results["data_factories"][:10]:
+            for factory in all_factories[:10]:
                 author = factory["author"]
                 count = factory["dataset_count"]
                 datasets = [
