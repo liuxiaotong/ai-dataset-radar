@@ -509,7 +509,7 @@ priority_data_types:
 ```
 ai-dataset-radar/
 ├── src/                        # 核心模块
-│   ├── main_intel.py           # 主入口（async 编排 + insights 提示生成）
+│   ├── main_intel.py           # 主入口（async 编排 + insights + --recipe DataRecipe 联动）
 │   ├── trackers/               # 数据追踪器（全异步 aiohttp）
 │   │   ├── org_tracker.py      # HuggingFace 组织追踪
 │   │   ├── blog_tracker.py     # 博客监控（RSS/HTML/Playwright async）
@@ -534,7 +534,8 @@ ai-dataset-radar/
 ├── docker-compose.yml          # scan + api 服务编排
 ├── config.yaml                 # 监控配置（组织/供应商/博客/关键词）
 ├── .env.example                # 环境变量模板
-└── data/reports/               # 输出目录
+└── data/reports/               # 输出目录（按日期子目录）
+    └── YYYY-MM-DD/             # 每日报告 + recipe/ 分析结果
 ```
 
 ---
@@ -543,7 +544,7 @@ ai-dataset-radar/
 
 ```mermaid
 graph LR
-    Radar["🔍 Radar<br/>情报发现"] --> Recipe["📋 Recipe<br/>逆向分析"]
+    Radar["🔍 Radar<br/>情报发现"] -->|--recipe| Recipe["📋 Recipe<br/>逆向分析"]
     Recipe --> Synth["🔄 Synth<br/>数据合成"]
     Recipe --> Label["🏷️ Label<br/>数据标注"]
     Synth --> Check["✅ Check<br/>数据质检"]
@@ -553,6 +554,50 @@ graph LR
     Sandbox --> Recorder["📹 Recorder<br/>轨迹录制"]
     Recorder --> Reward["⭐ Reward<br/>过程打分"]
     style Radar fill:#0969da,color:#fff,stroke:#0969da
+```
+
+### 一键联动 / One-Command Pipeline
+
+`--recipe` 参数让 Radar 扫描完成后**自动**挑选高价值数据集，调用 DataRecipe 深度分析：
+
+```bash
+# 扫描 → 智能评分 → 自动分析 Top 5 数据集
+python src/main_intel.py --days 7 --recipe
+
+# 前置：安装 DataRecipe（软依赖，未安装时自动跳过）
+pip install -e /path/to/data-recipe
+```
+
+**智能评分公式（0-100）：**
+
+| 维度 | 权重 | 说明 |
+|------|------|------|
+| 下载量 | max 30 | log10 缩放，覆盖 10~100k+ 量级 |
+| 信号强度 | max 25 | 有意义分类信号越多越优先 |
+| 分类优先级 | max 30 | preference > reward > sft > code/agent > synthetic > ... |
+| 新鲜度 | max 15 | ≤14 天 +15，≤30 天 +8 |
+
+**输出位于同一日期目录下：**
+```
+data/reports/2026-02-08/
+├── intel_report_2026-02-08.json    # Radar 报告
+└── recipe/                         # DataRecipe 分析
+    ├── recipe_analysis_summary.md  # 人类摘要
+    ├── aggregate_summary.json      # 机器摘要（总复刻成本、难度分布）
+    └── Anthropic__hh-rlhf/         # 每个数据集 23+ 分析文件
+```
+
+### MCP 双服务 / MCP Joint Config
+
+Claude Desktop 中同时配置两个 MCP Server，可自然语言驱动端到端工作流：
+
+```json
+{
+  "mcpServers": {
+    "ai-dataset-radar": { "command": "..." },
+    "datarecipe": { "command": "..." }
+  }
+}
 ```
 
 | 层 | 项目 | 说明 | 仓库 |
@@ -566,17 +611,6 @@ graph LR
 | Agent | **AgentRecorder** | 标准化轨迹录制、多框架适配 | [GitHub](https://github.com/liuxiaotong/agent-recorder) |
 | Agent | **AgentReward** | 过程级 Reward、Rubric 多维评估 | [GitHub](https://github.com/liuxiaotong/agent-reward) |
 | 编排 | **TrajectoryHub** | Pipeline 编排、数据集导出 | [GitHub](https://github.com/liuxiaotong/agent-trajectory-hub) |
-
-联合配置实现端到端工作流：
-
-```json
-{
-  "mcpServers": {
-    "ai-dataset-radar": { "command": "..." },
-    "datarecipe": { "command": "..." }
-  }
-}
-```
 
 ---
 
@@ -626,7 +660,7 @@ graph LR
 - [x] 全链路性能优化 (OrgTracker 组织内并行化, feedparser→线程池, 并发上限调优 blog25/x20/github15, 超时 30→20s/重试 3→2, X HEAD 跳过)
 - [x] dotenv 环境变量支持 (python-dotenv 自动加载 .env, .env.example 模板)
 - [x] Insights API 集成 (run_intel_scan API 路径复用 LLM insights 生成, 返回 insights 文本; CLI 无 API key 时 stdout 输出 prompt)
-- [x] 报告按日期子目录组织 (`data/reports/YYYY-MM-DD/`, 文件名简化, MCP/API 兼容新旧两种布局)
+- [x] 报告按日期子目录组织 (`data/reports/YYYY-MM-DD/`, MCP/API 兼容新旧两种布局)
 - [x] DataRecipe 自动衔接 (`--recipe` 智能评分选 Top N 数据集, 自动调用 DeepAnalyzerCore 深度分析, 输出聚合报告)
 
 ---
