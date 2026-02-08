@@ -608,6 +608,9 @@ graph LR
 - [x] 博客分类标注 (config.yaml 62 个博客源添加 category 字段, BlogTracker 透传至 JSON, /blogs API 分类筛选生效)
 - [x] 数据集分类对齐 (Dashboard 下拉菜单 + API 文档 + schema.json 枚举统一为 DataType: rlhf_preference/agent_tool 等 11 类)
 - [x] API 扫描 X/Twitter 补全 (run_intel_scan 添加 XTracker 采集 + x_activity 写入报告，API 扫描与 CLI 数据一致)
+- [x] Markdown 报告 X/Twitter 章节 (IntelReportGenerator 新增 _generate_x_section，CLI 与 API 报告均含推文动态)
+- [x] Dashboard 筛选增强 (论文「仅数据集」复选框 + 博客分类下拉 + MCP radar_blogs category 参数)
+- [x] 健壮性加固 (asyncio.get_running_loop 替代已弃用 API, open() 统一 UTF-8 编码, JSON 加载异常处理)
 
 ---
 
