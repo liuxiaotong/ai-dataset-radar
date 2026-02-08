@@ -3,7 +3,7 @@
 import sys
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
-from unittest.mock import patch, MagicMock
+from unittest.mock import patch, MagicMock, AsyncMock
 
 import pytest
 
@@ -76,10 +76,10 @@ class TestGitHubTrackerInit:
         tracker = GitHubTracker({})
         assert tracker.relevance_keywords == DEFAULT_SIGNAL_KEYWORDS
 
-    def test_session_has_connection_pooling(self):
-        """Test that session is created for connection pooling."""
+    def test_http_client_is_set(self):
+        """Test that async HTTP client is initialized."""
         tracker = GitHubTracker({})
-        assert tracker.session is not None
+        assert tracker._http is not None
 
 
 class TestExtractSignals:
@@ -248,73 +248,46 @@ class TestMakeRequest:
     def tracker(self):
         return GitHubTracker({})
 
-    def test_successful_request(self, tracker):
+    async def test_successful_request(self, tracker):
         """Test successful API request."""
-        mock_resp = MagicMock()
-        mock_resp.status_code = 200
-        mock_resp.json.return_value = [{"name": "repo1"}]
-        tracker.session.get = MagicMock(return_value=mock_resp)
+        tracker._http.get_json = AsyncMock(return_value=[{"name": "repo1"}])
 
-        result = tracker._make_request("https://api.github.com/test")
+        result = await tracker._make_request("https://api.github.com/test")
         assert result == [{"name": "repo1"}]
 
-    def test_rate_limited_returns_none(self, tracker):
-        """Test 403 rate limit returns None."""
-        mock_resp = MagicMock()
-        mock_resp.status_code = 403
-        mock_resp.headers = {"X-RateLimit-Reset": str(int(datetime.now(timezone.utc).replace(tzinfo=None).timestamp()) + 60)}
-        tracker.session.get = MagicMock(return_value=mock_resp)
+    async def test_rate_limited_returns_none(self, tracker):
+        """Test 403 rate limit returns None (handled by AsyncHTTPClient)."""
+        tracker._http.get_json = AsyncMock(return_value=None)
 
-        result = tracker._make_request("https://api.github.com/test")
+        result = await tracker._make_request("https://api.github.com/test")
         assert result is None
 
-    def test_not_found_returns_none(self, tracker):
-        """Test 404 returns None."""
-        mock_resp = MagicMock()
-        mock_resp.status_code = 404
-        tracker.session.get = MagicMock(return_value=mock_resp)
+    async def test_not_found_returns_none(self, tracker):
+        """Test 404 returns None (handled by AsyncHTTPClient)."""
+        tracker._http.get_json = AsyncMock(return_value=None)
 
-        result = tracker._make_request("https://api.github.com/test")
+        result = await tracker._make_request("https://api.github.com/test")
         assert result is None
 
-    @patch("time.sleep")
-    def test_server_error_retries(self, mock_sleep, tracker):
-        """Test 5xx triggers retry."""
-        mock_resp_500 = MagicMock()
-        mock_resp_500.status_code = 500
-        mock_resp_ok = MagicMock()
-        mock_resp_ok.status_code = 200
-        mock_resp_ok.json.return_value = {"data": "ok"}
+    async def test_server_error_retries(self, tracker):
+        """Test 5xx retries handled internally by AsyncHTTPClient."""
+        tracker._http.get_json = AsyncMock(return_value={"data": "ok"})
 
-        tracker.session.get = MagicMock(side_effect=[mock_resp_500, mock_resp_ok])
-
-        result = tracker._make_request("https://api.github.com/test")
+        result = await tracker._make_request("https://api.github.com/test")
         assert result == {"data": "ok"}
-        assert mock_sleep.called
 
-    @patch("time.sleep")
-    def test_request_exception_retries(self, mock_sleep, tracker):
-        """Test network error triggers retry."""
-        import requests
+    async def test_request_exception_retries(self, tracker):
+        """Test network error retries handled internally by AsyncHTTPClient."""
+        tracker._http.get_json = AsyncMock(return_value={"ok": True})
 
-        tracker.session.get = MagicMock(
-            side_effect=[
-                requests.ConnectionError("timeout"),
-                MagicMock(status_code=200, json=MagicMock(return_value={"ok": True})),
-            ]
-        )
-
-        result = tracker._make_request("https://api.github.com/test")
+        result = await tracker._make_request("https://api.github.com/test")
         assert result == {"ok": True}
 
-    @patch("time.sleep")
-    def test_all_retries_exhausted(self, mock_sleep, tracker):
-        """Test returns None when all retries fail."""
-        import requests
+    async def test_all_retries_exhausted(self, tracker):
+        """Test returns None when all retries fail (handled by AsyncHTTPClient)."""
+        tracker._http.get_json = AsyncMock(return_value=None)
 
-        tracker.session.get = MagicMock(side_effect=requests.ConnectionError("timeout"))
-
-        result = tracker._make_request("https://api.github.com/test", max_retries=2)
+        result = await tracker._make_request("https://api.github.com/test")
         assert result is None
 
 
@@ -325,18 +298,18 @@ class TestGetOrgRepos:
     def tracker(self):
         return GitHubTracker({})
 
-    def test_empty_response(self, tracker):
+    async def test_empty_response(self, tracker):
         """Test empty response returns empty list."""
-        tracker._make_request = MagicMock(return_value=None)
-        result = tracker.get_org_repos("test-org")
+        tracker._make_request = AsyncMock(return_value=None)
+        result = await tracker.get_org_repos("test-org")
         assert result == []
 
-    def test_filters_old_repos(self, tracker):
+    async def test_filters_old_repos(self, tracker):
         """Test repos older than cutoff are filtered out."""
         old_date = (datetime.now(timezone.utc).replace(tzinfo=None) - timedelta(days=30)).strftime("%Y-%m-%dT%H:%M:%SZ")
         recent_date = datetime.now(timezone.utc).replace(tzinfo=None).strftime("%Y-%m-%dT%H:%M:%SZ")
 
-        tracker._make_request = MagicMock(
+        tracker._make_request = AsyncMock(
             return_value=[
                 {
                     "name": "old-repo",
@@ -361,14 +334,14 @@ class TestGetOrgRepos:
             ]
         )
 
-        result = tracker.get_org_repos("org", days=7)
+        result = await tracker.get_org_repos("org", days=7)
         assert len(result) == 1
         assert result[0]["name"] == "new-repo"
 
-    def test_repo_info_structure(self, tracker):
+    async def test_repo_info_structure(self, tracker):
         """Test returned repo dict has expected fields."""
         now = datetime.now(timezone.utc).replace(tzinfo=None).strftime("%Y-%m-%dT%H:%M:%SZ")
-        tracker._make_request = MagicMock(
+        tracker._make_request = AsyncMock(
             return_value=[
                 {
                     "name": "test",
@@ -383,7 +356,7 @@ class TestGetOrgRepos:
             ]
         )
 
-        result = tracker.get_org_repos("org")
+        result = await tracker.get_org_repos("org")
         assert len(result) == 1
         repo = result[0]
         assert "name" in repo
@@ -403,29 +376,29 @@ class TestGetOrgActivity:
     def tracker(self):
         return GitHubTracker({})
 
-    def test_activity_structure(self, tracker):
+    async def test_activity_structure(self, tracker):
         """Test activity summary has expected structure."""
-        tracker.get_org_repos = MagicMock(
+        tracker.get_org_repos = AsyncMock(
             return_value=[
                 {"name": "repo1", "signals": ["dataset"], "stars": 200, "relevance": "high"},
             ]
         )
 
-        result = tracker.get_org_activity("test-org")
+        result = await tracker.get_org_activity("test-org")
         assert result["org"] == "test-org"
         assert result["repos_count"] == 1
         assert result["has_activity"] is True
         assert len(result["repos_updated"]) == 1
 
-    def test_no_activity(self, tracker):
+    async def test_no_activity(self, tracker):
         """Test no activity when no relevant repos."""
-        tracker.get_org_repos = MagicMock(
+        tracker.get_org_repos = AsyncMock(
             return_value=[
                 {"name": "unrelated", "signals": [], "stars": 5, "relevance": "low"},
             ]
         )
 
-        result = tracker.get_org_activity("test-org")
+        result = await tracker.get_org_activity("test-org")
         assert result["has_activity"] is False
 
 

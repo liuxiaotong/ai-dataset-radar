@@ -2,7 +2,7 @@
 
 import sys
 from pathlib import Path
-from unittest.mock import patch, MagicMock
+from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 
@@ -17,8 +17,9 @@ class TestHuggingFaceScraper:
 
     @pytest.fixture
     def scraper(self):
-        """Create a scraper instance."""
-        return HuggingFaceScraper(limit=10)
+        """Create a scraper instance with a mocked async HTTP client."""
+        mock_http = MagicMock()
+        return HuggingFaceScraper(limit=10, http_client=mock_http)
 
     def test_init(self, scraper):
         """Test scraper initialization."""
@@ -134,11 +135,9 @@ Trained on the imdb dataset for sentiment analysis.
         assert "imdb" in datasets
         assert len(datasets) == 3
 
-    @patch("requests.get")
-    def test_fetch_trending_models(self, mock_get, scraper):
+    async def test_fetch_trending_models(self, scraper):
         """Test fetching trending models."""
-        mock_response = MagicMock()
-        mock_response.json.return_value = [
+        scraper._http.get_json = AsyncMock(return_value=[
             {
                 "id": "model/a",
                 "author": "test",
@@ -157,32 +156,25 @@ Trained on the imdb dataset for sentiment analysis.
                 "tags": [],
                 "createdAt": "2024-01-15T10:00:00.000Z",
             },
-        ]
-        mock_response.raise_for_status = MagicMock()
-        mock_get.return_value = mock_response
+        ])
 
-        models = scraper.fetch_trending_models(limit=10, min_downloads=1000)
+        models = await scraper.fetch_trending_models(limit=10, min_downloads=1000)
 
         assert len(models) == 1
         assert models[0]["id"] == "model/a"
         assert models[0]["downloads"] == 50000
 
-    @patch("scrapers.huggingface.requests.get")
-    def test_fetch_trending_models_error(self, mock_get, scraper):
+    async def test_fetch_trending_models_error(self, scraper):
         """Test handling API errors when fetching models."""
-        import requests
+        scraper._http.get_json = AsyncMock(return_value=None)
 
-        mock_get.side_effect = requests.RequestException("API Error")
-
-        models = scraper.fetch_trending_models()
+        models = await scraper.fetch_trending_models()
 
         assert models == []
 
-    @patch("requests.get")
-    def test_fetch_model_card(self, mock_get, scraper):
+    async def test_fetch_model_card(self, scraper):
         """Test fetching a model card."""
-        model_response = MagicMock()
-        model_response.json.return_value = {
+        scraper._http.get_json = AsyncMock(return_value={
             "id": "test/model",
             "author": "test",
             "downloads": 10000,
@@ -191,28 +183,21 @@ Trained on the imdb dataset for sentiment analysis.
             "tags": [],
             "cardData": {"datasets": ["squad"]},
             "createdAt": "2024-01-15T10:00:00.000Z",
-        }
-        model_response.raise_for_status = MagicMock()
-        model_response.status_code = 200
+        })
+        scraper._http.get_text = AsyncMock(
+            return_value="# Model README\n\nTrained on glue."
+        )
 
-        readme_response = MagicMock()
-        readme_response.status_code = 200
-        readme_response.text = "# Model README\n\nTrained on glue."
-
-        mock_get.side_effect = [model_response, readme_response]
-
-        result = scraper.fetch_model_card("test/model")
+        result = await scraper.fetch_model_card("test/model")
 
         assert result is not None
         assert result["id"] == "test/model"
         assert "Model README" in result["readme"]
         assert result["card_data"]["datasets"] == ["squad"]
 
-    @patch("requests.get")
-    def test_fetch_dataset_info(self, mock_get, scraper):
+    async def test_fetch_dataset_info(self, scraper):
         """Test fetching dataset info."""
-        mock_response = MagicMock()
-        mock_response.json.return_value = {
+        scraper._http.get_json = AsyncMock(return_value={
             "id": "squad",
             "author": "rajpurkar",
             "downloads": 500000,
@@ -220,24 +205,18 @@ Trained on the imdb dataset for sentiment analysis.
             "tags": ["question-answering"],
             "description": "Stanford Question Answering Dataset",
             "createdAt": "2020-01-01T00:00:00.000Z",
-        }
-        mock_response.raise_for_status = MagicMock()
-        mock_response.status_code = 200
-        mock_get.return_value = mock_response
+        })
 
-        result = scraper.fetch_dataset_info("squad")
+        result = await scraper.fetch_dataset_info("squad")
 
         assert result is not None
         assert result["id"] == "squad"
         assert result["downloads"] == 500000
 
-    @patch("requests.get")
-    def test_fetch_dataset_info_not_found(self, mock_get, scraper):
+    async def test_fetch_dataset_info_not_found(self, scraper):
         """Test handling 404 when fetching dataset info."""
-        mock_response = MagicMock()
-        mock_response.status_code = 404
-        mock_get.return_value = mock_response
+        scraper._http.get_json = AsyncMock(return_value=None)
 
-        result = scraper.fetch_dataset_info("nonexistent")
+        result = await scraper.fetch_dataset_info("nonexistent")
 
         assert result is None

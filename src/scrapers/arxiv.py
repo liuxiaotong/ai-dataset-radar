@@ -7,7 +7,6 @@ Enhanced v5 scraper with tighter search queries focused on:
 """
 
 import feedparser
-import requests
 import urllib.parse
 from datetime import datetime
 from typing import Optional
@@ -15,6 +14,7 @@ from typing import Optional
 from .base import BaseScraper
 from .registry import register_scraper
 
+from utils.async_http import AsyncHTTPClient
 from utils.logging_config import get_logger
 
 logger = get_logger(__name__)
@@ -49,7 +49,8 @@ class ArxivScraper(BaseScraper):
     ]
 
     def __init__(
-        self, limit: int = 50, categories: Optional[list[str]] = None, config: dict = None
+        self, limit: int = 50, categories: Optional[list[str]] = None, config: dict = None,
+        http_client: AsyncHTTPClient = None,
     ):
         """Initialize arXiv scraper.
 
@@ -57,12 +58,14 @@ class ArxivScraper(BaseScraper):
             limit: Maximum number of papers to fetch.
             categories: arXiv categories to search.
             config: Optional configuration dict.
+            http_client: Optional shared AsyncHTTPClient instance.
         """
         super().__init__(config)
         self.limit = limit
         self.categories = categories or ["cs.CL", "cs.LG", "cs.AI"]
+        self._http = http_client or AsyncHTTPClient()
 
-    def scrape(self, config: dict = None) -> list[dict]:
+    async def scrape(self, config: dict = None) -> list[dict]:
         """Scrape papers from arXiv.
 
         Args:
@@ -71,9 +74,9 @@ class ArxivScraper(BaseScraper):
         Returns:
             List of paper dictionaries.
         """
-        return self.fetch()
+        return await self.fetch()
 
-    def fetch(self) -> list[dict]:
+    async def fetch(self) -> list[dict]:
         """Fetch latest RLHF/annotation related papers from arXiv.
 
         Returns:
@@ -95,10 +98,11 @@ class ArxivScraper(BaseScraper):
         url = f"{self.BASE_URL}?{urllib.parse.urlencode(params)}"
 
         try:
-            resp = requests.get(url, timeout=30)
-            resp.raise_for_status()
-            feed = feedparser.parse(resp.text)
-        except (requests.RequestException, Exception) as e:
+            text = await self._http.get_text(url)
+            if not text:
+                return []
+            feed = feedparser.parse(text)
+        except Exception as e:
             logger.warning("Error fetching arXiv papers: %s", e)
             return []
 
@@ -113,7 +117,7 @@ class ArxivScraper(BaseScraper):
 
         return results
 
-    def fetch_by_keywords(self, keywords: list[str]) -> list[dict]:
+    async def fetch_by_keywords(self, keywords: list[str]) -> list[dict]:
         """Fetch papers matching specific keywords.
 
         Args:
@@ -137,10 +141,11 @@ class ArxivScraper(BaseScraper):
         url = f"{self.BASE_URL}?{urllib.parse.urlencode(params)}"
 
         try:
-            resp = requests.get(url, timeout=30)
-            resp.raise_for_status()
-            feed = feedparser.parse(resp.text)
-        except (requests.RequestException, Exception) as e:
+            text = await self._http.get_text(url)
+            if not text:
+                return []
+            feed = feedparser.parse(text)
+        except Exception as e:
             logger.warning("Error fetching arXiv papers: %s", e)
             return []
 
@@ -153,19 +158,10 @@ class ArxivScraper(BaseScraper):
         return results
 
     def _parse_entry(self, entry: dict) -> Optional[dict]:
-        """Parse an entry from the arXiv feed.
-
-        Args:
-            entry: Raw entry from feedparser.
-
-        Returns:
-            Parsed paper info or None if parsing fails.
-        """
+        """Parse an entry from the arXiv feed."""
         try:
-            # Extract arXiv ID from the entry ID URL
             arxiv_id = entry.id.split("/abs/")[-1]
 
-            # Parse publication date
             published = entry.get("published", "")
             if published:
                 try:
@@ -174,13 +170,9 @@ class ArxivScraper(BaseScraper):
                 except ValueError:
                     pass
 
-            # Extract categories
             categories = [tag.term for tag in entry.get("tags", [])]
-
-            # Extract authors
             authors = [author.name for author in entry.get("authors", [])]
 
-            # Get PDF link
             pdf_link = None
             for link in entry.get("links", []):
                 if link.get("type") == "application/pdf":

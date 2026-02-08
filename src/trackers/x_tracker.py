@@ -11,14 +11,13 @@ Monitors AI labs, researchers, and data vendors for:
 - Industry news and trends
 """
 
+import asyncio
 import re
-import time
-from concurrent.futures import ThreadPoolExecutor
 from datetime import datetime, timedelta, timezone
 
 import feedparser
-import requests
 
+from utils.async_http import AsyncHTTPClient
 from utils.logging_config import get_logger
 
 logger = get_logger("x_tracker")
@@ -107,11 +106,12 @@ class XTracker:
     Supports multiple RSSHub instances with automatic fallback.
     """
 
-    def __init__(self, config: dict):
+    def __init__(self, config: dict, http_client: AsyncHTTPClient = None):
         """Initialize X tracker.
 
         Args:
             config: Configuration dict with x_tracker settings.
+            http_client: Optional shared AsyncHTTPClient instance.
         """
         self.config = config
         x_config = config.get("x_tracker", {})
@@ -144,14 +144,20 @@ class XTracker:
         # Search keywords for X API
         self.search_keywords = x_config.get("search_keywords", [])
 
-        self.session = requests.Session()
-        self.session.headers["User-Agent"] = "AI-Dataset-Radar/5.0"
+        # Async HTTP client (shared or owned)
+        self._http = http_client
+        self._owns_http = http_client is None
 
-    def _fetch_with_retry(self, fetch_fn, description: str, max_retries: int = 2):
-        """Execute a fetch function with retry.
+    async def _ensure_http(self):
+        """Lazily create HTTP client if not provided."""
+        if self._http is None:
+            self._http = AsyncHTTPClient()
+
+    async def _fetch_with_retry(self, fetch_fn, description: str, max_retries: int = 2):
+        """Execute an async fetch function with retry.
 
         Args:
-            fetch_fn: Callable that returns the result.
+            fetch_fn: Async callable (coroutine function) that returns the result.
             description: Description for logging.
             max_retries: Maximum number of retry attempts.
 
@@ -160,7 +166,7 @@ class XTracker:
         """
         for attempt in range(max_retries):
             try:
-                return fetch_fn()
+                return await fetch_fn()
             except Exception as e:
                 if attempt < max_retries - 1:
                     wait = 2 ** (attempt + 1)
@@ -172,12 +178,12 @@ class XTracker:
                         wait,
                         e,
                     )
-                    time.sleep(wait)
+                    await asyncio.sleep(wait)
                 else:
                     logger.debug("All %d retries failed for %s: %s", max_retries, description, e)
         return None
 
-    def _fetch_rsshub_feed(self, username: str, days: int = 7) -> list[dict]:
+    async def _fetch_rsshub_feed(self, username: str, days: int = 7) -> list[dict]:
         """Fetch tweets via RSSHub RSS feed, trying multiple instances.
 
         Args:
@@ -187,6 +193,8 @@ class XTracker:
         Returns:
             List of tweet dicts.
         """
+        await self._ensure_http()
+
         # Skip RSSHub if too many consecutive failures (likely all instances truly down)
         if self._rsshub_consecutive_fails >= self._rsshub_fail_threshold:
             return []
@@ -201,17 +209,20 @@ class XTracker:
         for base_url in instances:
             feed_url = f"{base_url}/twitter/user/{username}"
 
-            def _do_fetch(url=feed_url):
-                resp = self.session.get(url, timeout=15, allow_redirects=False)
-                # Detect redirect to error pages (e.g. rsshub.app → google.com/404)
-                if resp.status_code in (301, 302, 303, 307, 308):
-                    raise requests.HTTPError(
-                        f"Redirect {resp.status_code} → {resp.headers.get('Location', '?')}"
-                    )
-                resp.raise_for_status()
-                return feedparser.parse(resp.text)
+            async def _do_fetch(url=feed_url):
+                # Check for redirect first (error pages, domain parking, etc.)
+                status = await self._http.head(url, allow_redirects=False, timeout=10)
+                if status is not None and status in (301, 302, 303, 307, 308):
+                    raise RuntimeError(f"Redirect {status} for {url}")
 
-            result = self._fetch_with_retry(_do_fetch, f"RSSHub({base_url}) @{username}", max_retries=1)
+                text = await self._http.get_text(url, max_retries=1)
+                if text is None:
+                    raise RuntimeError(f"Failed to fetch {url}")
+                return feedparser.parse(text)
+
+            result = await self._fetch_with_retry(
+                _do_fetch, f"RSSHub({base_url}) @{username}", max_retries=1
+            )
             if result is not None:
                 self._last_working_rsshub = base_url
                 self._rsshub_consecutive_fails = 0
@@ -269,7 +280,7 @@ class XTracker:
 
         return tweets
 
-    def _fetch_api_user_tweets(self, username: str, days: int = 7) -> list[dict]:
+    async def _fetch_api_user_tweets(self, username: str, days: int = 7) -> list[dict]:
         """Fetch tweets via X API v2.
 
         Args:
@@ -282,6 +293,8 @@ class XTracker:
         if not self.bearer_token:
             return []
 
+        await self._ensure_http()
+
         headers = {
             "Authorization": f"Bearer {self.bearer_token}",
             "User-Agent": "AI-Dataset-Radar/5.0",
@@ -290,14 +303,14 @@ class XTracker:
         # Step 1: Get user ID
         user_url = f"https://api.twitter.com/2/users/by/username/{username}"
         try:
-            resp = requests.get(user_url, headers=headers, timeout=15)
-            if resp.status_code != 200:
-                logger.warning("X API user lookup failed for @%s: %s", username, resp.status_code)
+            user_data = await self._http.get_json(user_url, headers=headers, max_retries=2)
+            if user_data is None:
+                logger.warning("X API user lookup failed for @%s", username)
                 return []
-            user_id = resp.json().get("data", {}).get("id")
+            user_id = user_data.get("data", {}).get("id")
             if not user_id:
                 return []
-        except requests.RequestException as e:
+        except Exception as e:
             logger.warning("X API error for @%s: %s", username, e)
             return []
 
@@ -313,15 +326,13 @@ class XTracker:
         }
 
         try:
-            resp = requests.get(tweets_url, headers=headers, params=params, timeout=15)
-            if resp.status_code == 429:
-                logger.warning("X API rate limited")
+            resp_data = await self._http.get_json(
+                tweets_url, headers=headers, params=params, max_retries=2
+            )
+            if resp_data is None:
                 return []
-            if resp.status_code != 200:
-                return []
-
-            data = resp.json().get("data", [])
-        except requests.RequestException as e:
+            data = resp_data.get("data", [])
+        except Exception as e:
             logger.warning("X API tweets error for @%s: %s", username, e)
             return []
 
@@ -351,7 +362,7 @@ class XTracker:
 
         return tweets
 
-    def _fetch_api_search(self, query: str, days: int = 7) -> list[dict]:
+    async def _fetch_api_search(self, query: str, days: int = 7) -> list[dict]:
         """Search tweets via X API v2.
 
         Args:
@@ -363,6 +374,8 @@ class XTracker:
         """
         if not self.bearer_token:
             return []
+
+        await self._ensure_http()
 
         headers = {
             "Authorization": f"Bearer {self.bearer_token}",
@@ -380,11 +393,13 @@ class XTracker:
         }
 
         try:
-            resp = requests.get(url, headers=headers, params=params, timeout=15)
-            if resp.status_code != 200:
+            resp_data = await self._http.get_json(
+                url, headers=headers, params=params, max_retries=2
+            )
+            if resp_data is None:
                 return []
-            data = resp.json().get("data", [])
-        except requests.RequestException:
+            data = resp_data.get("data", [])
+        except Exception:
             return []
 
         tweets = []
@@ -418,7 +433,7 @@ class XTracker:
                 signals.append(keyword)
         return list(set(signals))
 
-    def fetch_account(self, username: str, days: int = 7) -> dict:
+    async def fetch_account(self, username: str, days: int = 7) -> dict:
         """Fetch tweets from a single account.
 
         Args:
@@ -432,15 +447,15 @@ class XTracker:
         tweets = []
 
         if self.backend == "api":
-            tweets = self._fetch_api_user_tweets(username, days) if self.bearer_token else []
+            tweets = await self._fetch_api_user_tweets(username, days) if self.bearer_token else []
         elif self.backend == "auto":
             # Try RSSHub first, fallback to API if RSSHub disabled
-            tweets = self._fetch_rsshub_feed(username, days)
+            tweets = await self._fetch_rsshub_feed(username, days)
             if not tweets and self._rsshub_consecutive_fails >= self._rsshub_fail_threshold and self.bearer_token:
-                tweets = self._fetch_api_user_tweets(username, days)
+                tweets = await self._fetch_api_user_tweets(username, days)
         else:
             # Default: rsshub only
-            tweets = self._fetch_rsshub_feed(username, days)
+            tweets = await self._fetch_rsshub_feed(username, days)
 
         # Filter to relevant tweets only
         relevant = [t for t in tweets if t.get("signals")]
@@ -452,8 +467,8 @@ class XTracker:
             "has_activity": len(relevant) > 0,
         }
 
-    def fetch_all(self, days: int = 7) -> dict:
-        """Fetch tweets from all configured accounts (parallelized).
+    async def fetch_all(self, days: int = 7) -> dict:
+        """Fetch tweets from all configured accounts (concurrent with semaphore).
 
         Args:
             days: Look back period in days.
@@ -461,6 +476,8 @@ class XTracker:
         Returns:
             Dict with account activities and search results.
         """
+        await self._ensure_http()
+
         logger.info("Tracking %d X/Twitter accounts...", len(self.accounts))
 
         results = {
@@ -469,31 +486,39 @@ class XTracker:
             "metadata": {},
         }
 
-        # Fetch accounts in parallel
+        # Fetch accounts concurrently with bounded parallelism
         failed_accounts = []
         if self.accounts:
-            with ThreadPoolExecutor(max_workers=2) as executor:
-                futures = {
-                    executor.submit(self.fetch_account, acct, days): acct for acct in self.accounts
-                }
-                for future in futures:
-                    try:
-                        activity = future.result()
-                        if activity["has_activity"]:
-                            results["accounts"].append(activity)
-                    except Exception as e:
-                        failed_accounts.append(futures[future])
-                        logger.warning("Error fetching @%s: %s", futures[future], e)
+            sem = asyncio.Semaphore(10)
 
-        # Run keyword searches (API only)
+            async def _bounded(acct):
+                async with sem:
+                    return await self.fetch_account(acct, days)
+
+            results_raw = await asyncio.gather(
+                *[_bounded(a) for a in self.accounts], return_exceptions=True
+            )
+            for i, result in enumerate(results_raw):
+                if isinstance(result, Exception):
+                    failed_accounts.append(self.accounts[i])
+                    logger.warning("Error fetching @%s: %s", self.accounts[i], result)
+                elif result["has_activity"]:
+                    results["accounts"].append(result)
+
+        # Run keyword searches concurrently (API only)
         if self.backend == "api" and self.bearer_token and self.search_keywords:
+            search_tasks = []
             for query in self.search_keywords:
-                try:
-                    tweets = self._fetch_api_search(query, days)
-                    if tweets:
-                        results["search_results"].extend(tweets)
-                except Exception as e:
-                    logger.warning("X search error for '%s': %s", query, e)
+                search_tasks.append(self._fetch_api_search(query, days))
+
+            search_results_raw = await asyncio.gather(*search_tasks, return_exceptions=True)
+            for i, sr in enumerate(search_results_raw):
+                if isinstance(sr, Exception):
+                    logger.warning(
+                        "X search error for '%s': %s", self.search_keywords[i], sr
+                    )
+                elif sr:
+                    results["search_results"].extend(sr)
 
         active = len(results["accounts"])
         tweet_count = sum(len(a["relevant_tweets"]) for a in results["accounts"])
@@ -514,3 +539,9 @@ class XTracker:
         }
 
         return results
+
+    async def close(self):
+        """Close the HTTP client if we own it."""
+        if self._owns_http and self._http is not None:
+            await self._http.close()
+            self._http = None

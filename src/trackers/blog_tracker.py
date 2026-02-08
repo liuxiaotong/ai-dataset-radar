@@ -5,16 +5,16 @@ Monitors company blogs for:
 - Signal keywords related to AI data and annotation
 """
 
+import asyncio
 import re
-from concurrent.futures import ThreadPoolExecutor
 from datetime import datetime, timedelta, timezone
 from typing import Optional
 from urllib.parse import urljoin, urlparse, urlunparse, parse_qs, urlencode
 
 import feedparser
-import requests
 from bs4 import BeautifulSoup
 
+from utils.async_http import AsyncHTTPClient
 from utils.logging_config import get_logger
 
 logger = get_logger("blog_tracker")
@@ -117,11 +117,12 @@ RSS_PATHS = [
 class BlogTracker:
     """Track blog and RSS feed updates."""
 
-    def __init__(self, config: dict):
+    def __init__(self, config: dict, http_client: AsyncHTTPClient = None):
         """Initialize blog tracker.
 
         Args:
             config: Configuration dict with blog settings.
+            http_client: Optional shared AsyncHTTPClient instance.
         """
         self.config = config
         # Check multiple possible config locations
@@ -131,14 +132,15 @@ class BlogTracker:
             or config.get("blogs", [])
         )
 
-        self.headers = {
-            "User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
-        }
-        self.session = requests.Session()
-        self.session.headers.update(self.headers)
+        self._http = http_client or AsyncHTTPClient(
+            headers={
+                "User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) "
+                "AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
+            },
+        )
         self._rss_cache = {}  # Cache: base_url -> discovered feed URL (or None)
 
-    def _discover_rss_feed(self, base_url: str) -> Optional[str]:
+    async def _discover_rss_feed(self, base_url: str) -> Optional[str]:
         """Try to discover RSS feed URL for a blog (parallelized, cached).
 
         Probes multiple RSS paths concurrently and caches the result.
@@ -156,43 +158,39 @@ class BlogTracker:
         parsed = urlparse(base_url)
         base = f"{parsed.scheme}://{parsed.netloc}"
 
-        def _probe_path(path):
+        async def _probe_path(path):
             """Probe a single RSS path, return URL if valid feed."""
             feed_url = base + path
             try:
-                resp = self.session.head(feed_url, timeout=5, allow_redirects=True)
-                if resp.status_code == 200:
-                    content_type = resp.headers.get("Content-Type", "")
-                    if any(t in content_type for t in ["xml", "rss", "atom", "feed"]):
-                        return feed_url
-                    resp = self.session.get(feed_url, timeout=5)
-                    if resp.status_code == 200 and (
-                        "<?xml" in resp.text[:100]
-                        or "<rss" in resp.text[:200]
-                        or "<feed" in resp.text[:200]
+                # Try HEAD first for content type check
+                status = await self._http.head(feed_url, timeout=5)
+                if status == 200:
+                    # Verify it's actually a feed by fetching content
+                    text = await self._http.get_text(feed_url, max_retries=1)
+                    if text and (
+                        "<?xml" in text[:100]
+                        or "<rss" in text[:200]
+                        or "<feed" in text[:200]
                     ):
                         return feed_url
-            except requests.RequestException:
+            except Exception:
                 pass
             return None
 
         # Probe all RSS paths concurrently
-        with ThreadPoolExecutor(max_workers=5) as executor:
-            future_to_path = {executor.submit(_probe_path, p): p for p in RSS_PATHS}
-            for future in future_to_path:
-                result = future.result()
-                if result:
-                    # Cancel remaining futures and return first hit
-                    for f in future_to_path:
-                        f.cancel()
-                    self._rss_cache[base_url] = result
-                    return result
+        tasks = [_probe_path(p) for p in RSS_PATHS]
+        results = await asyncio.gather(*tasks, return_exceptions=True)
+
+        for result in results:
+            if isinstance(result, str) and result:
+                self._rss_cache[base_url] = result
+                return result
 
         # Try to find feed link in HTML
         try:
-            resp = self.session.get(base_url, timeout=10)
-            if resp.status_code == 200:
-                soup = BeautifulSoup(resp.text, "html.parser")
+            html = await self._http.get_text(base_url)
+            if html:
+                soup = BeautifulSoup(html, "html.parser")
                 for link in soup.find_all("link", rel=["alternate", "feed"]):
                     link_type = link.get("type", "")
                     if "rss" in link_type or "atom" in link_type or "xml" in link_type:
@@ -202,13 +200,13 @@ class BlogTracker:
                                 href = urljoin(base_url, href)
                             self._rss_cache[base_url] = href
                             return href
-        except requests.RequestException:
+        except Exception:
             pass
 
         self._rss_cache[base_url] = None
         return None
 
-    def fetch_rss(self, url: str, days: int = 7) -> tuple[list[dict], Optional[str]]:
+    async def fetch_rss(self, url: str, days: int = 7) -> tuple[list[dict], Optional[str]]:
         """Parse RSS feed and extract recent articles.
 
         Args:
@@ -219,7 +217,10 @@ class BlogTracker:
             Tuple of (articles list, error message or None).
         """
         try:
-            feed = feedparser.parse(url)
+            text = await self._http.get_text(url, max_retries=2)
+            if not text:
+                return [], "Failed to fetch RSS feed"
+            feed = feedparser.parse(text)
         except Exception as e:
             return [], f"RSS parse error: {e}"
 
@@ -281,23 +282,15 @@ class BlogTracker:
         return articles, None
 
     def _validate_summary(self, summary: str, title: str) -> str:
-        """Validate and clean summary text.
-
-        Args:
-            summary: Raw summary text.
-            title: Article title for comparison.
-
-        Returns:
-            Cleaned summary or empty string if invalid.
-        """
+        """Validate and clean summary text."""
         if not summary:
             return ""
 
         # Remove if it's just a date
         date_patterns = [
-            r"^\w+\s+\d{1,2},?\s+\d{4}$",  # "January 15, 2024"
-            r"^\d{4}-\d{2}-\d{2}$",  # "2024-01-15"
-            r"^\d{1,2}/\d{1,2}/\d{4}$",  # "01/15/2024"
+            r"^\w+\s+\d{1,2},?\s+\d{4}$",
+            r"^\d{4}-\d{2}-\d{2}$",
+            r"^\d{1,2}/\d{1,2}/\d{4}$",
         ]
         for pattern in date_patterns:
             if re.match(pattern, summary.strip()):
@@ -329,7 +322,7 @@ class BlogTracker:
 
         return summary
 
-    def scrape_blog(
+    async def scrape_blog(
         self, url: str, selector: str, days: int = 7
     ) -> tuple[list[dict], Optional[str]]:
         """Scrape blog page for articles.
@@ -343,12 +336,13 @@ class BlogTracker:
             Tuple of (articles list, error message or None).
         """
         try:
-            resp = self.session.get(url, timeout=30)
-            resp.raise_for_status()
-        except requests.RequestException as e:
+            html = await self._http.get_text(url)
+            if not html:
+                return [], "Failed to fetch blog page"
+        except Exception as e:
             return [], f"HTTP error: {e}"
 
-        soup = BeautifulSoup(resp.text, "html.parser")
+        soup = BeautifulSoup(html, "html.parser")
         articles = []
         cutoff = datetime.now(timezone.utc).replace(tzinfo=None) - timedelta(days=days)
 
@@ -379,7 +373,7 @@ class BlogTracker:
                 title_elem = elem.select_one(title_sel)
                 if title_elem:
                     title = title_elem.get_text(strip=True)
-                    if title and len(title) > 10:  # Skip very short titles
+                    if title and len(title) > 10:
                         break
 
             if not title:
@@ -405,7 +399,7 @@ class BlogTracker:
                 date_str = date_elem.get("datetime", "") or date_elem.get_text(strip=True)
                 date_str = self._parse_date(date_str)
 
-            # Fallback: try to extract date from URL (e.g. /2023/04/ or /2023-04-06/)
+            # Fallback: try to extract date from URL
             if not date_str and link:
                 date_str = self._extract_date_from_url(link)
 
@@ -449,22 +443,22 @@ class BlogTracker:
 
         return articles, None
 
-    def scrape_with_browser(
+    async def scrape_with_browser(
         self, url: str, selector: str, days: int = 7, browser=None
     ) -> tuple[list[dict], Optional[str]]:
-        """Scrape JavaScript-rendered page using Playwright.
+        """Scrape JavaScript-rendered page using Playwright async API.
 
         Args:
             url: Page URL.
             selector: CSS selector for article elements.
             days: Look back period in days.
-            browser: Optional shared Playwright browser instance to reuse.
+            browser: Optional shared Playwright async browser instance to reuse.
 
         Returns:
             Tuple of (articles list, error message or None).
         """
         try:
-            from playwright.sync_api import sync_playwright, TimeoutError as PlaywrightTimeout
+            from playwright.async_api import async_playwright, TimeoutError as PlaywrightTimeout
         except ImportError:
             return (
                 [],
@@ -478,34 +472,31 @@ class BlogTracker:
         try:
             pw_context = None
             if own_browser:
-                from playwright.sync_api import sync_playwright
-
-                pw_context = sync_playwright().start()
-                browser = pw_context.chromium.launch(headless=True)
+                pw_context = await async_playwright().start()
+                browser = await pw_context.chromium.launch(headless=True)
 
             try:
-                page = browser.new_page()
-                page.set_default_timeout(15000)  # Reduced from 30s for faster failure
+                page = await browser.new_page()
+                page.set_default_timeout(15000)
 
                 # Navigate and wait for content
                 try:
-                    page.goto(url, wait_until="networkidle", timeout=15000)
+                    await page.goto(url, wait_until="networkidle", timeout=15000)
                 except Exception:
-                    # Fallback: some sites (e.g. Webflow) never reach networkidle
                     try:
-                        page.goto(url, wait_until="domcontentloaded", timeout=15000)
+                        await page.goto(url, wait_until="domcontentloaded", timeout=15000)
                     except Exception:
-                        page.close()
+                        await page.close()
                         return [], f"Page load timeout: {url}"
-                page.wait_for_timeout(1000)  # Reduced from 2s; JS usually loads within 1s
+                await page.wait_for_timeout(1000)
 
                 # Find all article elements, excluding nav/sidebar/footer noise
-                elements = page.query_selector_all(selector)
+                elements = await page.query_selector_all(selector)
                 # Filter out elements inside nav, sidebar, footer, header
                 filtered_elements = []
                 for elem in elements:
                     try:
-                        is_noise = elem.evaluate(
+                        is_noise = await elem.evaluate(
                             "el => !!el.closest('nav, .nav, .sidebar, footer, .footer, header, .header, .comments')"
                         )
                         if not is_noise:
@@ -514,31 +505,29 @@ class BlogTracker:
                         filtered_elements.append(elem)
                 elements = filtered_elements
                 if not elements:
-                    browser.close()
+                    await page.close()
                     return [], f"No elements found with selector: {selector}"
 
                 # First pass: collect metadata from list page
                 items_data = []
-                seen_links = set()  # Deduplicate by link
+                seen_links = set()
 
-                for i, elem in enumerate(elements[:30]):  # Check more elements for dedup
-                    # Check if the element itself is an anchor tag
-                    tag_name = elem.evaluate("el => el.tagName.toLowerCase()")
+                for i, elem in enumerate(elements[:30]):
+                    tag_name = await elem.evaluate("el => el.tagName.toLowerCase()")
                     is_anchor = tag_name == "a"
 
                     # Extract link first (for deduplication)
                     link = ""
                     if is_anchor:
-                        link = elem.get_attribute("href") or ""
+                        link = await elem.get_attribute("href") or ""
                     else:
-                        link_elem = elem.query_selector("a[href]")
+                        link_elem = await elem.query_selector("a[href]")
                         if link_elem:
-                            link = link_elem.get_attribute("href") or ""
+                            link = await link_elem.get_attribute("href") or ""
 
                     if link and not link.startswith("http"):
                         link = urljoin(url, link)
 
-                    # Skip if link is just the base URL or we've seen it
                     if link and (link.rstrip("/") == url.rstrip("/") or link in seen_links):
                         continue
                     if link:
@@ -554,20 +543,17 @@ class BlogTracker:
                         ".title",
                         "[class*='title']",
                     ]:
-                        title_elem = elem.query_selector(title_sel)
+                        title_elem = await elem.query_selector(title_sel)
                         if title_elem:
-                            title = title_elem.inner_text().strip()
+                            title = (await title_elem.inner_text()).strip()
                             if title and len(title) > 5:
                                 break
 
-                    # If no title found in child elements, use element's own text
                     if not title:
-                        title = elem.inner_text().strip()
-                        # Clean up: take first line if multi-line
+                        title = (await elem.inner_text()).strip()
                         if "\n" in title:
                             title = title.split("\n")[0].strip()
 
-                    # Skip generic titles
                     if (
                         not title
                         or len(title) < 5
@@ -575,31 +561,30 @@ class BlogTracker:
                     ):
                         continue
 
-                    # Stop after collecting 15 valid items
                     if len(items_data) >= 15:
                         break
 
                     # Extract date
                     date_str = ""
-                    date_elem = elem.query_selector(
+                    date_elem = await elem.query_selector(
                         ".blog-item-date, time, .date, [class*='date'], [datetime]"
                     )
                     if date_elem:
                         date_str = (
-                            date_elem.get_attribute("datetime") or date_elem.inner_text().strip()
+                            await date_elem.get_attribute("datetime")
+                            or (await date_elem.inner_text()).strip()
                         )
                         date_str = self._parse_date(date_str)
 
-                    # Fallback: extract date from URL
                     if not date_str and link:
                         date_str = self._extract_date_from_url(link)
 
                     # Extract summary
                     summary = ""
                     for sum_sel in [".blog-desc", "p", ".summary", ".excerpt", "[class*='desc']"]:
-                        sum_elem = elem.query_selector(sum_sel)
+                        sum_elem = await elem.query_selector(sum_sel)
                         if sum_elem:
-                            summary = sum_elem.inner_text().strip()
+                            summary = (await sum_elem.inner_text()).strip()
                             summary = self._validate_summary(summary, title)
                             if summary:
                                 break
@@ -618,30 +603,24 @@ class BlogTracker:
                 for item in items_data:
                     if not item["link"]:
                         try:
-                            # Re-query elements (page state may have changed)
-                            elements = page.query_selector_all(selector)
+                            elements = await page.query_selector_all(selector)
                             if item["index"] < len(elements):
                                 elem = elements[item["index"]]
-                                # Click and wait for navigation
                                 try:
-                                    with page.expect_navigation(timeout=5000):
-                                        elem.click()
-                                    # Capture the new URL
+                                    async with page.expect_navigation(timeout=5000):
+                                        await elem.click()
                                     item["link"] = page.url
-                                    # Go back to list page
-                                    page.go_back(wait_until="networkidle")
-                                    page.wait_for_timeout(1000)
+                                    await page.go_back(wait_until="networkidle")
+                                    await page.wait_for_timeout(1000)
                                 except PlaywrightTimeout:
-                                    # No navigation occurred, use list page URL
                                     item["link"] = url
                         except Exception:
                             item["link"] = url
 
-                page.close()
+                await page.close()
 
                 # Build article list (with date filtering)
                 for item in items_data:
-                    # Filter out old articles
                     if item["date"]:
                         try:
                             article_date = datetime.strptime(item["date"], "%Y-%m-%d")
@@ -660,9 +639,9 @@ class BlogTracker:
 
             finally:
                 if own_browser:
-                    browser.close()
+                    await browser.close()
                     if pw_context:
-                        pw_context.stop()
+                        await pw_context.stop()
 
             if not articles:
                 return [], "No valid articles extracted from browser render"
@@ -684,10 +663,8 @@ class BlogTracker:
         if not date_str:
             return ""
 
-        # Clean the string
         date_str = date_str.strip()
 
-        # Try common formats
         formats = [
             "%Y-%m-%d",
             "%Y-%m-%dT%H:%M:%S",
@@ -708,7 +685,6 @@ class BlogTracker:
             except ValueError:
                 continue
 
-        # Try to extract date with regex
         date_match = re.search(r"(\d{4})-(\d{2})-(\d{2})", date_str)
         if date_match:
             return date_match.group(0)
@@ -716,17 +692,7 @@ class BlogTracker:
         return ""
 
     def _extract_date_from_url(self, url: str) -> str:
-        """Try to extract a date from a URL path.
-
-        Matches patterns like /2023/04/06/, /2023/4/, /2023-04-06- etc.
-
-        Args:
-            url: Article URL.
-
-        Returns:
-            Date string in YYYY-MM-DD format, or empty string.
-        """
-        # Match /YYYY/MM/DD/ or /YYYY/MM/ in URL
+        """Try to extract a date from a URL path."""
         match = re.search(r"/(\d{4})/(\d{1,2})/(\d{1,2})", url)
         if match:
             return f"{match.group(1)}-{int(match.group(2)):02d}-{int(match.group(3)):02d}"
@@ -735,7 +701,6 @@ class BlogTracker:
         if match:
             return f"{match.group(1)}-{int(match.group(2)):02d}-01"
 
-        # Match YYYY-MM-DD in URL
         match = re.search(r"/(\d{4})-(\d{2})-(\d{2})", url)
         if match:
             return f"{match.group(1)}-{match.group(2)}-{match.group(3)}"
@@ -743,14 +708,7 @@ class BlogTracker:
         return ""
 
     def _extract_signals(self, article: dict) -> list[str]:
-        """Extract signal keywords from article.
-
-        Args:
-            article: Article dict with title and summary.
-
-        Returns:
-            List of matched signal keywords.
-        """
+        """Extract signal keywords from article."""
         text = " ".join([article.get("title", ""), article.get("summary", "")]).lower()
 
         signals = []
@@ -760,13 +718,13 @@ class BlogTracker:
 
         return list(set(signals))
 
-    def fetch_blog(self, blog_config: dict, days: int = 7, browser=None) -> dict:
+    async def fetch_blog(self, blog_config: dict, days: int = 7, browser=None) -> dict:
         """Fetch articles from a single blog.
 
         Args:
             blog_config: Blog configuration dict.
             days: Look back period in days.
-            browser: Optional shared Playwright browser instance.
+            browser: Optional shared Playwright async browser instance.
 
         Returns:
             Blog activity dict with status.
@@ -796,15 +754,15 @@ class BlogTracker:
 
         # Strategy 1: Use explicit RSS URL if provided
         if rss_url:
-            articles, error = self.fetch_rss(rss_url, days)
+            articles, error = await self.fetch_rss(rss_url, days)
             if articles:
                 result["feed_url"] = rss_url
 
         # Strategy 2: Try to discover RSS feed
         if not articles and blog_type in ("auto", "rss"):
-            discovered_feed = self._discover_rss_feed(url)
+            discovered_feed = await self._discover_rss_feed(url)
             if discovered_feed:
-                articles, error = self.fetch_rss(discovered_feed, days)
+                articles, error = await self.fetch_rss(discovered_feed, days)
                 if articles:
                     result["feed_url"] = discovered_feed
 
@@ -813,7 +771,7 @@ class BlogTracker:
             for rss_path in ["/feed", "/feed.xml", "/rss.xml", "/atom.xml"]:
                 parsed = urlparse(url)
                 test_url = f"{parsed.scheme}://{parsed.netloc}{rss_path}"
-                articles, error = self.fetch_rss(test_url, days)
+                articles, error = await self.fetch_rss(test_url, days)
                 if articles:
                     result["feed_url"] = test_url
                     break
@@ -821,19 +779,18 @@ class BlogTracker:
         # Strategy 4: Fall back to HTML scraping
         if not articles and blog_type in ("auto", "scrape"):
             selector = blog_config.get("selector", "article, [class*='post'], [class*='blog']")
-            articles, error = self.scrape_blog(url, selector, days)
+            articles, error = await self.scrape_blog(url, selector, days)
 
         # Strategy 5: Use Playwright for JavaScript-rendered pages
         if not articles and blog_type in ("auto", "scrape", "browser"):
             selector = blog_config.get("selector", "article, [class*='post'], [class*='blog']")
-            articles, error = self.scrape_with_browser(url, selector, days, browser=browser)
+            articles, error = await self.scrape_with_browser(url, selector, days, browser=browser)
             if articles:
                 result["render_method"] = "browser"
 
         # Process results
         if articles:
             result["total_articles"] = len(articles)
-            # Filter to articles with signals
             relevant = [a for a in articles if a.get("signals")]
             result["articles"] = relevant
             result["has_activity"] = len(relevant) > 0
@@ -845,11 +802,11 @@ class BlogTracker:
 
         return result
 
-    def fetch_all_blogs(self, days: int = 7) -> list[dict]:
+    async def fetch_all_blogs(self, days: int = 7) -> list[dict]:
         """Fetch articles from all configured blogs (parallelized).
 
-        Uses ThreadPoolExecutor to fetch multiple blogs concurrently.
-        Browser-based scraping is serialized to avoid resource contention.
+        Uses asyncio.gather for concurrent fetching.
+        Browser-based scraping runs concurrently with RSS blogs.
 
         Args:
             days: Look back period in days.
@@ -868,58 +825,80 @@ class BlogTracker:
             else:
                 auto_blogs.append(blog_config)
 
-        all_activities = []
+        async def _fetch_auto_blogs():
+            """Fetch auto/RSS blogs concurrently with semaphore."""
+            sem = asyncio.Semaphore(15)
 
-        # Fetch auto/RSS blogs in parallel (I/O-bound, safe to parallelize)
-        if auto_blogs:
-            with ThreadPoolExecutor(max_workers=8) as executor:
-                futures = {executor.submit(self.fetch_blog, cfg, days): cfg for cfg in auto_blogs}
-                for future in futures:
-                    try:
-                        all_activities.append(future.result())
-                    except Exception as e:
-                        cfg = futures[future]
-                        logger.warning("Error fetching %s: %s", cfg.get("name", "?"), e)
+            async def _bounded(cfg):
+                async with sem:
+                    return await self.fetch_blog(cfg, days)
 
-        # Fetch browser blogs with shared browser instance (avoid repeated launch)
-        if browser_blogs:
+            tasks = [_bounded(cfg) for cfg in auto_blogs]
+            results_raw = await asyncio.gather(*tasks, return_exceptions=True)
+            results = []
+            for i, result in enumerate(results_raw):
+                if isinstance(result, Exception):
+                    logger.warning(
+                        "Error fetching %s: %s", auto_blogs[i].get("name", "?"), result
+                    )
+                else:
+                    results.append(result)
+            return results
+
+        async def _fetch_browser_blogs():
+            """Fetch browser blogs with shared Playwright browser."""
+            results = []
+            if not browser_blogs:
+                return results
+
             shared_browser = None
             pw_context = None
             try:
-                from playwright.sync_api import sync_playwright
+                from playwright.async_api import async_playwright
 
-                pw_context = sync_playwright().start()
-                shared_browser = pw_context.chromium.launch(headless=True)
+                pw_context = await async_playwright().start()
+                shared_browser = await pw_context.chromium.launch(headless=True)
             except Exception as e:
                 logger.warning("Failed to launch shared browser: %s", e)
 
             if shared_browser:
-                # Browser scraping is not thread-safe, run sequentially with shared browser
-                # Restart browser every 5 pages to prevent memory leaks
-                for i, cfg in enumerate(browser_blogs):
-                    try:
-                        all_activities.append(self.fetch_blog(cfg, days, browser=shared_browser))
-                    except Exception as e:
-                        logger.warning("Error fetching %s: %s", cfg.get("name", "?"), e)
-                    # Restart browser every 5 pages
-                    if (i + 1) % 5 == 0 and i + 1 < len(browser_blogs):
+                try:
+                    for i, cfg in enumerate(browser_blogs):
                         try:
-                            shared_browser.close()
-                            shared_browser = pw_context.chromium.launch(headless=True)
-                            logger.info("Browser restarted after %d pages", i + 1)
+                            results.append(
+                                await self.fetch_blog(cfg, days, browser=shared_browser)
+                            )
                         except Exception as e:
-                            logger.warning("Browser restart failed: %s", e)
-                            break
-                shared_browser.close()
-                if pw_context:
-                    pw_context.stop()
+                            logger.warning("Error fetching %s: %s", cfg.get("name", "?"), e)
+                        # Restart browser every 5 pages
+                        if (i + 1) % 5 == 0 and i + 1 < len(browser_blogs):
+                            try:
+                                await shared_browser.close()
+                                shared_browser = await pw_context.chromium.launch(headless=True)
+                                logger.info("Browser restarted after %d pages", i + 1)
+                            except Exception as e:
+                                logger.warning("Browser restart failed: %s", e)
+                                break
+                finally:
+                    if shared_browser:
+                        await shared_browser.close()
+                    if pw_context:
+                        await pw_context.stop()
             else:
                 # Fallback: each blog launches its own browser
                 for cfg in browser_blogs:
                     try:
-                        all_activities.append(self.fetch_blog(cfg, days))
+                        results.append(await self.fetch_blog(cfg, days))
                     except Exception as e:
                         logger.warning("Error fetching %s: %s", cfg.get("name", "?"), e)
+
+            return results
+
+        # Run RSS and browser blogs concurrently
+        auto_results, browser_results = await asyncio.gather(
+            _fetch_auto_blogs(), _fetch_browser_blogs()
+        )
+        all_activities = auto_results + browser_results
 
         # Deduplicate articles by normalized URL
         seen_urls = set()
@@ -940,26 +919,14 @@ class BlogTracker:
         return results
 
     def _normalize_url(self, url: str) -> str:
-        """Normalize URL for deduplication.
-
-        Removes trailing slashes, fragments, and tracking params.
-
-        Args:
-            url: URL to normalize.
-
-        Returns:
-            Normalized URL.
-        """
+        """Normalize URL for deduplication."""
         if not url:
             return ""
 
         try:
             parsed = urlparse(url)
-
-            # Remove fragment
             parsed = parsed._replace(fragment="")
 
-            # Remove tracking query params
             tracking_params = {
                 "utm_source",
                 "utm_medium",
@@ -975,7 +942,6 @@ class BlogTracker:
                 new_query = urlencode(filtered, doseq=True) if filtered else ""
                 parsed = parsed._replace(query=new_query)
 
-            # Normalize path (remove trailing slash)
             path = parsed.path.rstrip("/") or "/"
             parsed = parsed._replace(path=path)
 
@@ -996,12 +962,5 @@ BLOG_VENDOR_MAP = {
 
 
 def map_blog_to_vendor(source_name: str) -> str:
-    """Map blog source name to vendor key.
-
-    Args:
-        source_name: Blog source display name.
-
-    Returns:
-        Vendor key for aggregation.
-    """
+    """Map blog source name to vendor key."""
     return BLOG_VENDOR_MAP.get(source_name, source_name.lower().replace(" ", "_"))

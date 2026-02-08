@@ -199,7 +199,7 @@ async def run_scan(request: ScanRequest):
         # Import and run the scanner
         from main_intel import run_intel_scan
 
-        result = run_intel_scan(days=request.days)
+        result = await run_intel_scan(days=request.days)
 
         report = get_latest_report()
         summary = report.get("summary", {}) if report else {}

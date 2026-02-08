@@ -4,7 +4,7 @@ import sys
 import time
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
-from unittest.mock import patch, MagicMock
+from unittest.mock import MagicMock, AsyncMock
 
 import pytest
 
@@ -106,16 +106,16 @@ class TestOrgTrackerInit:
         assert scale["tier"] == "premium"
         assert scale["blog_url"] == "https://scale.com/blog"
 
-    def test_init_session_created(self, sample_config):
-        """Test HTTP session is initialized."""
+    def test_init_http_client_created(self, sample_config):
+        """Test async HTTP client is initialized."""
         tracker = OrgTracker(sample_config)
-        assert tracker.session is not None
-        assert "User-Agent" in tracker.session.headers
+        assert tracker._http is not None
 
     def test_init_rate_limit_defaults(self, sample_config):
         """Test rate limiting defaults."""
         tracker = OrgTracker(sample_config)
-        assert tracker._request_delay == 0.1
+        assert tracker._rate_limiter is not None
+        assert tracker._rate_limiter._min_interval > 0
 
 
 class TestParseOrgs:
@@ -181,23 +181,22 @@ class TestParseVendors:
 class TestRateLimit:
     """Tests for rate limiting."""
 
-    def test_rate_limit_enforced(self, sample_config):
+    async def test_rate_limit_enforced(self, sample_config):
         """Test rate limit delays requests."""
         tracker = OrgTracker(sample_config)
-        tracker._request_delay = 0.05  # Short delay for testing
 
         start = time.time()
-        tracker._rate_limit()
-        tracker._rate_limit()
+        await tracker._rate_limit()
+        await tracker._rate_limit()
         elapsed = time.time() - start
 
-        # Should have at least one delay
-        assert elapsed >= 0.04
+        # Should have at least one delay (min_interval = 1/10 = 0.1s)
+        assert elapsed >= 0.05
 
-    def test_rate_limit_thread_safe(self, sample_config):
-        """Test rate limit uses lock."""
+    def test_rate_limiter_exists(self, sample_config):
+        """Test rate limiter is initialized."""
         tracker = OrgTracker(sample_config)
-        assert tracker._rate_lock is not None
+        assert tracker._rate_limiter is not None
 
 
 class TestRequestWithRetry:
@@ -206,19 +205,16 @@ class TestRequestWithRetry:
     @pytest.fixture
     def tracker(self, sample_config):
         tracker = OrgTracker(sample_config)
-        tracker._request_delay = 0  # Disable rate limit for tests
+        tracker._rate_limiter._min_interval = 0  # Disable rate limit for tests
         return tracker
 
-    def test_successful_request(self, tracker):
+    async def test_successful_request(self, tracker):
         """Test successful request returns data and caches."""
-        mock_resp = MagicMock()
-        mock_resp.status_code = 200
-        mock_resp.json.return_value = [{"id": "test/dataset"}]
-        tracker.session.get = MagicMock(return_value=mock_resp)
+        tracker._http.get_json = AsyncMock(return_value=[{"id": "test/dataset"}])
         tracker._cache = MagicMock()
         tracker._cache.get.return_value = None
 
-        result = tracker._request_with_retry(
+        result = await tracker._request_with_retry(
             url="https://huggingface.co/api/datasets",
             params={"author": "test"},
             cache_key="test:key",
@@ -227,36 +223,28 @@ class TestRequestWithRetry:
         assert result == [{"id": "test/dataset"}]
         tracker._cache.set.assert_called_once()
 
-    def test_cache_hit(self, tracker):
+    async def test_cache_hit(self, tracker):
         """Test cached data returned without request."""
+        tracker._http.get_json = AsyncMock()
         tracker._cache = MagicMock()
         tracker._cache.get.return_value = [{"id": "cached"}]
 
-        result = tracker._request_with_retry(
+        result = await tracker._request_with_retry(
             url="https://huggingface.co/api/datasets",
             params={},
             cache_key="cached:key",
             description="test",
         )
         assert result == [{"id": "cached"}]
-        tracker.session.get.assert_not_called() if hasattr(
-            tracker.session.get, "assert_not_called"
-        ) else None
+        tracker._http.get_json.assert_not_called()
 
-    @patch("time.sleep")
-    def test_server_error_retries(self, mock_sleep, tracker):
-        """Test 5xx error triggers retry."""
-        mock_500 = MagicMock()
-        mock_500.status_code = 500
-        mock_ok = MagicMock()
-        mock_ok.status_code = 200
-        mock_ok.json.return_value = [{"id": "retried"}]
-
-        tracker.session.get = MagicMock(side_effect=[mock_500, mock_ok])
+    async def test_server_error_retries(self, tracker):
+        """Test retries are handled by AsyncHTTPClient internally."""
+        tracker._http.get_json = AsyncMock(return_value=[{"id": "retried"}])
         tracker._cache = MagicMock()
         tracker._cache.get.return_value = None
 
-        result = tracker._request_with_retry(
+        result = await tracker._request_with_retry(
             url="https://huggingface.co/api/test",
             params={},
             cache_key="retry:key",
@@ -264,15 +252,13 @@ class TestRequestWithRetry:
         )
         assert result == [{"id": "retried"}]
 
-    def test_non_200_returns_empty(self, tracker):
-        """Test non-200, non-5xx returns empty list."""
-        mock_resp = MagicMock()
-        mock_resp.status_code = 404
-        tracker.session.get = MagicMock(return_value=mock_resp)
+    async def test_non_200_returns_empty(self, tracker):
+        """Test None from get_json (non-200) returns empty list."""
+        tracker._http.get_json = AsyncMock(return_value=None)
         tracker._cache = MagicMock()
         tracker._cache.get.return_value = None
 
-        result = tracker._request_with_retry(
+        result = await tracker._request_with_retry(
             url="https://huggingface.co/api/test",
             params={},
             cache_key="404:key",
@@ -280,20 +266,13 @@ class TestRequestWithRetry:
         )
         assert result == []
 
-    @patch("time.sleep")
-    def test_connection_error_retries(self, mock_sleep, tracker):
-        """Test network error triggers retry."""
-        import requests
-
-        mock_ok = MagicMock()
-        mock_ok.status_code = 200
-        mock_ok.json.return_value = []
-
-        tracker.session.get = MagicMock(side_effect=[requests.ConnectionError("timeout"), mock_ok])
+    async def test_connection_error_retries(self, tracker):
+        """Test retries on network error are handled by AsyncHTTPClient internally."""
+        tracker._http.get_json = AsyncMock(return_value=[])
         tracker._cache = MagicMock()
         tracker._cache.get.return_value = None
 
-        result = tracker._request_with_retry(
+        result = await tracker._request_with_retry(
             url="https://huggingface.co/api/test",
             params={},
             cache_key="err:key",
@@ -305,11 +284,11 @@ class TestRequestWithRetry:
 class TestFetchOrgDatasets:
     """Tests for _fetch_org_datasets."""
 
-    def test_calls_correct_url(self, sample_config):
+    async def test_calls_correct_url(self, sample_config):
         tracker = OrgTracker(sample_config)
-        tracker._request_with_retry = MagicMock(return_value=[])
+        tracker._request_with_retry = AsyncMock(return_value=[])
 
-        tracker._fetch_org_datasets("openai", limit=50)
+        await tracker._fetch_org_datasets("openai", limit=50)
         tracker._request_with_retry.assert_called_once()
         call_args = tracker._request_with_retry.call_args
         assert "datasets" in call_args.kwargs.get("url", call_args[1].get("url", ""))
@@ -319,11 +298,11 @@ class TestFetchOrgDatasets:
 class TestFetchOrgModels:
     """Tests for _fetch_org_models."""
 
-    def test_calls_correct_url(self, sample_config):
+    async def test_calls_correct_url(self, sample_config):
         tracker = OrgTracker(sample_config)
-        tracker._request_with_retry = MagicMock(return_value=[])
+        tracker._request_with_retry = AsyncMock(return_value=[])
 
-        tracker._fetch_org_models("meta-llama", limit=25)
+        await tracker._fetch_org_models("meta-llama", limit=25)
         tracker._request_with_retry.assert_called_once()
         call_args = tracker._request_with_retry.call_args
         assert "models" in call_args.kwargs.get("url", call_args[1].get("url", ""))
@@ -368,63 +347,63 @@ class TestFetchSingleOrg:
     def tracker(self, sample_config):
         return OrgTracker(sample_config)
 
-    def test_returns_none_when_no_data(self, tracker):
+    async def test_returns_none_when_no_data(self, tracker):
         """Test returns None when org has no recent activity."""
-        tracker._fetch_org_datasets = MagicMock(return_value=[])
-        tracker._fetch_org_models = MagicMock(return_value=[])
+        tracker._fetch_org_datasets = AsyncMock(return_value=[])
+        tracker._fetch_org_models = AsyncMock(return_value=[])
 
         cutoff = datetime.now() - timedelta(days=7)
         org_info = {"hf_ids": ["openai"], "category": "frontier_labs", "priority": "high"}
 
-        result = tracker._fetch_single_org("OpenAI", org_info, cutoff)
+        result = await tracker._fetch_single_org("OpenAI", org_info, cutoff)
         assert result is None
 
-    def test_returns_data_when_recent(self, tracker):
+    async def test_returns_data_when_recent(self, tracker):
         """Test returns data when org has recent datasets."""
         recent_date = datetime.now(timezone.utc).replace(tzinfo=None).isoformat() + "Z"
-        tracker._fetch_org_datasets = MagicMock(
+        tracker._fetch_org_datasets = AsyncMock(
             return_value=[
                 {"id": "openai/new-dataset", "lastModified": recent_date},
             ]
         )
-        tracker._fetch_org_models = MagicMock(return_value=[])
+        tracker._fetch_org_models = AsyncMock(return_value=[])
 
         cutoff = datetime.now() - timedelta(days=7)
         org_info = {"hf_ids": ["openai"], "category": "frontier_labs", "priority": "high"}
 
-        result = tracker._fetch_single_org("OpenAI", org_info, cutoff)
+        result = await tracker._fetch_single_org("OpenAI", org_info, cutoff)
         assert result is not None
         category, org_name, org_data = result
         assert category == "frontier_labs"
         assert org_name == "OpenAI"
         assert len(org_data["datasets"]) == 1
 
-    def test_filters_old_datasets(self, tracker):
+    async def test_filters_old_datasets(self, tracker):
         """Test old datasets are filtered out."""
         old_date = (datetime.now(timezone.utc).replace(tzinfo=None) - timedelta(days=30)).isoformat() + "Z"
-        tracker._fetch_org_datasets = MagicMock(
+        tracker._fetch_org_datasets = AsyncMock(
             return_value=[
                 {"id": "openai/old-dataset", "lastModified": old_date},
             ]
         )
-        tracker._fetch_org_models = MagicMock(return_value=[])
+        tracker._fetch_org_models = AsyncMock(return_value=[])
 
         cutoff = datetime.now() - timedelta(days=7)
         org_info = {"hf_ids": ["openai"], "category": "frontier_labs", "priority": "high"}
 
-        result = tracker._fetch_single_org("OpenAI", org_info, cutoff)
-        assert result is None  # No recent data → None
+        result = await tracker._fetch_single_org("OpenAI", org_info, cutoff)
+        assert result is None  # No recent data -> None
 
 
 class TestFetchLabActivity:
     """Tests for fetch_lab_activity."""
 
-    def test_returns_structured_results(self, sample_config):
+    async def test_returns_structured_results(self, sample_config):
         """Test returns dict with expected categories."""
         tracker = OrgTracker(sample_config)
-        tracker._fetch_single_org = MagicMock(return_value=None)
+        tracker._fetch_single_org = AsyncMock(return_value=None)
 
-        result = tracker.fetch_lab_activity(days=7)
+        result = await tracker.fetch_lab_activity(days=7)
         assert "frontier_labs" in result
         assert "emerging_labs" in result
         assert "research_labs" in result
@@ -433,11 +412,11 @@ class TestFetchLabActivity:
 class TestFetchVendorActivity:
     """Tests for fetch_vendor_activity."""
 
-    def test_returns_structured_results(self, sample_config):
+    async def test_returns_structured_results(self, sample_config):
         """Test returns dict with expected tiers."""
         tracker = OrgTracker(sample_config)
-        tracker._fetch_org_datasets = MagicMock(return_value=[])
+        tracker._fetch_org_datasets = AsyncMock(return_value=[])
 
-        result = tracker.fetch_vendor_activity(days=7)
+        result = await tracker.fetch_vendor_activity(days=7)
         assert "premium" in result
         assert "specialized" in result

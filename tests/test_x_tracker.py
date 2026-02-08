@@ -3,10 +3,9 @@
 import sys
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
-from unittest.mock import patch, MagicMock
+from unittest.mock import patch, MagicMock, AsyncMock
 
 import pytest
-import requests
 
 # Add src to path
 sys.path.insert(0, str(Path(__file__).parent.parent / "src"))
@@ -155,7 +154,7 @@ class TestFetchRSSHubFeed:
 
     @pytest.fixture
     def tracker(self):
-        return XTracker(
+        tracker = XTracker(
             {
                 "x_tracker": {
                     "backend": "rsshub",
@@ -163,17 +162,13 @@ class TestFetchRSSHubFeed:
                 }
             }
         )
-
-    def _make_ok_resp(self, text="<rss>mock</rss>"):
-        """Helper: create a mock response that passes redirect check."""
-        resp = MagicMock()
-        resp.text = text
-        resp.status_code = 200
-        resp.raise_for_status = MagicMock()
-        return resp
+        # Pre-inject a mock HTTP client so _ensure_http doesn't create a real one
+        tracker._http = MagicMock()
+        tracker._owns_http = False
+        return tracker
 
     @patch("trackers.x_tracker.feedparser.parse")
-    def test_fetch_rsshub_feed_success(self, mock_parse, tracker):
+    async def test_fetch_rsshub_feed_success(self, mock_parse, tracker):
         """Test successful RSSHub feed fetch."""
         now = datetime.now(timezone.utc).replace(tzinfo=None)
         mock_entry = MagicMock()
@@ -188,31 +183,32 @@ class TestFetchRSSHubFeed:
         mock_feed.entries = [mock_entry]
         mock_parse.return_value = mock_feed
 
-        mock_resp = self._make_ok_resp()
-        tracker.session.get = MagicMock(return_value=mock_resp)
+        tracker._http.head = AsyncMock(return_value=200)
+        tracker._http.get_text = AsyncMock(return_value="<rss>mock</rss>")
 
-        tweets = tracker._fetch_rsshub_feed("testuser", days=7)
+        tweets = await tracker._fetch_rsshub_feed("testuser", days=7)
 
         assert len(tweets) == 1
         assert tweets[0]["username"] == "testuser"
         assert tweets[0]["source"] == "x_rsshub"
         assert "dataset" in tweets[0]["signals"]
-        mock_parse.assert_called_once_with(mock_resp.text)
+        mock_parse.assert_called_once_with("<rss>mock</rss>")
 
     @patch("trackers.x_tracker.feedparser.parse")
-    def test_fetch_rsshub_feed_empty(self, mock_parse, tracker):
+    async def test_fetch_rsshub_feed_empty(self, mock_parse, tracker):
         """Test RSSHub feed with no entries."""
         mock_feed = MagicMock()
         mock_feed.entries = []
         mock_parse.return_value = mock_feed
 
-        tracker.session.get = MagicMock(return_value=self._make_ok_resp("<rss></rss>"))
+        tracker._http.head = AsyncMock(return_value=200)
+        tracker._http.get_text = AsyncMock(return_value="<rss></rss>")
 
-        tweets = tracker._fetch_rsshub_feed("testuser")
+        tweets = await tracker._fetch_rsshub_feed("testuser")
         assert tweets == []
 
     @patch("trackers.x_tracker.feedparser.parse")
-    def test_fetch_rsshub_feed_old_entries_filtered(self, mock_parse, tracker):
+    async def test_fetch_rsshub_feed_old_entries_filtered(self, mock_parse, tracker):
         """Test that entries older than cutoff are filtered out."""
         old_date = datetime.now(timezone.utc).replace(tzinfo=None) - timedelta(days=30)
         mock_entry = MagicMock()
@@ -227,22 +223,22 @@ class TestFetchRSSHubFeed:
         mock_feed.entries = [mock_entry]
         mock_parse.return_value = mock_feed
 
-        tracker.session.get = MagicMock(return_value=self._make_ok_resp())
+        tracker._http.head = AsyncMock(return_value=200)
+        tracker._http.get_text = AsyncMock(return_value="<rss>mock</rss>")
 
-        tweets = tracker._fetch_rsshub_feed("testuser", days=7)
+        tweets = await tracker._fetch_rsshub_feed("testuser", days=7)
         assert tweets == []
 
-    def test_fetch_rsshub_feed_http_error(self, tracker):
+    async def test_fetch_rsshub_feed_http_error(self, tracker):
         """Test handling of HTTP request errors."""
-        tracker.session.get = MagicMock(
-            side_effect=requests.exceptions.ConnectionError("Connection refused")
-        )
+        tracker._http.head = AsyncMock(return_value=200)
+        tracker._http.get_text = AsyncMock(return_value=None)
 
-        tweets = tracker._fetch_rsshub_feed("testuser")
+        tweets = await tracker._fetch_rsshub_feed("testuser")
         assert tweets == []
 
     @patch("trackers.x_tracker.feedparser.parse")
-    def test_fetch_rsshub_html_cleaned(self, mock_parse, tracker):
+    async def test_fetch_rsshub_html_cleaned(self, mock_parse, tracker):
         """Test that HTML tags are cleaned from summary."""
         now = datetime.now(timezone.utc).replace(tzinfo=None)
         mock_entry = MagicMock()
@@ -257,21 +253,19 @@ class TestFetchRSSHubFeed:
         mock_feed.entries = [mock_entry]
         mock_parse.return_value = mock_feed
 
-        tracker.session.get = MagicMock(return_value=self._make_ok_resp())
+        tracker._http.head = AsyncMock(return_value=200)
+        tracker._http.get_text = AsyncMock(return_value="<rss>mock</rss>")
 
-        tweets = tracker._fetch_rsshub_feed("testuser", days=7)
+        tweets = await tracker._fetch_rsshub_feed("testuser", days=7)
         assert len(tweets) == 1
         assert "<" not in tweets[0]["text"]
         assert ">" not in tweets[0]["text"]
 
-    def test_fetch_rsshub_redirect_detected(self, tracker):
-        """Test that HTTP redirects (like rsshub.app → google.com/404) are rejected."""
-        redirect_resp = MagicMock()
-        redirect_resp.status_code = 302
-        redirect_resp.headers = {"Location": "https://google.com/404"}
-        tracker.session.get = MagicMock(return_value=redirect_resp)
+    async def test_fetch_rsshub_redirect_detected(self, tracker):
+        """Test that HTTP redirects (like rsshub.app -> google.com/404) are rejected."""
+        tracker._http.head = AsyncMock(return_value=302)
 
-        tweets = tracker._fetch_rsshub_feed("testuser")
+        tweets = await tracker._fetch_rsshub_feed("testuser")
         assert tweets == []
         assert tracker._rsshub_consecutive_fails == 1
 
@@ -281,7 +275,7 @@ class TestFetchAPIUserTweets:
 
     @pytest.fixture
     def tracker(self):
-        return XTracker(
+        tracker = XTracker(
             {
                 "x_tracker": {
                     "backend": "api",
@@ -289,25 +283,20 @@ class TestFetchAPIUserTweets:
                 }
             }
         )
+        tracker._http = MagicMock()
+        tracker._owns_http = False
+        return tracker
 
-    def test_no_bearer_token_returns_empty(self):
+    async def test_no_bearer_token_returns_empty(self):
         """Test that missing bearer token returns empty list."""
         tracker = XTracker({"x_tracker": {"backend": "api"}})
-        tweets = tracker._fetch_api_user_tweets("testuser")
+        tweets = await tracker._fetch_api_user_tweets("testuser")
         assert tweets == []
 
-    @patch("trackers.x_tracker.requests.get")
-    def test_fetch_api_user_tweets_success(self, mock_get, tracker):
+    async def test_fetch_api_user_tweets_success(self, tracker):
         """Test successful API user tweets fetch."""
-        # Mock user lookup
-        user_resp = MagicMock()
-        user_resp.status_code = 200
-        user_resp.json.return_value = {"data": {"id": "12345"}}
-
-        # Mock tweets fetch
-        tweets_resp = MagicMock()
-        tweets_resp.status_code = 200
-        tweets_resp.json.return_value = {
+        user_data = {"data": {"id": "12345"}}
+        tweets_data = {
             "data": [
                 {
                     "id": "111",
@@ -318,47 +307,34 @@ class TestFetchAPIUserTweets:
             ]
         }
 
-        mock_get.side_effect = [user_resp, tweets_resp]
+        tracker._http.get_json = AsyncMock(side_effect=[user_data, tweets_data])
 
-        tweets = tracker._fetch_api_user_tweets("testuser", days=7)
+        tweets = await tracker._fetch_api_user_tweets("testuser", days=7)
         assert len(tweets) == 1
         assert tweets[0]["source"] == "x_api"
         assert tweets[0]["username"] == "testuser"
         assert "dataset" in tweets[0]["signals"]
 
-    @patch("trackers.x_tracker.requests.get")
-    def test_fetch_api_user_lookup_fails(self, mock_get, tracker):
+    async def test_fetch_api_user_lookup_fails(self, tracker):
         """Test handling of user lookup failure."""
-        resp = MagicMock()
-        resp.status_code = 404
-        mock_get.return_value = resp
+        tracker._http.get_json = AsyncMock(return_value=None)
 
-        tweets = tracker._fetch_api_user_tweets("nonexistent")
+        tweets = await tracker._fetch_api_user_tweets("nonexistent")
         assert tweets == []
 
-    @patch("trackers.x_tracker.requests.get")
-    def test_fetch_api_rate_limited(self, mock_get, tracker):
+    async def test_fetch_api_rate_limited(self, tracker):
         """Test handling of rate limiting."""
-        user_resp = MagicMock()
-        user_resp.status_code = 200
-        user_resp.json.return_value = {"data": {"id": "12345"}}
+        user_data = {"data": {"id": "12345"}}
+        tracker._http.get_json = AsyncMock(side_effect=[user_data, None])
 
-        rate_resp = MagicMock()
-        rate_resp.status_code = 429
-
-        mock_get.side_effect = [user_resp, rate_resp]
-
-        tweets = tracker._fetch_api_user_tweets("testuser")
+        tweets = await tracker._fetch_api_user_tweets("testuser")
         assert tweets == []
 
-    @patch("trackers.x_tracker.requests.get")
-    def test_fetch_api_network_error(self, mock_get, tracker):
+    async def test_fetch_api_network_error(self, tracker):
         """Test handling of network errors."""
-        import requests as req
+        tracker._http.get_json = AsyncMock(side_effect=Exception("Network error"))
 
-        mock_get.side_effect = req.RequestException("Network error")
-
-        tweets = tracker._fetch_api_user_tweets("testuser")
+        tweets = await tracker._fetch_api_user_tweets("testuser")
         assert tweets == []
 
 
@@ -367,7 +343,7 @@ class TestFetchAPISearch:
 
     @pytest.fixture
     def tracker(self):
-        return XTracker(
+        tracker = XTracker(
             {
                 "x_tracker": {
                     "backend": "api",
@@ -375,19 +351,19 @@ class TestFetchAPISearch:
                 }
             }
         )
+        tracker._http = MagicMock()
+        tracker._owns_http = False
+        return tracker
 
-    def test_no_bearer_token_returns_empty(self):
+    async def test_no_bearer_token_returns_empty(self):
         """Test that missing bearer token returns empty list."""
         tracker = XTracker({})
-        tweets = tracker._fetch_api_search("dataset release")
+        tweets = await tracker._fetch_api_search("dataset release")
         assert tweets == []
 
-    @patch("trackers.x_tracker.requests.get")
-    def test_search_success(self, mock_get, tracker):
+    async def test_search_success(self, tracker):
         """Test successful search."""
-        resp = MagicMock()
-        resp.status_code = 200
-        resp.json.return_value = {
+        search_data = {
             "data": [
                 {
                     "id": "222",
@@ -397,21 +373,18 @@ class TestFetchAPISearch:
                 }
             ]
         }
-        mock_get.return_value = resp
+        tracker._http.get_json = AsyncMock(return_value=search_data)
 
-        tweets = tracker._fetch_api_search("dataset benchmark", days=7)
+        tweets = await tracker._fetch_api_search("dataset benchmark", days=7)
         assert len(tweets) == 1
         assert tweets[0]["source"] == "x_api_search"
         assert tweets[0]["query"] == "dataset benchmark"
 
-    @patch("trackers.x_tracker.requests.get")
-    def test_search_api_error(self, mock_get, tracker):
+    async def test_search_api_error(self, tracker):
         """Test handling of search API error."""
-        resp = MagicMock()
-        resp.status_code = 500
-        mock_get.return_value = resp
+        tracker._http.get_json = AsyncMock(return_value=None)
 
-        tweets = tracker._fetch_api_search("test query")
+        tweets = await tracker._fetch_api_search("test query")
         assert tweets == []
 
 
@@ -420,7 +393,7 @@ class TestFetchAccount:
 
     @pytest.fixture
     def tracker(self):
-        return XTracker(
+        tracker = XTracker(
             {
                 "x_tracker": {
                     "backend": "rsshub",
@@ -428,35 +401,38 @@ class TestFetchAccount:
                 }
             }
         )
+        tracker._http = MagicMock()
+        tracker._owns_http = False
+        return tracker
 
-    @patch.object(XTracker, "_fetch_rsshub_feed")
-    def test_fetch_account_rsshub(self, mock_fetch, tracker):
+    @patch.object(XTracker, "_fetch_rsshub_feed", new_callable=AsyncMock)
+    async def test_fetch_account_rsshub(self, mock_fetch, tracker):
         """Test fetching account via RSSHub backend."""
         mock_fetch.return_value = [
             {"text": "New dataset release", "signals": ["dataset"]},
             {"text": "Had lunch today", "signals": []},
         ]
 
-        result = tracker.fetch_account("OpenAI", days=7)
+        result = await tracker.fetch_account("OpenAI", days=7)
         assert result["username"] == "OpenAI"
         assert result["total_tweets"] == 2
         assert len(result["relevant_tweets"]) == 1
         assert result["has_activity"] is True
 
-    @patch.object(XTracker, "_fetch_rsshub_feed")
-    def test_fetch_account_no_relevant(self, mock_fetch, tracker):
+    @patch.object(XTracker, "_fetch_rsshub_feed", new_callable=AsyncMock)
+    async def test_fetch_account_no_relevant(self, mock_fetch, tracker):
         """Test account with no relevant tweets."""
         mock_fetch.return_value = [
             {"text": "Just a normal tweet", "signals": []},
         ]
 
-        result = tracker.fetch_account("testuser")
+        result = await tracker.fetch_account("testuser")
         assert result["total_tweets"] == 1
         assert result["relevant_tweets"] == []
         assert result["has_activity"] is False
 
-    @patch.object(XTracker, "_fetch_api_user_tweets")
-    def test_fetch_account_api_backend(self, mock_fetch):
+    @patch.object(XTracker, "_fetch_api_user_tweets", new_callable=AsyncMock)
+    async def test_fetch_account_api_backend(self, mock_fetch):
         """Test fetching account via API backend."""
         tracker = XTracker(
             {
@@ -466,18 +442,20 @@ class TestFetchAccount:
                 }
             }
         )
+        tracker._http = MagicMock()
+        tracker._owns_http = False
         mock_fetch.return_value = [
             {"text": "Releasing open-source model", "signals": ["open source"]},
         ]
 
-        result = tracker.fetch_account("testuser")
+        result = await tracker.fetch_account("testuser")
         assert result["has_activity"] is True
         mock_fetch.assert_called_once()
 
-    def test_fetch_account_strips_at_symbol(self, tracker):
+    async def test_fetch_account_strips_at_symbol(self, tracker):
         """Test that @ is stripped from username."""
-        with patch.object(tracker, "_fetch_rsshub_feed", return_value=[]) as mock:
-            tracker.fetch_account("@OpenAI")
+        with patch.object(tracker, "_fetch_rsshub_feed", new_callable=AsyncMock, return_value=[]) as mock:
+            await tracker.fetch_account("@OpenAI")
             mock.assert_called_once_with("OpenAI", 7)
 
 
@@ -486,7 +464,7 @@ class TestFetchAll:
 
     @pytest.fixture
     def tracker(self):
-        return XTracker(
+        tracker = XTracker(
             {
                 "x_tracker": {
                     "backend": "rsshub",
@@ -494,9 +472,12 @@ class TestFetchAll:
                 }
             }
         )
+        tracker._http = MagicMock()
+        tracker._owns_http = False
+        return tracker
 
-    @patch.object(XTracker, "fetch_account")
-    def test_fetch_all_parallel(self, mock_fetch, tracker):
+    @patch.object(XTracker, "fetch_account", new_callable=AsyncMock)
+    async def test_fetch_all_parallel(self, mock_fetch, tracker):
         """Test parallel fetching of all accounts."""
         mock_fetch.side_effect = [
             {
@@ -513,23 +494,25 @@ class TestFetchAll:
             },
         ]
 
-        result = tracker.fetch_all(days=7)
+        result = await tracker.fetch_all(days=7)
         assert len(result["accounts"]) == 1  # Only active accounts
         assert result["accounts"][0]["username"] == "OpenAI"
         assert result["search_results"] == []
 
-    @patch.object(XTracker, "fetch_account")
-    def test_fetch_all_empty_accounts(self, mock_fetch):
+    @patch.object(XTracker, "fetch_account", new_callable=AsyncMock)
+    async def test_fetch_all_empty_accounts(self, mock_fetch):
         """Test fetch_all with no configured accounts."""
         tracker = XTracker({})
-        result = tracker.fetch_all()
+        tracker._http = MagicMock()
+        tracker._owns_http = False
+        result = await tracker.fetch_all()
         assert result["accounts"] == []
         assert result["search_results"] == []
         mock_fetch.assert_not_called()
 
-    @patch.object(XTracker, "_fetch_api_search")
-    @patch.object(XTracker, "fetch_account")
-    def test_fetch_all_with_search(self, mock_fetch, mock_search):
+    @patch.object(XTracker, "_fetch_api_search", new_callable=AsyncMock)
+    @patch.object(XTracker, "fetch_account", new_callable=AsyncMock)
+    async def test_fetch_all_with_search(self, mock_fetch, mock_search):
         """Test fetch_all with API search keywords."""
         tracker = XTracker(
             {
@@ -541,6 +524,8 @@ class TestFetchAll:
                 }
             }
         )
+        tracker._http = MagicMock()
+        tracker._owns_http = False
         mock_fetch.return_value = {
             "username": "OpenAI",
             "total_tweets": 0,
@@ -549,16 +534,16 @@ class TestFetchAll:
         }
         mock_search.return_value = [{"text": "New dataset release!", "signals": ["dataset"]}]
 
-        result = tracker.fetch_all()
+        result = await tracker.fetch_all()
         assert len(result["search_results"]) == 1
         mock_search.assert_called_once()
 
-    @patch.object(XTracker, "fetch_account")
-    def test_fetch_all_handles_errors(self, mock_fetch, tracker):
+    @patch.object(XTracker, "fetch_account", new_callable=AsyncMock)
+    async def test_fetch_all_handles_errors(self, mock_fetch, tracker):
         """Test that errors from individual accounts are handled gracefully."""
         mock_fetch.side_effect = Exception("Connection failed")
 
-        result = tracker.fetch_all()
+        result = await tracker.fetch_all()
         assert result["accounts"] == []
 
 
@@ -586,8 +571,8 @@ class TestMultiInstanceFallback:
     """Tests for multi-RSSHub-instance fallback and auto backend."""
 
     @patch("trackers.x_tracker.feedparser.parse")
-    def test_rsshub_fallback_to_second_instance(self, mock_parse):
-        """First instance fails (503), second succeeds."""
+    async def test_rsshub_fallback_to_second_instance(self, mock_parse):
+        """First instance fails (get_text returns None), second succeeds."""
         tracker = XTracker({
             "x_tracker": {
                 "rsshub_urls": [
@@ -596,6 +581,8 @@ class TestMultiInstanceFallback:
                 ],
             }
         })
+        tracker._http = MagicMock()
+        tracker._owns_http = False
 
         now = datetime.now(timezone.utc).replace(tzinfo=None)
         mock_entry = MagicMock()
@@ -609,26 +596,17 @@ class TestMultiInstanceFallback:
         mock_feed.entries = [mock_entry]
         mock_parse.return_value = mock_feed
 
-        # First call → 503 error, second call → 200 OK
-        fail_resp = MagicMock()
-        fail_resp.status_code = 503
-        fail_resp.raise_for_status = MagicMock(
-            side_effect=requests.exceptions.HTTPError("503")
-        )
+        # First call to head returns 200 (no redirect), get_text returns None (fail)
+        # Second call to head returns 200 (no redirect), get_text returns RSS content
+        tracker._http.head = AsyncMock(return_value=200)
+        tracker._http.get_text = AsyncMock(side_effect=[None, "<rss>mock</rss>"])
 
-        ok_resp = MagicMock()
-        ok_resp.status_code = 200
-        ok_resp.text = "<rss>mock</rss>"
-        ok_resp.raise_for_status = MagicMock()
-
-        tracker.session.get = MagicMock(side_effect=[fail_resp, ok_resp])
-
-        tweets = tracker._fetch_rsshub_feed("testuser", days=7)
+        tweets = await tracker._fetch_rsshub_feed("testuser", days=7)
         assert len(tweets) == 1
         assert tracker._last_working_rsshub == "https://good-instance.example.com"
 
-    def test_rsshub_all_fail_increments_counter(self):
-        """All RSSHub instances fail → consecutive fail counter increases."""
+    async def test_rsshub_all_fail_increments_counter(self):
+        """All RSSHub instances fail -> consecutive fail counter increases."""
         tracker = XTracker({
             "x_tracker": {
                 "rsshub_urls": [
@@ -637,31 +615,36 @@ class TestMultiInstanceFallback:
                 ],
             }
         })
-        tracker.session.get = MagicMock(
-            side_effect=requests.exceptions.ConnectionError("refused")
-        )
+        tracker._http = MagicMock()
+        tracker._owns_http = False
+        tracker._http.head = AsyncMock(return_value=200)
+        tracker._http.get_text = AsyncMock(return_value=None)
 
-        tweets = tracker._fetch_rsshub_feed("testuser")
+        tweets = await tracker._fetch_rsshub_feed("testuser")
         assert tweets == []
         assert tracker._rsshub_consecutive_fails == 1
 
-    def test_rsshub_threshold_skips_immediately(self):
+    async def test_rsshub_threshold_skips_immediately(self):
         """Once fail threshold reached, _fetch_rsshub_feed returns [] without HTTP calls."""
         tracker = XTracker({})
+        tracker._http = MagicMock()
+        tracker._owns_http = False
         tracker._rsshub_consecutive_fails = tracker._rsshub_fail_threshold
-        tracker.session.get = MagicMock()
+        tracker._http.head = AsyncMock()
 
-        tweets = tracker._fetch_rsshub_feed("testuser")
+        tweets = await tracker._fetch_rsshub_feed("testuser")
         assert tweets == []
-        tracker.session.get.assert_not_called()
+        tracker._http.head.assert_not_called()
 
-    def test_rsshub_success_resets_consecutive_fails(self):
+    async def test_rsshub_success_resets_consecutive_fails(self):
         """A successful fetch resets the consecutive failure counter."""
         tracker = XTracker({
             "x_tracker": {
                 "rsshub_urls": ["https://good.example.com"],
             }
         })
+        tracker._http = MagicMock()
+        tracker._owns_http = False
         tracker._rsshub_consecutive_fails = 3
 
         now = datetime.now(timezone.utc).replace(tzinfo=None)
@@ -673,22 +656,19 @@ class TestMultiInstanceFallback:
         mock_feed = MagicMock()
         mock_feed.entries = [mock_entry]
 
-        ok_resp = MagicMock()
-        ok_resp.status_code = 200
-        ok_resp.text = "<rss>mock</rss>"
-        ok_resp.raise_for_status = MagicMock()
-        tracker.session.get = MagicMock(return_value=ok_resp)
+        tracker._http.head = AsyncMock(return_value=200)
+        tracker._http.get_text = AsyncMock(return_value="<rss>mock</rss>")
 
         with patch("trackers.x_tracker.feedparser.parse", return_value=mock_feed):
-            tweets = tracker._fetch_rsshub_feed("testuser", days=7)
+            tweets = await tracker._fetch_rsshub_feed("testuser", days=7)
             assert len(tweets) == 1
             assert tracker._rsshub_consecutive_fails == 0
             assert tracker._rsshub_success_count == 1
 
-    @patch.object(XTracker, "_fetch_api_user_tweets")
-    @patch.object(XTracker, "_fetch_rsshub_feed")
-    def test_auto_backend_rsshub_then_api(self, mock_rss, mock_api):
-        """auto mode: RSSHub all fail → fallback to X API."""
+    @patch.object(XTracker, "_fetch_api_user_tweets", new_callable=AsyncMock)
+    @patch.object(XTracker, "_fetch_rsshub_feed", new_callable=AsyncMock)
+    async def test_auto_backend_rsshub_then_api(self, mock_rss, mock_api):
+        """auto mode: RSSHub all fail -> fallback to X API."""
         tracker = XTracker({
             "x_tracker": {
                 "backend": "auto",
@@ -696,6 +676,8 @@ class TestMultiInstanceFallback:
                 "accounts": ["testuser"],
             }
         })
+        tracker._http = MagicMock()
+        tracker._owns_http = False
         # RSSHub returns nothing and threshold reached
         mock_rss.return_value = []
         tracker._rsshub_consecutive_fails = tracker._rsshub_fail_threshold
@@ -704,40 +686,44 @@ class TestMultiInstanceFallback:
             {"text": "New dataset via API", "signals": ["dataset"]},
         ]
 
-        result = tracker.fetch_account("testuser", days=7)
+        result = await tracker.fetch_account("testuser", days=7)
         assert result["has_activity"] is True
         assert len(result["relevant_tweets"]) == 1
         mock_api.assert_called_once()
 
-    @patch.object(XTracker, "_fetch_rsshub_feed")
-    def test_auto_backend_rsshub_success_no_api(self, mock_rss):
-        """auto mode: RSSHub succeeds → no API call."""
+    @patch.object(XTracker, "_fetch_rsshub_feed", new_callable=AsyncMock)
+    async def test_auto_backend_rsshub_success_no_api(self, mock_rss):
+        """auto mode: RSSHub succeeds -> no API call."""
         tracker = XTracker({
             "x_tracker": {
                 "backend": "auto",
                 "bearer_token": "test_token",
             }
         })
+        tracker._http = MagicMock()
+        tracker._owns_http = False
         mock_rss.return_value = [
             {"text": "Dataset release", "signals": ["dataset"]},
         ]
 
-        result = tracker.fetch_account("testuser", days=7)
+        result = await tracker.fetch_account("testuser", days=7)
         assert result["has_activity"] is True
         mock_rss.assert_called_once()
 
-    @patch.object(XTracker, "_fetch_rsshub_feed")
-    def test_auto_no_api_token_graceful(self, mock_rss):
-        """auto mode: RSSHub fails + no API token → returns empty gracefully."""
+    @patch.object(XTracker, "_fetch_rsshub_feed", new_callable=AsyncMock)
+    async def test_auto_no_api_token_graceful(self, mock_rss):
+        """auto mode: RSSHub fails + no API token -> returns empty gracefully."""
         tracker = XTracker({
             "x_tracker": {
                 "backend": "auto",
                 "bearer_token": "",
             }
         })
+        tracker._http = MagicMock()
+        tracker._owns_http = False
         mock_rss.return_value = []
         tracker._rsshub_consecutive_fails = tracker._rsshub_fail_threshold
 
-        result = tracker.fetch_account("testuser")
+        result = await tracker.fetch_account("testuser")
         assert result["has_activity"] is False
         assert result["relevant_tweets"] == []

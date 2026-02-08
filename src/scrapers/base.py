@@ -26,7 +26,7 @@ class BaseScraper(ABC):
         self.config = config or {}
 
     @abstractmethod
-    def scrape(self, config: dict = None) -> list[dict]:
+    async def scrape(self, config: dict = None) -> list[dict]:
         """Fetch data from source.
 
         Args:

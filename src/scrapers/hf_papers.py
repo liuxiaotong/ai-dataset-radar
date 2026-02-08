@@ -1,11 +1,12 @@
 """HuggingFace Daily Papers scraper for early dataset discovery."""
 
 import re
-import requests
 from datetime import datetime
 from typing import Optional
+
 from bs4 import BeautifulSoup
 
+from utils.async_http import AsyncHTTPClient
 from utils.logging_config import get_logger
 
 logger = get_logger(__name__)
@@ -40,17 +41,24 @@ class HFPapersScraper:
         "alignment",
     ]
 
-    def __init__(self, limit: int = 50, days: int = 7):
+    def __init__(
+        self,
+        limit: int = 50,
+        days: int = 7,
+        http_client: AsyncHTTPClient = None,
+    ):
         """Initialize the scraper.
 
         Args:
             limit: Maximum number of papers to fetch.
             days: Look back period in days.
+            http_client: Shared async HTTP client (created if not provided).
         """
         self.limit = limit
         self.days = days
+        self._http = http_client or AsyncHTTPClient()
 
-    def fetch(self) -> list[dict]:
+    async def fetch(self) -> list[dict]:
         """Fetch papers from HuggingFace Daily Papers.
 
         Returns:
@@ -59,13 +67,13 @@ class HFPapersScraper:
         papers = []
 
         # Try API first
-        api_papers = self._fetch_from_api()
+        api_papers = await self._fetch_from_api()
         if api_papers:
             papers.extend(api_papers)
 
         # Supplement with page scraping if needed
         if len(papers) < self.limit:
-            page_papers = self._fetch_from_page()
+            page_papers = await self._fetch_from_page()
             seen_ids = {p["id"] for p in papers}
             for paper in page_papers:
                 if paper["id"] not in seen_ids:
@@ -79,19 +87,18 @@ class HFPapersScraper:
 
         return papers[: self.limit]
 
-    def _fetch_from_api(self) -> list[dict]:
+    async def _fetch_from_api(self) -> list[dict]:
         """Fetch papers from HuggingFace API.
 
         Returns:
             List of parsed paper dictionaries.
         """
         try:
-            response = requests.get(self.PAPERS_API, timeout=30)
+            data = await self._http.get_json(self.PAPERS_API)
 
-            if response.status_code != 200:
+            if data is None:
                 return []
 
-            data = response.json()
             papers = []
 
             for item in data:
@@ -101,26 +108,23 @@ class HFPapersScraper:
 
             return papers
 
-        except requests.RequestException as e:
-            logger.info("Error fetching HF papers API: %s", e)
-            return []
         except Exception as e:
             logger.info("Error parsing HF papers API response: %s", e)
             return []
 
-    def _fetch_from_page(self) -> list[dict]:
+    async def _fetch_from_page(self) -> list[dict]:
         """Fetch papers by scraping the HuggingFace papers page.
 
         Returns:
             List of parsed paper dictionaries.
         """
         try:
-            response = requests.get(
-                self.PAPERS_PAGE, headers={"User-Agent": "Mozilla/5.0"}, timeout=30
-            )
-            response.raise_for_status()
+            html = await self._http.get_text(self.PAPERS_PAGE)
 
-            soup = BeautifulSoup(response.text, "html.parser")
+            if html is None:
+                return []
+
+            soup = BeautifulSoup(html, "html.parser")
             papers = []
 
             # Find paper cards - adjust selector based on actual page structure
@@ -131,8 +135,8 @@ class HFPapersScraper:
 
             return papers
 
-        except requests.RequestException as e:
-            logger.info("Error fetching HF papers page: %s", e)
+        except Exception as e:
+            logger.info("Error parsing HF papers page: %s", e)
             return []
 
     def _parse_api_paper(self, item: dict) -> Optional[dict]:
@@ -252,7 +256,7 @@ class HFPapersScraper:
 
         return False
 
-    def fetch_paper_details(self, arxiv_id: str) -> Optional[dict]:
+    async def fetch_paper_details(self, arxiv_id: str) -> Optional[dict]:
         """Fetch detailed information about a specific paper.
 
         Args:
@@ -264,9 +268,8 @@ class HFPapersScraper:
         url = f"https://huggingface.co/api/papers/{arxiv_id}"
 
         try:
-            response = requests.get(url, timeout=15)
-            if response.status_code == 200:
-                data = response.json()
+            data = await self._http.get_json(url)
+            if data is not None:
                 return {
                     "source": "hf_papers",
                     "id": arxiv_id,
@@ -279,15 +282,15 @@ class HFPapersScraper:
                     "arxiv_url": f"https://arxiv.org/abs/{arxiv_id}",
                 }
             return None
-        except requests.RequestException as e:
+        except Exception as e:
             logger.info("Error fetching paper %s: %s", arxiv_id, e)
             return None
 
-    def get_dataset_papers(self) -> list[dict]:
+    async def get_dataset_papers(self) -> list[dict]:
         """Fetch only dataset-related papers.
 
         Returns:
             List of dataset-related papers.
         """
-        all_papers = self.fetch()
+        all_papers = await self.fetch()
         return [p for p in all_papers if p.get("is_dataset_paper", False)]

@@ -6,15 +6,13 @@ Monitors GitHub organizations for:
 - Data annotation and RLHF related projects
 """
 
+import asyncio
 import os
 import re
-import time
-from concurrent.futures import ThreadPoolExecutor
 from datetime import datetime, timedelta, timezone
 from typing import Optional
 
-import requests
-
+from utils.async_http import AsyncHTTPClient
 from utils.logging_config import get_logger
 
 logger = get_logger(__name__)
@@ -78,11 +76,12 @@ class GitHubTracker:
 
     BASE_URL = "https://api.github.com"
 
-    def __init__(self, config: dict):
+    def __init__(self, config: dict, http_client: AsyncHTTPClient = None):
         """Initialize GitHub tracker.
 
         Args:
             config: Configuration dict with github settings.
+            http_client: Optional shared AsyncHTTPClient instance.
         """
         self.config = config
         github_config = config.get("github", {})
@@ -105,9 +104,8 @@ class GitHubTracker:
         if self.token and not self.token.startswith("${"):
             self.headers["Authorization"] = f"token {self.token}"
 
-        # Use Session for connection pooling across requests
-        self.session = requests.Session()
-        self.session.headers.update(self.headers)
+        # Use shared async HTTP client (create one if not provided)
+        self._http = http_client or AsyncHTTPClient()
 
         # Get org lists from config
         self.vendor_orgs = github_config.get("orgs", {}).get("data_vendors", [])
@@ -118,46 +116,15 @@ class GitHubTracker:
             sources_github.get("relevance_keywords") or DEFAULT_SIGNAL_KEYWORDS
         )
 
-    def _make_request(self, url: str, params: dict = None, max_retries: int = 3) -> Optional[dict]:
-        """Make a GitHub API request with rate limit handling and retry."""
-        for attempt in range(max_retries):
-            try:
-                resp = self.session.get(url, params=params, timeout=30)
+    async def _make_request(self, url: str, params: dict = None) -> Optional[dict]:
+        """Make a GitHub API request with rate limit handling and retry.
 
-                if resp.status_code == 403:
-                    # Rate limited
-                    reset_time = resp.headers.get("X-RateLimit-Reset")
-                    if reset_time:
-                        wait_time = max(int(reset_time) - int(time.time()), 1)
-                        logger.info("  GitHub rate limited, reset in %ss", wait_time)
-                    return None
+        Delegates retry/rate-limit logic to AsyncHTTPClient which handles
+        429, 5xx, 403, and 404 status codes automatically.
+        """
+        return await self._http.get_json(url, headers=self.headers, params=params)
 
-                if resp.status_code == 404:
-                    return None
-
-                if resp.status_code >= 500:
-                    # Server error — retry
-                    if attempt < max_retries - 1:
-                        wait = 2 ** (attempt + 1)
-                        logger.warning("  GitHub %d, retry in %ds", resp.status_code, wait)
-                        time.sleep(wait)
-                        continue
-                    return None
-
-                resp.raise_for_status()
-                return resp.json()
-
-            except requests.RequestException as e:
-                if attempt < max_retries - 1:
-                    wait = 2 ** (attempt + 1)
-                    logger.warning("  GitHub API error, retry in %ds: %s", wait, e)
-                    time.sleep(wait)
-                else:
-                    logger.info("  GitHub API error (all retries failed): %s", e)
-                    return None
-        return None
-
-    def get_org_repos(self, org_name: str, days: int = 7) -> list[dict]:
+    async def get_org_repos(self, org_name: str, days: int = 7) -> list[dict]:
         """Get recently updated repos for an organization.
 
         Args:
@@ -170,7 +137,7 @@ class GitHubTracker:
         url = f"{self.BASE_URL}/orgs/{org_name}/repos"
         params = {"sort": "updated", "direction": "desc", "per_page": 30}
 
-        data = self._make_request(url, params)
+        data = await self._make_request(url, params)
         if not data:
             return []
 
@@ -284,7 +251,7 @@ class GitHubTracker:
     def _calculate_relevance(self, signals: list[str], repo: dict = None) -> str:
         """Calculate relevance level using weighted scoring.
 
-        Score = (keyword_matches × 10) + (stars / 100) + recency_boost
+        Score = (keyword_matches x 10) + (stars / 100) + recency_boost
         - high: score >= 20
         - medium: score >= 5
         - low: score < 5
@@ -326,7 +293,7 @@ class GitHubTracker:
         else:
             return "low"
 
-    def get_repo_readme(self, full_name: str) -> Optional[str]:
+    async def get_repo_readme(self, full_name: str) -> Optional[str]:
         """Get README content for a repo.
 
         Args:
@@ -337,19 +304,14 @@ class GitHubTracker:
         """
         url = f"{self.BASE_URL}/repos/{full_name}/readme"
 
-        # Request raw content - use direct request with overridden Accept header
-        try:
-            resp = self.session.get(
-                url, headers={"Accept": "application/vnd.github.v3.raw"}, timeout=30
-            )
-            if resp.status_code == 200:
-                return resp.text[:5000]  # Limit length
-        except requests.RequestException:
-            pass
-
+        # Request raw content with overridden Accept header
+        readme_headers = {**self.headers, "Accept": "application/vnd.github.v3.raw"}
+        text = await self._http.get_text(url, headers=readme_headers)
+        if text:
+            return text[:5000]  # Limit length
         return None
 
-    def get_org_activity(self, org_name: str, days: int = 7) -> dict:
+    async def get_org_activity(self, org_name: str, days: int = 7) -> dict:
         """Get complete activity summary for an organization.
 
         Args:
@@ -359,7 +321,7 @@ class GitHubTracker:
         Returns:
             Activity summary dict.
         """
-        repos = self.get_org_repos(org_name, days)
+        repos = await self.get_org_repos(org_name, days)
 
         # Filter to repos with signals or high stars
         relevant_repos = [r for r in repos if r["signals"] or r["stars"] >= 100]
@@ -371,8 +333,8 @@ class GitHubTracker:
             "has_activity": len(relevant_repos) > 0,
         }
 
-    def _fetch_orgs_parallel(self, orgs: list[str], days: int) -> list[dict]:
-        """Fetch activity for a list of orgs in parallel.
+    async def _fetch_orgs_parallel(self, orgs: list[str], days: int) -> list[dict]:
+        """Fetch activity for a list of orgs concurrently.
 
         Args:
             orgs: List of GitHub org names.
@@ -381,20 +343,26 @@ class GitHubTracker:
         Returns:
             List of org activity summaries (only active ones).
         """
+        sem = asyncio.Semaphore(8)
+
+        async def _bounded(org):
+            async with sem:
+                return await self.get_org_activity(org, days)
+
+        results_raw = await asyncio.gather(
+            *[_bounded(org) for org in orgs], return_exceptions=True
+        )
+
         results = []
-        with ThreadPoolExecutor(max_workers=4) as executor:
-            futures = {executor.submit(self.get_org_activity, org, days): org for org in orgs}
-            for future in futures:
-                try:
-                    activity = future.result()
-                    if activity["has_activity"]:
-                        results.append(activity)
-                except Exception as e:
-                    logger.warning("Error fetching GitHub org %s: %s", futures[future], e)
+        for r in results_raw:
+            if isinstance(r, Exception):
+                logger.warning("Error fetching GitHub org: %s", r)
+            elif r and r["has_activity"]:
+                results.append(r)
         return results
 
-    def fetch_vendor_activity(self, days: int = 7) -> list[dict]:
-        """Fetch activity for all configured vendor organizations (parallelized).
+    async def fetch_vendor_activity(self, days: int = 7) -> list[dict]:
+        """Fetch activity for all configured vendor organizations (concurrent).
 
         Args:
             days: Look back period in days.
@@ -403,10 +371,10 @@ class GitHubTracker:
             List of org activity summaries.
         """
         logger.info("  Tracking %s vendor GitHub orgs...", len(self.vendor_orgs))
-        return self._fetch_orgs_parallel(self.vendor_orgs, days)
+        return await self._fetch_orgs_parallel(self.vendor_orgs, days)
 
-    def fetch_lab_activity(self, days: int = 7) -> list[dict]:
-        """Fetch activity for all configured AI lab organizations (parallelized).
+    async def fetch_lab_activity(self, days: int = 7) -> list[dict]:
+        """Fetch activity for all configured AI lab organizations (concurrent).
 
         Args:
             days: Look back period in days.
@@ -415,10 +383,10 @@ class GitHubTracker:
             List of org activity summaries.
         """
         logger.info("  Tracking %s lab GitHub orgs...", len(self.lab_orgs))
-        return self._fetch_orgs_parallel(self.lab_orgs, days)
+        return await self._fetch_orgs_parallel(self.lab_orgs, days)
 
-    def fetch_all_orgs(self, days: int = 7) -> dict:
-        """Fetch activity for all configured organizations (parallelized).
+    async def fetch_all_orgs(self, days: int = 7) -> dict:
+        """Fetch activity for all configured organizations (concurrent).
 
         All org categories are fetched concurrently.
 
@@ -431,7 +399,7 @@ class GitHubTracker:
         all_orgs = list(set(self.vendor_orgs + self.lab_orgs))
         logger.info("  Tracking %s total GitHub orgs...", len(all_orgs))
 
-        all_results = self._fetch_orgs_parallel(all_orgs, days)
+        all_results = await self._fetch_orgs_parallel(all_orgs, days)
 
         # Split back into vendor vs lab
         vendor_set = set(self.vendor_orgs)

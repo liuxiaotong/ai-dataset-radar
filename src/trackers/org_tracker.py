@@ -4,15 +4,13 @@ Tracks AI Labs and data vendors by fetching their datasets and models
 from HuggingFace API.
 """
 
-import time
-from concurrent.futures import ThreadPoolExecutor
-from threading import Lock
-import requests
+import asyncio
 from datetime import datetime, timedelta
 from typing import Optional
 
 from utils.logging_config import get_logger
 from utils.cache import get_cache
+from utils.async_http import AsyncHTTPClient, AsyncRateLimiter
 
 logger = get_logger(__name__)
 
@@ -27,24 +25,24 @@ class OrgTracker:
 
     HF_API_URL = "https://huggingface.co/api"
 
-    def __init__(self, config: dict):
+    def __init__(self, config: dict, http_client: AsyncHTTPClient = None):
         """Initialize the organization tracker.
 
         Args:
             config: Configuration dict with watched_orgs and watched_vendors.
+            http_client: Optional shared AsyncHTTPClient instance.
         """
         self.config = config
-        self.session = requests.Session()
-        self.session.headers["User-Agent"] = "AI-Dataset-Radar/4.0"
+        self._http = http_client or AsyncHTTPClient(
+            headers={"User-Agent": "AI-Dataset-Radar/4.0"},
+        )
 
         # Parse watched organizations
         self.watched_orgs = self._parse_orgs(config.get("watched_orgs", {}))
         self.watched_vendors = self._parse_vendors(config.get("watched_vendors", {}))
 
-        # Thread-safe rate limiting
-        self._last_request = 0
-        self._request_delay = 0.1  # seconds (reduced from 0.3)
-        self._rate_lock = Lock()
+        # Async rate limiting (cooperative, no lock needed)
+        self._rate_limiter = AsyncRateLimiter(calls_per_second=10)
         self._cache = get_cache()
 
     def _parse_orgs(self, orgs_config: dict) -> dict:
@@ -89,15 +87,11 @@ class OrgTracker:
                 }
         return result
 
-    def _rate_limit(self):
-        """Apply thread-safe rate limiting between requests."""
-        with self._rate_lock:
-            elapsed = time.time() - self._last_request
-            if elapsed < self._request_delay:
-                time.sleep(self._request_delay - elapsed)
-            self._last_request = time.time()
+    async def _rate_limit(self):
+        """Apply cooperative async rate limiting between requests."""
+        await self._rate_limiter.acquire()
 
-    def _request_with_retry(
+    async def _request_with_retry(
         self, url: str, params: dict, cache_key: str, description: str, max_retries: int = 3
     ) -> list[dict]:
         """Make an HF API request with retry and cache fallback.
@@ -112,44 +106,23 @@ class OrgTracker:
         Returns:
             List of result dictionaries.
         """
+        # Synchronous cache check (FileCache is sync)
         cached = self._cache.get(cache_key)
         if cached is not None:
             return cached
 
-        self._rate_limit()
+        await self._rate_limit()
 
-        for attempt in range(max_retries):
-            try:
-                response = self.session.get(url, params=params, timeout=30)
-                if response.status_code == 200:
-                    result = response.json()
-                    self._cache.set(cache_key, result, ttl=3600)
-                    return result
-                elif response.status_code >= 500:
-                    # Server error — retry
-                    if attempt < max_retries - 1:
-                        wait = 2 ** (attempt + 1)
-                        logger.warning(
-                            "HF API %d for %s, retry in %ds",
-                            response.status_code,
-                            description,
-                            wait,
-                        )
-                        time.sleep(wait)
-                        continue
-                return []
-            except requests.RequestException as e:
-                if attempt < max_retries - 1:
-                    wait = 2 ** (attempt + 1)
-                    logger.warning(
-                        "HF request failed for %s, retry in %ds: %s", description, wait, e
-                    )
-                    time.sleep(wait)
-                else:
-                    logger.warning("All retries failed for %s: %s", description, e)
+        result = await self._http.get_json(url, params=params, max_retries=max_retries)
+        if result is not None:
+            # Synchronous cache set (FileCache is sync)
+            self._cache.set(cache_key, result, ttl=3600)
+            return result
+
+        logger.warning("All retries failed for %s", description)
         return []
 
-    def _fetch_org_datasets(self, org_id: str, limit: int = 100) -> list[dict]:
+    async def _fetch_org_datasets(self, org_id: str, limit: int = 100) -> list[dict]:
         """Fetch datasets from a specific organization (with caching + retry).
 
         Args:
@@ -159,14 +132,14 @@ class OrgTracker:
         Returns:
             List of dataset dictionaries.
         """
-        return self._request_with_retry(
+        return await self._request_with_retry(
             url=f"{self.HF_API_URL}/datasets",
             params={"author": org_id, "limit": limit, "sort": "lastModified", "direction": -1},
             cache_key=f"hf:datasets:{org_id}:{limit}",
             description=f"datasets/{org_id}",
         )
 
-    def _fetch_org_models(self, org_id: str, limit: int = 50) -> list[dict]:
+    async def _fetch_org_models(self, org_id: str, limit: int = 50) -> list[dict]:
         """Fetch models from a specific organization (with caching + retry).
 
         Args:
@@ -176,14 +149,14 @@ class OrgTracker:
         Returns:
             List of model dictionaries.
         """
-        return self._request_with_retry(
+        return await self._request_with_retry(
             url=f"{self.HF_API_URL}/models",
             params={"author": org_id, "limit": limit, "sort": "lastModified", "direction": -1},
             cache_key=f"hf:models:{org_id}:{limit}",
             description=f"models/{org_id}",
         )
 
-    def _fetch_single_org(self, org_name: str, org_info: dict, cutoff: datetime) -> Optional[tuple]:
+    async def _fetch_single_org(self, org_name: str, org_info: dict, cutoff: datetime) -> Optional[tuple]:
         """Fetch datasets and models for a single org.
 
         Args:
@@ -202,7 +175,7 @@ class OrgTracker:
         }
 
         for hf_id in org_info["hf_ids"]:
-            datasets = self._fetch_org_datasets(hf_id)
+            datasets = await self._fetch_org_datasets(hf_id)
             for ds in datasets:
                 ds["_org"] = org_name
                 ds["_hf_id"] = hf_id
@@ -219,7 +192,7 @@ class OrgTracker:
                 else:
                     org_data["datasets"].append(ds)
 
-            models = self._fetch_org_models(hf_id)
+            models = await self._fetch_org_models(hf_id)
             for model in models:
                 model["_org"] = org_name
                 model["_hf_id"] = hf_id
@@ -238,8 +211,8 @@ class OrgTracker:
             return (category, org_name, org_data)
         return None
 
-    def fetch_lab_activity(self, days: int = 7) -> dict:
-        """Fetch recent activity from all watched AI labs (parallelized).
+    async def fetch_lab_activity(self, days: int = 7) -> dict:
+        """Fetch recent activity from all watched AI labs (concurrent with semaphore).
 
         Args:
             days: Look back period in days.
@@ -257,34 +230,33 @@ class OrgTracker:
         total_orgs = len(self.watched_orgs)
         logger.info("  Tracking %s AI labs...", total_orgs)
 
-        with ThreadPoolExecutor(max_workers=6) as executor:
-            futures = {
-                executor.submit(self._fetch_single_org, name, info, cutoff): name
-                for name, info in self.watched_orgs.items()
-            }
+        sem = asyncio.Semaphore(10)
 
-            done_count = 0
-            for future in futures:
-                try:
-                    result = future.result()
-                except Exception as e:
-                    org_name = futures[future]
-                    logger.warning("Error fetching org %s: %s", org_name, e)
-                    done_count += 1
-                    continue
-                done_count += 1
-                if result:
-                    category, org_name, org_data = result
-                    if category not in results:
-                        results[category] = {}
-                    results[category][org_name] = org_data
-                if done_count % 10 == 0:
-                    logger.info("    Processed %s/%s orgs...", done_count, total_orgs)
+        async def _bounded(name, info):
+            async with sem:
+                return await self._fetch_single_org(name, info, cutoff)
+
+        tasks = [_bounded(name, info) for name, info in self.watched_orgs.items()]
+        results_raw = await asyncio.gather(*tasks, return_exceptions=True)
+
+        done_count = 0
+        for name, result in zip(self.watched_orgs.keys(), results_raw):
+            done_count += 1
+            if isinstance(result, Exception):
+                logger.warning("Error fetching org %s: %s", name, result)
+                continue
+            if result:
+                category, org_name, org_data = result
+                if category not in results:
+                    results[category] = {}
+                results[category][org_name] = org_data
+            if done_count % 10 == 0:
+                logger.info("    Processed %s/%s orgs...", done_count, total_orgs)
 
         return results
 
-    def fetch_vendor_activity(self, days: int = 7) -> dict:
-        """Fetch recent activity from watched data vendors (parallelized).
+    async def fetch_vendor_activity(self, days: int = 7) -> dict:
+        """Fetch recent activity from watched data vendors (concurrent with semaphore).
 
         Args:
             days: Look back period in days.
@@ -301,47 +273,50 @@ class OrgTracker:
         total_vendors = len(self.watched_vendors)
         logger.info("  Tracking %s data vendors...", total_vendors)
 
-        def _fetch_vendor(vendor_name, vendor_info):
-            vendor_data = {
-                "datasets": [],
-                "blog_url": vendor_info.get("blog_url"),
-            }
-            for hf_id in vendor_info["hf_ids"]:
-                datasets = self._fetch_org_datasets(hf_id)
-                for ds in datasets:
-                    ds["_vendor"] = vendor_name
-                    ds["_hf_id"] = hf_id
-                    ds["created_at"] = ds.get("createdAt", "")
-                    ds["last_modified"] = ds.get("lastModified", "")
-                    modified = ds.get("lastModified", "")
-                    if modified:
-                        try:
-                            mod_date = datetime.fromisoformat(modified.replace("Z", "+00:00"))
-                            if mod_date.replace(tzinfo=None) >= cutoff:
-                                vendor_data["datasets"].append(ds)
-                        except (ValueError, TypeError):
-                            vendor_data["datasets"].append(ds)
-            return vendor_info["tier"], vendor_name, vendor_data
+        sem = asyncio.Semaphore(10)
 
-        with ThreadPoolExecutor(max_workers=6) as executor:
-            futures = [
-                executor.submit(_fetch_vendor, name, info)
-                for name, info in self.watched_vendors.items()
-            ]
-            for future in futures:
-                try:
-                    tier, vendor_name, vendor_data = future.result()
-                except Exception as e:
-                    logger.warning("Error fetching vendor: %s", e)
-                    continue
-                if vendor_data["datasets"]:
-                    if tier not in results:
-                        results[tier] = {}
-                    results[tier][vendor_name] = vendor_data
+        async def _fetch_vendor(vendor_name, vendor_info):
+            async with sem:
+                vendor_data = {
+                    "datasets": [],
+                    "blog_url": vendor_info.get("blog_url"),
+                }
+                for hf_id in vendor_info["hf_ids"]:
+                    datasets = await self._fetch_org_datasets(hf_id)
+                    for ds in datasets:
+                        ds["_vendor"] = vendor_name
+                        ds["_hf_id"] = hf_id
+                        ds["created_at"] = ds.get("createdAt", "")
+                        ds["last_modified"] = ds.get("lastModified", "")
+                        modified = ds.get("lastModified", "")
+                        if modified:
+                            try:
+                                mod_date = datetime.fromisoformat(modified.replace("Z", "+00:00"))
+                                if mod_date.replace(tzinfo=None) >= cutoff:
+                                    vendor_data["datasets"].append(ds)
+                            except (ValueError, TypeError):
+                                vendor_data["datasets"].append(ds)
+                return vendor_info["tier"], vendor_name, vendor_data
+
+        tasks = [
+            _fetch_vendor(name, info)
+            for name, info in self.watched_vendors.items()
+        ]
+        results_raw = await asyncio.gather(*tasks, return_exceptions=True)
+
+        for result in results_raw:
+            if isinstance(result, Exception):
+                logger.warning("Error fetching vendor: %s", result)
+                continue
+            tier, vendor_name, vendor_data = result
+            if vendor_data["datasets"]:
+                if tier not in results:
+                    results[tier] = {}
+                results[tier][vendor_name] = vendor_data
 
         return results
 
-    def fetch_all(self, days: int = 7) -> dict:
+    async def fetch_all(self, days: int = 7) -> dict:
         """Fetch all tracked activity.
 
         Args:
@@ -351,10 +326,10 @@ class OrgTracker:
             Combined results for labs and vendors.
         """
         logger.info("Fetching AI lab activity...")
-        labs = self.fetch_lab_activity(days)
+        labs = await self.fetch_lab_activity(days)
 
         logger.info("Fetching vendor activity...")
-        vendors = self.fetch_vendor_activity(days)
+        vendors = await self.fetch_vendor_activity(days)
 
         # Count items
         lab_datasets = sum(

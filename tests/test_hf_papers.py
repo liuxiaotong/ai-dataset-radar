@@ -2,7 +2,7 @@
 
 import sys
 from pathlib import Path
-from unittest.mock import patch, MagicMock
+from unittest.mock import patch, MagicMock, AsyncMock
 
 import pytest
 
@@ -84,45 +84,40 @@ class TestHFPapersScraper:
         }
         assert scraper._is_dataset_related(paper) is False
 
-    @patch("scrapers.hf_papers.requests.get")
-    def test_fetch_from_api(self, mock_get, scraper):
+    async def test_fetch_from_api(self, scraper):
         """Test fetching papers from API."""
-        mock_response = MagicMock()
-        mock_response.status_code = 200
-        mock_response.json.return_value = [
-            {
-                "paper": {
-                    "id": "2401.12345",
-                    "title": "New Dataset Paper",
-                    "summary": "A dataset for testing",
-                    "authors": [{"name": "Author"}],
-                    "publishedAt": "2024-01-15T10:00:00.000Z",
-                    "upvotes": 10,
-                },
-                "numComments": 2,
-            }
-        ]
-        mock_get.return_value = mock_response
+        scraper._http.get_json = AsyncMock(
+            return_value=[
+                {
+                    "paper": {
+                        "id": "2401.12345",
+                        "title": "New Dataset Paper",
+                        "summary": "A dataset for testing",
+                        "authors": [{"name": "Author"}],
+                        "publishedAt": "2024-01-15T10:00:00.000Z",
+                        "upvotes": 10,
+                    },
+                    "numComments": 2,
+                }
+            ]
+        )
 
-        papers = scraper._fetch_from_api()
+        papers = await scraper._fetch_from_api()
 
         assert len(papers) == 1
         assert papers[0]["arxiv_id"] == "2401.12345"
 
-    @patch("scrapers.hf_papers.requests.get")
-    def test_fetch_from_api_error(self, mock_get, scraper):
+    async def test_fetch_from_api_error(self, scraper):
         """Test handling API errors."""
-        mock_response = MagicMock()
-        mock_response.status_code = 500
-        mock_get.return_value = mock_response
+        scraper._http.get_json = AsyncMock(return_value=None)
 
-        papers = scraper._fetch_from_api()
+        papers = await scraper._fetch_from_api()
 
         assert papers == []
 
-    @patch.object(HFPapersScraper, "_fetch_from_page")
-    @patch.object(HFPapersScraper, "_fetch_from_api")
-    def test_fetch_marks_dataset_papers(self, mock_api, mock_page, scraper):
+    @patch.object(HFPapersScraper, "_fetch_from_page", new_callable=AsyncMock)
+    @patch.object(HFPapersScraper, "_fetch_from_api", new_callable=AsyncMock)
+    async def test_fetch_marks_dataset_papers(self, mock_api, mock_page, scraper):
         """Test that fetch marks dataset-related papers."""
         mock_api.return_value = [
             {
@@ -154,7 +149,7 @@ class TestHFPapersScraper:
         ]
         mock_page.return_value = []
 
-        papers = scraper.fetch()
+        papers = await scraper.fetch()
 
         # First paper should be marked as dataset-related
         dataset_paper = next(p for p in papers if p["arxiv_id"] == "2401.11111")
@@ -164,16 +159,18 @@ class TestHFPapersScraper:
         other_paper = next(p for p in papers if p["arxiv_id"] == "2401.22222")
         assert other_paper["is_dataset_paper"] is False
 
-    def test_get_dataset_papers(self, scraper):
+    async def test_get_dataset_papers(self, scraper):
         """Test getting only dataset-related papers."""
-        with patch.object(scraper, "fetch") as mock_fetch:
-            mock_fetch.return_value = [
+        mock_fetch = AsyncMock(
+            return_value=[
                 {"arxiv_id": "1", "is_dataset_paper": True},
                 {"arxiv_id": "2", "is_dataset_paper": False},
                 {"arxiv_id": "3", "is_dataset_paper": True},
             ]
+        )
 
-            dataset_papers = scraper.get_dataset_papers()
+        with patch.object(scraper, "fetch", new=mock_fetch):
+            dataset_papers = await scraper.get_dataset_papers()
 
             assert len(dataset_papers) == 2
             assert all(p["is_dataset_paper"] for p in dataset_papers)
@@ -202,10 +199,10 @@ class TestHFPapersScraperIntegration:
     """Integration tests (require network)."""
 
     @pytest.mark.skip(reason="Requires network access")
-    def test_fetch_real_data(self):
+    async def test_fetch_real_data(self):
         """Test fetching real data from HuggingFace."""
         scraper = HFPapersScraper(limit=5)
-        papers = scraper.fetch()
+        papers = await scraper.fetch()
 
         assert isinstance(papers, list)
         # Should find some papers

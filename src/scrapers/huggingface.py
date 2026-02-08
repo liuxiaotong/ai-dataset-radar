@@ -1,13 +1,13 @@
 """Hugging Face datasets and models scraper."""
 
 import re
-import requests
 from datetime import datetime
 from typing import Optional
 
 from .base import BaseScraper
 from .registry import register_scraper
 
+from utils.async_http import AsyncHTTPClient
 from utils.logging_config import get_logger
 from utils.cache import get_cache
 
@@ -28,12 +28,13 @@ class HuggingFaceScraper(BaseScraper):
     MODELS_URL = "https://huggingface.co/api/models"
     BASE_URL = "https://huggingface.co/api/datasets"  # Keep for backward compatibility
 
-    def __init__(self, config: dict = None, limit: int = 50):
+    def __init__(self, config: dict = None, limit: int = 50, http_client: AsyncHTTPClient = None):
         super().__init__(config)
         self.limit = limit
         self.headers = {"User-Agent": "AI-Dataset-Radar/1.0"}
+        self._http = http_client or AsyncHTTPClient()
 
-    def scrape(self, config: dict = None) -> list[dict]:
+    async def scrape(self, config: dict = None) -> list[dict]:
         """Scrape datasets from Hugging Face Hub.
 
         Args:
@@ -42,9 +43,9 @@ class HuggingFaceScraper(BaseScraper):
         Returns:
             List of dataset dictionaries.
         """
-        return self.fetch()
+        return await self.fetch()
 
-    def fetch(self) -> list[dict]:
+    async def fetch(self) -> list[dict]:
         """Fetch latest datasets from Hugging Face Hub.
 
         Returns:
@@ -57,12 +58,9 @@ class HuggingFaceScraper(BaseScraper):
             "full": "true",
         }
 
-        try:
-            response = requests.get(self.BASE_URL, params=params, timeout=30)
-            response.raise_for_status()
-            datasets = response.json()
-        except requests.RequestException as e:
-            logger.info("Error fetching Hugging Face datasets: %s", e)
+        datasets = await self._http.get_json(self.BASE_URL, params=params)
+        if datasets is None:
+            logger.info("Error fetching Hugging Face datasets (no response)")
             return []
 
         results = []
@@ -121,7 +119,7 @@ class HuggingFaceScraper(BaseScraper):
             logger.info("Error parsing dataset %s: %s", ds.get("id", "unknown"), e)
             return None
 
-    def fetch_trending_models(
+    async def fetch_trending_models(
         self,
         limit: int = 100,
         min_downloads: int = 1000,
@@ -142,12 +140,9 @@ class HuggingFaceScraper(BaseScraper):
             "full": "true",
         }
 
-        try:
-            response = requests.get(self.MODELS_URL, params=params, timeout=30)
-            response.raise_for_status()
-            models = response.json()
-        except requests.RequestException as e:
-            logger.info("Error fetching Hugging Face models: %s", e)
+        models = await self._http.get_json(self.MODELS_URL, params=params)
+        if models is None:
+            logger.info("Error fetching Hugging Face models (no response)")
             return []
 
         results = []
@@ -190,7 +185,7 @@ class HuggingFaceScraper(BaseScraper):
             logger.info("Error parsing model %s: %s", model.get("id", "unknown"), e)
             return None
 
-    def fetch_model_card(self, model_id: str) -> Optional[dict]:
+    async def fetch_model_card(self, model_id: str) -> Optional[dict]:
         """Fetch detailed model card information.
 
         Args:
@@ -201,23 +196,14 @@ class HuggingFaceScraper(BaseScraper):
         """
         url = f"{self.MODELS_URL}/{model_id}"
 
-        try:
-            response = requests.get(url, timeout=30)
-            response.raise_for_status()
-            model_data = response.json()
-        except requests.RequestException as e:
-            logger.info("Error fetching model card for %s: %s", model_id, e)
+        model_data = await self._http.get_json(url)
+        if model_data is None:
+            logger.info("Error fetching model card for %s", model_id)
             return None
 
         # Also try to fetch the README content
         readme_url = f"https://huggingface.co/{model_id}/raw/main/README.md"
-        readme_content = ""
-        try:
-            readme_response = requests.get(readme_url, timeout=15)
-            if readme_response.status_code == 200:
-                readme_content = readme_response.text
-        except requests.RequestException:
-            pass  # README is optional
+        readme_content = await self._http.get_text(readme_url) or ""
 
         parsed = self._parse_model(model_data)
         if parsed:
@@ -278,7 +264,7 @@ class HuggingFaceScraper(BaseScraper):
 
         return list(datasets)
 
-    def fetch_dataset_info(self, dataset_id: str) -> Optional[dict]:
+    async def fetch_dataset_info(self, dataset_id: str) -> Optional[dict]:
         """Fetch information about a specific dataset.
 
         Args:
@@ -289,17 +275,13 @@ class HuggingFaceScraper(BaseScraper):
         """
         url = f"{self.DATASETS_URL}/{dataset_id}"
 
-        try:
-            response = requests.get(url, timeout=15)
-            if response.status_code == 404:
-                return None
-            response.raise_for_status()
-            return self._parse_dataset(response.json())
-        except requests.RequestException as e:
-            logger.info("Error fetching dataset %s: %s", dataset_id, e)
+        data = await self._http.get_json(url)
+        if data is None:
+            logger.info("Error fetching dataset %s (no response or not found)", dataset_id)
             return None
+        return self._parse_dataset(data)
 
-    def fetch_dataset_readme(self, dataset_id: str) -> Optional[str]:
+    async def fetch_dataset_readme(self, dataset_id: str) -> Optional[str]:
         """Fetch the README content for a dataset.
 
         Uses file-based cache with 24-hour TTL to avoid repeated API calls.
@@ -310,7 +292,7 @@ class HuggingFaceScraper(BaseScraper):
         Returns:
             README content string or None if not found.
         """
-        # Check cache first
+        # Check cache first (sync — FileCache is file-based)
         cache = get_cache()
         cache_key = f"hf:readme:{dataset_id}"
         cached = cache.get(cache_key)
@@ -322,31 +304,24 @@ class HuggingFaceScraper(BaseScraper):
         url = f"{self.DATASETS_URL}/{dataset_id}"
         result = None
 
-        try:
-            response = requests.get(url, headers=self.headers, timeout=15)
-            if response.status_code == 200:
-                data = response.json()
-                # cardData often contains the README-like content
-                card_data = data.get("cardData", "")
-                if card_data:
-                    result = str(card_data)
-                else:
-                    # Try description
-                    description = data.get("description", "")
-                    if description:
-                        result = description
-        except requests.RequestException:
-            pass
+        data = await self._http.get_json(url, headers=self.headers)
+        if data is not None:
+            # cardData often contains the README-like content
+            card_data = data.get("cardData", "")
+            if card_data:
+                result = str(card_data)
+            else:
+                # Try description
+                description = data.get("description", "")
+                if description:
+                    result = description
 
         # Fallback: try to fetch raw README.md
         if not result:
             readme_url = f"https://huggingface.co/datasets/{dataset_id}/raw/main/README.md"
-            try:
-                response = requests.get(readme_url, headers=self.headers, timeout=15)
-                if response.status_code == 200:
-                    result = response.text
-            except requests.RequestException:
-                pass
+            text = await self._http.get_text(readme_url, headers=self.headers)
+            if text is not None:
+                result = text
 
         # Cache the result (even if None, to avoid repeated requests)
         if result:

@@ -6,9 +6,9 @@ Integrates HuggingFace, GitHub, and Blog monitoring.
 """
 
 import argparse
+import asyncio
 import json
 import sys
-from concurrent.futures import ThreadPoolExecutor
 from datetime import datetime
 from pathlib import Path
 
@@ -19,6 +19,7 @@ src_dir = Path(__file__).parent
 if str(src_dir) not in sys.path:
     sys.path.insert(0, str(src_dir))
 
+from utils.async_http import AsyncHTTPClient
 from utils.logging_config import get_logger, setup_logging
 
 logger = get_logger("main_intel")
@@ -632,10 +633,10 @@ def validate_config(config: dict) -> list[str]:
     return warnings
 
 
-def fetch_dataset_readmes(datasets: list[dict], hf_scraper: HuggingFaceScraper) -> list[dict]:
+async def fetch_dataset_readmes(datasets: list[dict], hf_scraper: HuggingFaceScraper) -> list[dict]:
     """Fetch README content for datasets to improve classification.
 
-    Uses parallel fetching with rate-limited workers for speed.
+    Uses concurrent fetching with semaphore for speed.
 
     Args:
         datasets: List of datasets.
@@ -652,25 +653,386 @@ def fetch_dataset_readmes(datasets: list[dict], hf_scraper: HuggingFaceScraper) 
     if not to_fetch:
         return datasets
 
-    def _fetch_one(idx_ds):
-        idx, ds = idx_ds
+    sem = asyncio.Semaphore(10)
+
+    async def _fetch_one(idx: int, ds: dict):
         ds_id = ds.get("id", "")
-        try:
-            card_data = hf_scraper.fetch_dataset_readme(ds_id)
-            return idx, card_data
-        except Exception as e:
-            logger.warning("Could not fetch README for %s: %s", ds_id, e)
-            return idx, None
+        async with sem:
+            try:
+                card_data = await hf_scraper.fetch_dataset_readme(ds_id)
+                return idx, card_data
+            except Exception as e:
+                logger.warning("Could not fetch README for %s: %s", ds_id, e)
+                return idx, None
+
+    results = await asyncio.gather(
+        *[_fetch_one(idx, ds) for idx, ds in to_fetch], return_exceptions=True
+    )
 
     count = 0
-    with ThreadPoolExecutor(max_workers=5) as executor:
-        for idx, card_data in executor.map(_fetch_one, to_fetch):
-            if card_data:
-                datasets[idx]["card_data"] = card_data[:5000]
-                count += 1
+    for result in results:
+        if isinstance(result, Exception):
+            continue
+        idx, card_data = result
+        if card_data:
+            datasets[idx]["card_data"] = card_data[:5000]
+            count += 1
 
     logger.info("Fetched %d READMEs", count)
     return datasets
+
+
+async def async_main(args):
+    """Async main logic for the intelligence scan.
+
+    Args:
+        args: Parsed command-line arguments.
+    """
+    # Set up logging based on verbosity
+    setup_logging(level="INFO")
+
+    # Load config
+    logger.info("=" * 60)
+    logger.info("  AI Dataset Radar v5")
+    logger.info("  Competitive Intelligence System")
+    logger.info("=" * 60)
+
+    config = load_config(args.config)
+
+    # Create shared async HTTP client
+    http_client = AsyncHTTPClient()
+    try:
+        # Initialize components with shared HTTP client
+        org_tracker = OrgTracker(config, http_client=http_client)
+        github_tracker = GitHubTracker(config, http_client=http_client)
+        blog_tracker = BlogTracker(config, http_client=http_client)
+        x_tracker = (
+            XTracker(config, http_client=http_client)
+            if not args.no_x and config.get("x_tracker", {}).get("enabled", False)
+            else None
+        )
+        data_classifier = DataTypeClassifier(config)
+        paper_filter = PaperFilter(config)
+        report_generator = IntelReportGenerator(config)
+        hf_scraper = HuggingFaceScraper(config, http_client=http_client)
+
+        # 1-3. Fetch all data sources concurrently
+        lab_activity = {"labs": {}}
+        vendor_activity = {"vendors": {}}
+        github_activity = []
+        blog_activity = []
+        x_activity = {"accounts": [], "search_results": []}
+        papers = []
+
+        # Pre-build paper scrapers
+        arxiv_scraper = None
+        hf_papers_scraper = None
+        if not args.no_papers:
+            arxiv_config = config.get("sources", {}).get("arxiv", {})
+            if arxiv_config.get("enabled", True):
+                arxiv_scraper = ArxivScraper(limit=50, config=config, http_client=http_client)
+            hf_config = config.get("sources", {}).get("hf_papers", {})
+            if hf_config.get("enabled", True):
+                hf_papers_scraper = HFPapersScraper(
+                    limit=50,
+                    days=hf_config.get("days", 7),
+                    http_client=http_client,
+                )
+
+        # Build async tasks
+        tasks = {}
+        if not args.no_labs:
+            logger.info("Tracking AI labs on HuggingFace...")
+            tasks["labs"] = org_tracker.fetch_lab_activity(days=args.days)
+
+        if not args.no_vendors:
+            logger.info("Tracking data vendors on HuggingFace...")
+            tasks["vendors"] = org_tracker.fetch_vendor_activity(days=args.days)
+
+        if not args.no_github:
+            logger.info("Tracking GitHub organizations...")
+            tasks["github"] = github_tracker.fetch_all_orgs(days=args.days)
+
+        if not args.no_blogs:
+            logger.info("Tracking company blogs...")
+            tasks["blogs"] = blog_tracker.fetch_all_blogs(days=args.days)
+
+        if x_tracker:
+            logger.info("Tracking X/Twitter accounts...")
+            tasks["x"] = x_tracker.fetch_all(days=args.days)
+
+        if arxiv_scraper:
+            logger.info("Fetching from arXiv...")
+            tasks["arxiv"] = arxiv_scraper.fetch()
+
+        if hf_papers_scraper:
+            logger.info("Fetching from HuggingFace Papers...")
+            tasks["hf_papers"] = hf_papers_scraper.fetch()
+
+        # Run all tasks concurrently
+        if tasks:
+            keys = list(tasks.keys())
+            results = await asyncio.gather(*tasks.values(), return_exceptions=True)
+
+            for key, result in zip(keys, results):
+                try:
+                    if isinstance(result, Exception):
+                        raise result
+                    if key == "labs":
+                        lab_activity = {"labs": result}
+                    elif key == "vendors":
+                        vendor_activity = {"vendors": result}
+                    elif key == "github":
+                        github_activity = result.get("vendors", []) + result.get("labs", [])
+                        active_count = sum(1 for a in github_activity if a.get("repos_updated"))
+                        repo_count = sum(len(a.get("repos_updated", [])) for a in github_activity)
+                        logger.info(
+                            "Found %d active orgs with %d updated repos", active_count, repo_count
+                        )
+                    elif key == "blogs":
+                        blog_activity = result
+                        active_count = sum(1 for a in blog_activity if a.get("articles"))
+                        article_count = sum(len(a.get("articles", [])) for a in blog_activity)
+                        logger.info(
+                            "Found %d active blogs with %d relevant articles",
+                            active_count,
+                            article_count,
+                        )
+                    elif key == "x":
+                        x_activity = result
+                        x_acct_count = len(result.get("accounts", []))
+                        x_tweets = sum(
+                            len(a.get("relevant_tweets", [])) for a in result.get("accounts", [])
+                        )
+                        logger.info(
+                            "Found %d active X accounts with %d relevant tweets",
+                            x_acct_count,
+                            x_tweets,
+                        )
+                    elif key == "arxiv":
+                        logger.info("Found %d arXiv papers", len(result))
+                        papers.extend(paper_filter.filter_papers(result))
+                        logger.info("Relevant arXiv: %d", len(papers))
+                    elif key == "hf_papers":
+                        logger.info("Found %d HF papers", len(result))
+                        filtered = paper_filter.filter_papers(result)
+                        papers.extend(filtered)
+                        logger.info("Relevant HF papers: %d", len(filtered))
+                except Exception as e:
+                    logger.warning("Error fetching %s: %s", key, e)
+
+        # 4. Collect all datasets for classification
+        all_datasets = []
+
+        # From labs
+        for category in lab_activity.get("labs", {}).values():
+            for org_data in category.values():
+                all_datasets.extend(org_data.get("datasets", []))
+
+        # From vendors
+        for tier in vendor_activity.get("vendors", {}).values():
+            for vendor_data in tier.values():
+                all_datasets.extend(vendor_data.get("datasets", []))
+
+        logger.info("Collected %d datasets from tracked organizations", len(all_datasets))
+
+        # 5. Fetch dataset READMEs for better classification
+        if not args.no_readme and all_datasets:
+            all_datasets = await fetch_dataset_readmes(all_datasets, hf_scraper)
+
+        # 6. Classify datasets
+        logger.info("Classifying datasets by training type...")
+        datasets_by_type = data_classifier.group_by_type(all_datasets)
+
+        summary = data_classifier.summarize(all_datasets)
+        logger.info("Classified datasets: %d/%d relevant", summary["relevant"], summary["total"])
+        logger.info("Other ratio: %.1f%%", summary["other_ratio"] * 100)
+        for dtype, count in summary["by_type"].items():
+            if count > 0:
+                logger.info("  %s: %d", dtype, count)
+
+        # 7. Papers already fetched in parallel above (arXiv + HF Papers)
+
+        # 7.5 Data quality validation
+        anomalies = []
+        active_github = sum(1 for a in github_activity if a.get("repos_updated"))
+        active_blogs = sum(1 for a in blog_activity if a.get("articles"))
+        x_accounts = len(x_activity.get("accounts", []))
+
+        if not args.no_github and active_github == 0:
+            anomalies.append("GitHub: 0 active orgs (expected >0)")
+        if not args.no_blogs and active_blogs == 0:
+            anomalies.append("Blogs: 0 active blogs (expected >0)")
+        if x_tracker and x_accounts == 0:
+            anomalies.append("X/Twitter: 0 active accounts (check RSSHub/API connectivity)")
+        if not args.no_papers and len(papers) == 0:
+            anomalies.append("Papers: 0 results from arXiv + HF Papers (check network)")
+        if len(all_datasets) == 0 and not args.no_labs and not args.no_vendors:
+            anomalies.append("Datasets: 0 from all tracked orgs (check HuggingFace API)")
+
+        if anomalies:
+            logger.warning("=" * 60)
+            logger.warning("  DATA QUALITY WARNINGS")
+            logger.warning("=" * 60)
+            for a in anomalies:
+                logger.warning("  ⚠ %s", a)
+            logger.warning("=" * 60)
+
+        # 8. Generate report
+        logger.info("Generating intelligence report...")
+
+        report = report_generator.generate(
+            lab_activity=lab_activity,
+            vendor_activity=vendor_activity,
+            datasets_by_type=datasets_by_type,
+            papers=papers,
+            github_activity=github_activity,
+            blog_activity=blog_activity,
+        )
+
+        # Prepare structured data for JSON output
+        datasets_json = {}
+        for dtype, ds_list in datasets_by_type.items():
+            key = dtype.value if isinstance(dtype, DataType) else str(dtype)
+            datasets_json[key] = [
+                {k: v for k, v in ds.items() if not k.startswith("_")} for ds in ds_list
+            ]
+
+        all_data = {
+            "data_quality_warnings": anomalies,
+            "period": {
+                "days": args.days,
+                "start": None,
+                "end": datetime.now().isoformat(),
+            },
+            "labs_activity": lab_activity,
+            "vendor_activity": vendor_activity,
+            "github_activity": github_activity,
+            "blog_posts": blog_activity,
+            "x_activity": x_activity,
+            "datasets": all_datasets,
+            "datasets_by_type": datasets_json,
+            "papers": papers,
+        }
+
+        # Determine output directory and save reports
+        output_dir = Path(config.get("report", {}).get("output_dir", "data"))
+        output_dir.mkdir(parents=True, exist_ok=True)
+
+        # Initialize dual formatter
+        formatter = DualOutputFormatter(output_dir=str(output_dir / "reports"))
+
+        # Use custom output path if specified
+        if args.output:
+            output_path = Path(args.output)
+            with open(output_path, "w", encoding="utf-8") as f:
+                f.write(report)
+            logger.info("Report saved to: %s", output_path)
+
+            if args.json:
+                json_path = output_path.with_suffix(".json")
+                with open(json_path, "w", encoding="utf-8") as f:
+                    json.dump(
+                        formatter._format_json_output(all_data),
+                        f,
+                        ensure_ascii=False,
+                        indent=2,
+                        default=str,
+                    )
+                logger.info("JSON data saved to: %s", json_path)
+        else:
+            # Use DualOutputFormatter for default path
+            md_path, json_path = formatter.save_reports(
+                markdown_content=report, data=all_data, filename_prefix="intel_report"
+            )
+            logger.info("Report saved to: %s", md_path)
+            logger.info("JSON data saved to: %s", json_path)
+
+        # 9. Record daily stats and calculate trends
+        try:
+            db_path = output_dir / "radar.db"
+            db = RadarDatabase(str(db_path))
+            trend_analyzer = TrendAnalyzer(db, config)
+
+            if all_datasets:
+                recorded = trend_analyzer.record_daily_stats(all_datasets)
+                logger.info("Recorded daily stats for %d datasets", recorded)
+
+                trend_summary = trend_analyzer.calculate_trends()
+                logger.info(
+                    "Trends: %d calculated, %d with growth",
+                    trend_summary["trends_calculated"],
+                    trend_summary["datasets_with_growth"],
+                )
+
+            db.close()
+        except Exception as e:
+            logger.warning("Trend analysis skipped: %s", e)
+
+        # Print console summary
+        logger.info(
+            report_generator.generate_console_summary(
+                lab_activity, vendor_activity, datasets_by_type, github_activity, blog_activity
+            )
+        )
+
+        logger.info("Done!")
+
+        # Output insights prompt for LLM analysis (Claude Code / Claude App)
+        if not args.no_insights:
+            insights_content = format_insights_prompt(
+                all_datasets=all_datasets,
+                blog_activity=blog_activity,
+                github_activity=github_activity,
+                papers=papers,
+                datasets_by_type=datasets_by_type,
+                lab_activity=lab_activity,
+                vendor_activity=vendor_activity,
+                x_activity=x_activity,
+            )
+
+            # Save insights prompt to file for reference
+            date_str = datetime.now().strftime("%Y-%m-%d")
+            insights_prompt_path = (
+                output_dir / "reports" / f"intel_report_{date_str}_insights_prompt.md"
+            )
+            with open(insights_prompt_path, "w", encoding="utf-8") as f:
+                f.write(insights_content)
+            logger.info("Insights prompt saved to: %s", insights_prompt_path)
+
+            # Try auto-generating insights via LLM API
+            from utils.llm_client import generate_insights
+
+            insights_result = generate_insights(insights_content)
+
+            insights_path = output_dir / "reports" / f"intel_report_{date_str}_insights.md"
+            if insights_result:
+                # API succeeded — save the report
+                with open(insights_path, "w", encoding="utf-8") as f:
+                    f.write(insights_result)
+                logger.info("Insights report saved to: %s", insights_path)
+            else:
+                # No API key — prompt saved to file for environment LLM (e.g. Claude Code)
+                logger.info("No ANTHROPIC_API_KEY — insights prompt saved for environment LLM")
+                logger.info("INSIGHTS_PROMPT_PATH=%s", insights_prompt_path)
+                logger.info("INSIGHTS_OUTPUT_PATH=%s", insights_path)
+
+            # Generate anomalies report (separate from insights — for engineering use)
+            anomalies_content = format_anomalies_report(
+                anomalies=anomalies,
+                all_datasets=all_datasets,
+                datasets_by_type=datasets_by_type,
+                x_activity=x_activity,
+                blog_activity=blog_activity,
+                github_activity=github_activity,
+                papers=papers,
+            )
+            anomalies_path = output_dir / "reports" / f"intel_report_{date_str}_anomalies.md"
+            with open(anomalies_path, "w", encoding="utf-8") as f:
+                f.write(anomalies_content)
+            logger.info("Anomalies report saved to: %s", anomalies_path)
+    finally:
+        await http_client.close()
 
 
 def main():
@@ -741,342 +1103,10 @@ def main():
     )
 
     args = parser.parse_args()
-
-    # Set up logging based on verbosity
-    setup_logging(level="INFO")
-
-    # Load config
-    logger.info("=" * 60)
-    logger.info("  AI Dataset Radar v5")
-    logger.info("  Competitive Intelligence System")
-    logger.info("=" * 60)
-
-    config = load_config(args.config)
-
-    # Initialize components
-    org_tracker = OrgTracker(config)
-    github_tracker = GitHubTracker(config)
-    blog_tracker = BlogTracker(config)
-    x_tracker = (
-        XTracker(config)
-        if not args.no_x and config.get("x_tracker", {}).get("enabled", False)
-        else None
-    )
-    data_classifier = DataTypeClassifier(config)
-    paper_filter = PaperFilter(config)
-    report_generator = IntelReportGenerator(config)
-    hf_scraper = HuggingFaceScraper(config)
-
-    # 1-3. Fetch all data sources in parallel for maximum speed
-    lab_activity = {"labs": {}}
-    vendor_activity = {"vendors": {}}
-    github_activity = []
-    blog_activity = []
-    x_activity = {"accounts": [], "search_results": []}
-    papers = []
-
-    # Pre-build paper scrapers so they're ready for parallel submission
-    arxiv_scraper = None
-    hf_papers_scraper = None
-    if not args.no_papers:
-        arxiv_config = config.get("sources", {}).get("arxiv", {})
-        if arxiv_config.get("enabled", True):
-            arxiv_scraper = ArxivScraper(limit=50, config=config)
-        hf_config = config.get("sources", {}).get("hf_papers", {})
-        if hf_config.get("enabled", True):
-            hf_papers_scraper = HFPapersScraper(
-                limit=50,
-                days=hf_config.get("days", 7),
-            )
-
-    futures = {}
-    with ThreadPoolExecutor(max_workers=6, thread_name_prefix="radar") as executor:
-        if not args.no_labs:
-            logger.info("Tracking AI labs on HuggingFace...")
-            futures["labs"] = executor.submit(org_tracker.fetch_lab_activity, days=args.days)
-
-        if not args.no_vendors:
-            logger.info("Tracking data vendors on HuggingFace...")
-            futures["vendors"] = executor.submit(org_tracker.fetch_vendor_activity, days=args.days)
-
-        if not args.no_github:
-            logger.info("Tracking GitHub organizations...")
-            futures["github"] = executor.submit(github_tracker.fetch_all_orgs, days=args.days)
-
-        if not args.no_blogs:
-            logger.info("Tracking company blogs...")
-            futures["blogs"] = executor.submit(blog_tracker.fetch_all_blogs, days=args.days)
-
-        if x_tracker:
-            logger.info("Tracking X/Twitter accounts...")
-            futures["x"] = executor.submit(x_tracker.fetch_all, days=args.days)
-
-        if arxiv_scraper:
-            logger.info("Fetching from arXiv...")
-            futures["arxiv"] = executor.submit(arxiv_scraper.fetch)
-
-        if hf_papers_scraper:
-            logger.info("Fetching from HuggingFace Papers...")
-            futures["hf_papers"] = executor.submit(hf_papers_scraper.fetch)
-
-        # Collect results as they complete
-        for key, future in futures.items():
-            try:
-                result = future.result()
-                if key == "labs":
-                    lab_activity = {"labs": result}
-                elif key == "vendors":
-                    vendor_activity = {"vendors": result}
-                elif key == "github":
-                    github_activity = result.get("vendors", []) + result.get("labs", [])
-                    active_count = sum(1 for a in github_activity if a.get("repos_updated"))
-                    repo_count = sum(len(a.get("repos_updated", [])) for a in github_activity)
-                    logger.info(
-                        "Found %d active orgs with %d updated repos", active_count, repo_count
-                    )
-                elif key == "blogs":
-                    blog_activity = result
-                    active_count = sum(1 for a in blog_activity if a.get("articles"))
-                    article_count = sum(len(a.get("articles", [])) for a in blog_activity)
-                    logger.info(
-                        "Found %d active blogs with %d relevant articles",
-                        active_count,
-                        article_count,
-                    )
-                elif key == "x":
-                    x_activity = result
-                    x_accounts = len(result.get("accounts", []))
-                    x_tweets = sum(
-                        len(a.get("relevant_tweets", [])) for a in result.get("accounts", [])
-                    )
-                    logger.info(
-                        "Found %d active X accounts with %d relevant tweets", x_accounts, x_tweets
-                    )
-                elif key == "arxiv":
-                    logger.info("Found %d arXiv papers", len(result))
-                    papers.extend(paper_filter.filter_papers(result))
-                    logger.info("Relevant arXiv: %d", len(papers))
-                elif key == "hf_papers":
-                    logger.info("Found %d HF papers", len(result))
-                    filtered = paper_filter.filter_papers(result)
-                    papers.extend(filtered)
-                    logger.info("Relevant HF papers: %d", len(filtered))
-            except Exception as e:
-                logger.warning("Error fetching %s: %s", key, e)
-
-    # 4. Collect all datasets for classification
-    all_datasets = []
-
-    # From labs
-    for category in lab_activity.get("labs", {}).values():
-        for org_data in category.values():
-            all_datasets.extend(org_data.get("datasets", []))
-
-    # From vendors
-    for tier in vendor_activity.get("vendors", {}).values():
-        for vendor_data in tier.values():
-            all_datasets.extend(vendor_data.get("datasets", []))
-
-    logger.info("Collected %d datasets from tracked organizations", len(all_datasets))
-
-    # 5. Fetch dataset READMEs for better classification
-    if not args.no_readme and all_datasets:
-        all_datasets = fetch_dataset_readmes(all_datasets, hf_scraper)
-
-    # 6. Classify datasets
-    logger.info("Classifying datasets by training type...")
-    datasets_by_type = data_classifier.group_by_type(all_datasets)
-
-    summary = data_classifier.summarize(all_datasets)
-    logger.info("Classified datasets: %d/%d relevant", summary["relevant"], summary["total"])
-    logger.info("Other ratio: %.1f%%", summary["other_ratio"] * 100)
-    for dtype, count in summary["by_type"].items():
-        if count > 0:
-            logger.info("  %s: %d", dtype, count)
-
-    # 7. Papers already fetched in parallel above (arXiv + HF Papers)
-
-    # 7.5 Data quality validation — warn if any source returned suspiciously low counts
-    anomalies = []
-    active_github = sum(1 for a in github_activity if a.get("repos_updated"))
-    active_blogs = sum(1 for a in blog_activity if a.get("articles"))
-    x_accounts = len(x_activity.get("accounts", []))
-
-    if not args.no_github and active_github == 0:
-        anomalies.append("GitHub: 0 active orgs (expected >0)")
-    if not args.no_blogs and active_blogs == 0:
-        anomalies.append("Blogs: 0 active blogs (expected >0)")
-    if x_tracker and x_accounts == 0:
-        anomalies.append("X/Twitter: 0 active accounts (check RSSHub/API connectivity)")
-    if not args.no_papers and len(papers) == 0:
-        anomalies.append("Papers: 0 results from arXiv + HF Papers (check network)")
-    if len(all_datasets) == 0 and not args.no_labs and not args.no_vendors:
-        anomalies.append("Datasets: 0 from all tracked orgs (check HuggingFace API)")
-
-    if anomalies:
-        logger.warning("=" * 60)
-        logger.warning("  DATA QUALITY WARNINGS")
-        logger.warning("=" * 60)
-        for a in anomalies:
-            logger.warning("  ⚠ %s", a)
-        logger.warning("=" * 60)
-
-    # 8. Generate report
-    logger.info("Generating intelligence report...")
-
-    report = report_generator.generate(
-        lab_activity=lab_activity,
-        vendor_activity=vendor_activity,
-        datasets_by_type=datasets_by_type,
-        papers=papers,
-        github_activity=github_activity,
-        blog_activity=blog_activity,
-    )
-
-    # Prepare structured data for JSON output
-    datasets_json = {}
-    for dtype, ds_list in datasets_by_type.items():
-        key = dtype.value if isinstance(dtype, DataType) else str(dtype)
-        datasets_json[key] = [
-            {k: v for k, v in ds.items() if not k.startswith("_")} for ds in ds_list
-        ]
-
-    all_data = {
-        "data_quality_warnings": anomalies,
-        "period": {
-            "days": args.days,
-            "start": None,
-            "end": datetime.now().isoformat(),
-        },
-        "labs_activity": lab_activity,
-        "vendor_activity": vendor_activity,
-        "github_activity": github_activity,
-        "blog_posts": blog_activity,
-        "x_activity": x_activity,
-        "datasets": all_datasets,
-        "datasets_by_type": datasets_json,
-        "papers": papers,
-    }
-
-    # Determine output directory and save reports
-    output_dir = Path(config.get("report", {}).get("output_dir", "data"))
-    output_dir.mkdir(parents=True, exist_ok=True)
-
-    # Initialize dual formatter
-    formatter = DualOutputFormatter(output_dir=str(output_dir / "reports"))
-
-    # Use custom output path if specified
-    if args.output:
-        output_path = Path(args.output)
-        with open(output_path, "w", encoding="utf-8") as f:
-            f.write(report)
-        logger.info("Report saved to: %s", output_path)
-
-        if args.json:
-            json_path = output_path.with_suffix(".json")
-            with open(json_path, "w", encoding="utf-8") as f:
-                json.dump(
-                    formatter._format_json_output(all_data),
-                    f,
-                    ensure_ascii=False,
-                    indent=2,
-                    default=str,
-                )
-            logger.info("JSON data saved to: %s", json_path)
-    else:
-        # Use DualOutputFormatter for default path
-        md_path, json_path = formatter.save_reports(
-            markdown_content=report, data=all_data, filename_prefix="intel_report"
-        )
-        logger.info("Report saved to: %s", md_path)
-        logger.info("JSON data saved to: %s", json_path)
-
-    # 9. Record daily stats and calculate trends
-    try:
-        db_path = output_dir / "radar.db"
-        db = RadarDatabase(str(db_path))
-        trend_analyzer = TrendAnalyzer(db, config)
-
-        if all_datasets:
-            recorded = trend_analyzer.record_daily_stats(all_datasets)
-            logger.info("Recorded daily stats for %d datasets", recorded)
-
-            trend_summary = trend_analyzer.calculate_trends()
-            logger.info(
-                "Trends: %d calculated, %d with growth",
-                trend_summary["trends_calculated"],
-                trend_summary["datasets_with_growth"],
-            )
-
-        db.close()
-    except Exception as e:
-        logger.warning("Trend analysis skipped: %s", e)
-
-    # Print console summary
-    logger.info(
-        report_generator.generate_console_summary(
-            lab_activity, vendor_activity, datasets_by_type, github_activity, blog_activity
-        )
-    )
-
-    logger.info("Done!")
-
-    # Output insights prompt for LLM analysis (Claude Code / Claude App)
-    if not args.no_insights:
-        insights_content = format_insights_prompt(
-            all_datasets=all_datasets,
-            blog_activity=blog_activity,
-            github_activity=github_activity,
-            papers=papers,
-            datasets_by_type=datasets_by_type,
-            lab_activity=lab_activity,
-            vendor_activity=vendor_activity,
-            x_activity=x_activity,
-        )
-
-        # Save insights prompt to file for reference
-        date_str = datetime.now().strftime("%Y-%m-%d")
-        insights_prompt_path = (
-            output_dir / "reports" / f"intel_report_{date_str}_insights_prompt.md"
-        )
-        with open(insights_prompt_path, "w", encoding="utf-8") as f:
-            f.write(insights_content)
-        logger.info("Insights prompt saved to: %s", insights_prompt_path)
-
-        # Try auto-generating insights via LLM API
-        from utils.llm_client import generate_insights
-
-        insights_result = generate_insights(insights_content)
-
-        insights_path = output_dir / "reports" / f"intel_report_{date_str}_insights.md"
-        if insights_result:
-            # API succeeded — save the report
-            with open(insights_path, "w", encoding="utf-8") as f:
-                f.write(insights_result)
-            logger.info("Insights report saved to: %s", insights_path)
-        else:
-            # No API key — prompt saved to file for environment LLM (e.g. Claude Code)
-            logger.info("No ANTHROPIC_API_KEY — insights prompt saved for environment LLM")
-            logger.info("INSIGHTS_PROMPT_PATH=%s", insights_prompt_path)
-            logger.info("INSIGHTS_OUTPUT_PATH=%s", insights_path)
-
-        # Generate anomalies report (separate from insights — for engineering use)
-        anomalies_content = format_anomalies_report(
-            anomalies=anomalies,
-            all_datasets=all_datasets,
-            datasets_by_type=datasets_by_type,
-            x_activity=x_activity,
-            blog_activity=blog_activity,
-            github_activity=github_activity,
-            papers=papers,
-        )
-        anomalies_path = output_dir / "reports" / f"intel_report_{date_str}_anomalies.md"
-        with open(anomalies_path, "w", encoding="utf-8") as f:
-            f.write(anomalies_content)
-        logger.info("Anomalies report saved to: %s", anomalies_path)
+    asyncio.run(async_main(args))
 
 
-def run_intel_scan(days: int = 7) -> dict:
+async def run_intel_scan(days: int = 7) -> dict:
     """Run an intelligence scan programmatically (used by the API).
 
     Args:
@@ -1088,44 +1118,50 @@ def run_intel_scan(days: int = 7) -> dict:
     setup_logging(level="INFO")
     config = load_config()
 
-    org_tracker = OrgTracker(config)
-    github_tracker = GitHubTracker(config)
-    blog_tracker = BlogTracker(config)
-    data_classifier = DataTypeClassifier(config)
-    paper_filter = PaperFilter(config)
-    report_generator = IntelReportGenerator(config)
-    hf_scraper = HuggingFaceScraper(config)
+    http_client = AsyncHTTPClient()
+    try:
+        org_tracker = OrgTracker(config, http_client=http_client)
+        github_tracker = GitHubTracker(config, http_client=http_client)
+        blog_tracker = BlogTracker(config, http_client=http_client)
+        data_classifier = DataTypeClassifier(config)
+        paper_filter = PaperFilter(config)
+        report_generator = IntelReportGenerator(config)
+        hf_scraper = HuggingFaceScraper(config, http_client=http_client)
 
-    # Fetch data sources in parallel
-    lab_activity = {"labs": {}}
-    vendor_activity = {"vendors": {}}
-    github_activity = []
-    blog_activity = []
-    papers = []
+        # Build async tasks
+        tasks = {
+            "labs": org_tracker.fetch_lab_activity(days=days),
+            "vendors": org_tracker.fetch_vendor_activity(days=days),
+            "github": github_tracker.fetch_all_orgs(days=days),
+            "blogs": blog_tracker.fetch_all_blogs(days=days),
+        }
 
-    arxiv_config = config.get("sources", {}).get("arxiv", {})
-    arxiv_scraper = ArxivScraper(limit=50, config=config) if arxiv_config.get("enabled", True) else None
-    hf_config = config.get("sources", {}).get("hf_papers", {})
-    hf_papers_scraper = (
-        HFPapersScraper(limit=50, days=hf_config.get("days", 7))
-        if hf_config.get("enabled", True)
-        else None
-    )
+        arxiv_config = config.get("sources", {}).get("arxiv", {})
+        if arxiv_config.get("enabled", True):
+            arxiv_scraper = ArxivScraper(limit=50, config=config, http_client=http_client)
+            tasks["arxiv"] = arxiv_scraper.fetch()
 
-    futures = {}
-    with ThreadPoolExecutor(max_workers=6, thread_name_prefix="radar") as executor:
-        futures["labs"] = executor.submit(org_tracker.fetch_lab_activity, days=days)
-        futures["vendors"] = executor.submit(org_tracker.fetch_vendor_activity, days=days)
-        futures["github"] = executor.submit(github_tracker.fetch_all_orgs, days=days)
-        futures["blogs"] = executor.submit(blog_tracker.fetch_all_blogs, days=days)
-        if arxiv_scraper:
-            futures["arxiv"] = executor.submit(arxiv_scraper.fetch)
-        if hf_papers_scraper:
-            futures["hf_papers"] = executor.submit(hf_papers_scraper.fetch)
+        hf_config = config.get("sources", {}).get("hf_papers", {})
+        if hf_config.get("enabled", True):
+            hf_papers_scraper = HFPapersScraper(
+                limit=50, days=hf_config.get("days", 7), http_client=http_client,
+            )
+            tasks["hf_papers"] = hf_papers_scraper.fetch()
 
-        for key, future in futures.items():
+        # Run all tasks concurrently
+        lab_activity = {"labs": {}}
+        vendor_activity = {"vendors": {}}
+        github_activity = []
+        blog_activity = []
+        papers = []
+
+        keys = list(tasks.keys())
+        results = await asyncio.gather(*tasks.values(), return_exceptions=True)
+
+        for key, result in zip(keys, results):
             try:
-                result = future.result()
+                if isinstance(result, Exception):
+                    raise result
                 if key == "labs":
                     lab_activity = {"labs": result}
                 elif key == "vendors":
@@ -1141,62 +1177,64 @@ def run_intel_scan(days: int = 7) -> dict:
             except Exception as e:
                 logger.warning("Error fetching %s: %s", key, e)
 
-    # Collect and classify datasets
-    all_datasets = []
-    for category in lab_activity.get("labs", {}).values():
-        for org_data in category.values():
-            all_datasets.extend(org_data.get("datasets", []))
-    for tier in vendor_activity.get("vendors", {}).values():
-        for vendor_data in tier.values():
-            all_datasets.extend(vendor_data.get("datasets", []))
+        # Collect and classify datasets
+        all_datasets = []
+        for category in lab_activity.get("labs", {}).values():
+            for org_data in category.values():
+                all_datasets.extend(org_data.get("datasets", []))
+        for tier in vendor_activity.get("vendors", {}).values():
+            for vendor_data in tier.values():
+                all_datasets.extend(vendor_data.get("datasets", []))
 
-    if all_datasets:
-        all_datasets = fetch_dataset_readmes(all_datasets, hf_scraper)
+        if all_datasets:
+            all_datasets = await fetch_dataset_readmes(all_datasets, hf_scraper)
 
-    datasets_by_type = data_classifier.group_by_type(all_datasets)
-    summary = data_classifier.summarize(all_datasets)
+        datasets_by_type = data_classifier.group_by_type(all_datasets)
+        summary = data_classifier.summarize(all_datasets)
 
-    # Generate and save report
-    report = report_generator.generate(
-        lab_activity=lab_activity,
-        vendor_activity=vendor_activity,
-        datasets_by_type=datasets_by_type,
-        papers=papers,
-        github_activity=github_activity,
-        blog_activity=blog_activity,
-    )
+        # Generate and save report
+        report = report_generator.generate(
+            lab_activity=lab_activity,
+            vendor_activity=vendor_activity,
+            datasets_by_type=datasets_by_type,
+            papers=papers,
+            github_activity=github_activity,
+            blog_activity=blog_activity,
+        )
 
-    output_dir = Path(config.get("report", {}).get("output_dir", "data"))
-    output_dir.mkdir(parents=True, exist_ok=True)
-    formatter = DualOutputFormatter(output_dir=str(output_dir / "reports"))
+        output_dir = Path(config.get("report", {}).get("output_dir", "data"))
+        output_dir.mkdir(parents=True, exist_ok=True)
+        formatter = DualOutputFormatter(output_dir=str(output_dir / "reports"))
 
-    datasets_json = {}
-    for dtype, ds_list in datasets_by_type.items():
-        key = dtype.value if isinstance(dtype, DataType) else str(dtype)
-        datasets_json[key] = [
-            {k: v for k, v in ds.items() if not k.startswith("_")} for ds in ds_list
-        ]
+        datasets_json = {}
+        for dtype, ds_list in datasets_by_type.items():
+            key = dtype.value if isinstance(dtype, DataType) else str(dtype)
+            datasets_json[key] = [
+                {k: v for k, v in ds.items() if not k.startswith("_")} for ds in ds_list
+            ]
 
-    all_data = {
-        "period": {"days": days, "end": datetime.now().isoformat()},
-        "labs_activity": lab_activity,
-        "vendor_activity": vendor_activity,
-        "github_activity": github_activity,
-        "blog_posts": blog_activity,
-        "datasets": all_datasets,
-        "datasets_by_type": datasets_json,
-        "papers": papers,
-    }
+        all_data = {
+            "period": {"days": days, "end": datetime.now().isoformat()},
+            "labs_activity": lab_activity,
+            "vendor_activity": vendor_activity,
+            "github_activity": github_activity,
+            "blog_posts": blog_activity,
+            "datasets": all_datasets,
+            "datasets_by_type": datasets_json,
+            "papers": papers,
+        }
 
-    formatter.save_reports(markdown_content=report, data=all_data, filename_prefix="intel_report")
+        formatter.save_reports(markdown_content=report, data=all_data, filename_prefix="intel_report")
 
-    return {
-        "datasets": len(all_datasets),
-        "papers": len(papers),
-        "blogs": sum(len(b.get("articles", [])) for b in blog_activity),
-        "github_repos": sum(len(a.get("repos_updated", [])) for a in github_activity),
-        "classification": summary,
-    }
+        return {
+            "datasets": len(all_datasets),
+            "papers": len(papers),
+            "blogs": sum(len(b.get("articles", [])) for b in blog_activity),
+            "github_repos": sum(len(a.get("repos_updated", [])) for a in github_activity),
+            "classification": summary,
+        }
+    finally:
+        await http_client.close()
 
 
 if __name__ == "__main__":
