@@ -245,6 +245,71 @@ watched_orgs:
       keywords: ["商汤", "sensetime", "日日新"]
       priority: medium
 
+  # Robotics / Embodied AI Labs - 机器人与具身智能
+  robotics_labs:
+    physical_intelligence:
+      hf_ids: ["physical-intelligence"]
+      github: ["Physical-Intelligence"]
+      keywords: ["physical intelligence", "pi0", "openpi"]
+      priority: high
+    lerobot:
+      hf_ids: ["lerobot"]
+      github: ["huggingface/lerobot"]
+      keywords: ["lerobot", "open x-embodiment"]
+      priority: high
+    openvla:
+      hf_ids: ["openvla"]
+      github: ["openvla"]
+      keywords: ["openvla", "vision-language-action"]
+      priority: medium
+    figure_ai:
+      hf_ids: ["figure-ai"]
+      keywords: ["figure ai", "figure robot"]
+      priority: medium
+    onex_tech:
+      hf_ids: ["1x-technologies"]
+      github: ["1x-technologies"]
+      keywords: ["1x technologies", "neo humanoid"]
+      priority: medium
+    boston_dynamics:
+      hf_ids: []
+      keywords: ["boston dynamics", "atlas robot"]
+      priority: medium
+    toyota_research:
+      hf_ids: ["tri-robotics"]
+      keywords: ["toyota research institute", "tri robotics", "large behavior model"]
+      priority: medium
+    opendrivelab:
+      hf_ids: ["OpenDriveLab"]
+      github: ["OpenDriveLab"]
+      keywords: ["opendrivelab", "drivelm"]
+      priority: medium
+
+  # China Robotics - 中国机器人公司
+  china_robotics:
+    unitree:
+      hf_ids: ["unitree"]
+      github: ["unitreerobotics"]
+      keywords: ["宇树科技", "unitree", "unitree robotics"]
+      priority: high
+    agibot:
+      hf_ids: ["agibot", "agibotworld"]
+      keywords: ["智元机器人", "agibot", "agibot world"]
+      priority: high
+    galbot:
+      hf_ids: []
+      keywords: ["银河通用", "galbot"]
+      priority: medium
+    robotera:
+      hf_ids: []
+      keywords: ["星动纪元", "robotera"]
+      priority: medium
+    fourier:
+      hf_ids: []
+      github: ["FFTAI"]
+      keywords: ["傅利叶", "fourier intelligence", "fourier robot"]
+      priority: medium
+
 # 数据供应商（竞品监控）
 watched_vendors:
   # Premium Vendors - 头部供应商
@@ -574,6 +639,32 @@ watched_vendors:
       category: "research"
       type: "browser"
       selector: "a[href*='/blog/']"
+    # --- Robotics / Embodied AI ---
+    - name: "Physical Intelligence Blog"
+      url: "https://www.physicalintelligence.company/blog"
+      category: "robotics"
+      type: "auto"
+      selector: "article, [class*='post'], [class*='blog'], [class*='card']"
+    - name: "Boston Dynamics Blog"
+      url: "https://bostondynamics.com/blog/"
+      category: "robotics"
+      type: "auto"
+      selector: "article, [class*='post'], [class*='blog'], [class*='card']"
+    - name: "Toyota Research Institute"
+      url: "https://www.tri.global/news"
+      category: "robotics"
+      type: "auto"
+      selector: "article, [class*='post'], [class*='news'], [class*='card']"
+    - name: "The Robot Report"
+      url: "https://www.therobotreport.com/"
+      category: "robotics"
+      type: "auto"
+      selector: "article, [class*='post'], [class*='entry'], h2 a"
+    - name: "NVIDIA Robotics Blog"
+      url: "https://blogs.nvidia.com/blog/category/robotics/"
+      category: "robotics"
+      type: "auto"
+      selector: "article, [class*='post'], [class*='blog'], [class*='card']"
     # --- New: Global Tech Giants ---
     - name: "Apple Machine Learning Research"
       url: "https://machinelearning.apple.com/"
@@ -1002,6 +1093,18 @@ github:
       - LAION-AI
       - databricks
       - LiquidAI
+    # Robotics / Embodied AI - 机器人与具身智能
+    robotics:
+      - Physical-Intelligence
+      - openvla
+      - 1x-technologies
+      - rail-berkeley
+      - Stanford-ILIAD
+      - StanfordVL
+      - facebookresearch
+      - NVIDIA-Omniverse
+      - FFTAI
+      - unitreerobotics
     # Additional data vendors - 更多数据供应商
     data_vendors_extended:
       - Toloka
@@ -1142,6 +1245,28 @@ x_tracker:
     - LightOnIO
     - LG_AI_Research
     - StanfordHAI
+    # ── Robotics / Embodied AI Companies (10) ──
+    - Figure_robot
+    - physical_int
+    - 1x_tech
+    - BostonDynamics
+    - AgilityRobotics
+    - UnitreeRobotics
+    - AgiBot_zhiyuan
+    - GalbotRobotics
+    - roboterax
+    - FourierRobots
+    # ── Robotics Researchers (10) ──
+    - pabbeel
+    - svlevine
+    - chelseabfinn
+    - LerrelPinto
+    - yukez
+    - SongShuran
+    - DorsaSadigh
+    - Ken_Goldberg
+    - xiao_ted
+    - hausman_k
     # ── Data Vendors & Platforms (9) ──
     - scale_AI
     - HelloSurgeAI
@@ -1206,6 +1331,11 @@ x_tracker:
     - "RLHF training data"
     - "benchmark evaluation"
     - "synthetic data"
+    - "robot learning"
+    - "embodied AI"
+    - "humanoid robot"
+    - "sim2real"
+    - "manipulation dataset"
 
 # =============================================================================
 # 通知配置 | Notifications
