@@ -84,8 +84,9 @@ git clone https://github.com/liuxiaotong/ai-dataset-radar.git
 cd ai-dataset-radar
 pip install -r requirements.txt
 
-# 可选：Agent API 服务
-pip install fastapi uvicorn
+# 配置环境变量
+cp .env.example .env
+# 编辑 .env 填入 ANTHROPIC_API_KEY 等（可选）
 ```
 
 ### Docker 部署
@@ -133,18 +134,16 @@ x_tracker:
 
 ### 配置与调度 / Configuration & Scheduling
 
-```bash
-cp .env.example .env
+项目使用 `python-dotenv` 自动加载项目根目录的 `.env` 文件，无需手动 `export`：
 
-# 关键变量
-DATA_SOURCES=github,huggingface,arxiv
+```bash
+# .env 关键变量（参见 .env.example）
 ANTHROPIC_API_KEY=sk-ant-...        # 用于自动生成 insights 报告（可选）
-OPENAI_API_KEY=sk-oai-...
-REPORT_DAYS=7                       # 默认扫描区间
+GITHUB_TOKEN=ghp_...                # 提升 GitHub API 限额（可选）
 ```
 
-- GitHub/HF Token：用于访问私有数据源或提升 API 限额。
-- `DATA_SOURCES`：逗号分隔控制采集范围，禁用特定源时也能减少速率限制。
+- `ANTHROPIC_API_KEY`：设置后 CLI 和 API 路径均自动生成 insights 报告。
+- `GITHUB_TOKEN`：用于访问私有数据源或提升 API 限额。
 - 调度建议：`crontab -e` 中加入 `0 */6 * * * /usr/bin/python src/main_intel.py --days 7`，即可每 6 小时刷新一次。
 
 ## 快速开始 / Quick Start
@@ -163,8 +162,8 @@ python src/main_intel.py --days 7 --no-insights
 
 | 环境 | 行为 |
 |------|------|
-| 有 `ANTHROPIC_API_KEY` | 自动调用 API 生成 `_insights.md` |
-| Claude Code 等 AI CLI | 保存 prompt 文件，由环境 LLM 自动接管分析 |
+| 有 `ANTHROPIC_API_KEY` | 自动调用 API 生成 `_insights.md`（CLI 与 API 路径均支持） |
+| 无 API key（CLI） | 将 insights prompt 直接输出到 stdout，便于 Claude Code 等 AI CLI 接管 |
 | `--no-insights` | 跳过 insights 逻辑 |
 
 **产出文件：**
@@ -221,7 +220,7 @@ uvicorn agent.api:app --port 8080
 | `/github` | GET | GitHub 仓库活动 (支持 relevance 筛选) |
 | `/papers` | GET | 论文列表 (支持 dataset_only 筛选) |
 | `/blogs` | GET | 博客文章 (支持 category/source 筛选) |
-| `/scan` | POST | 执行新扫描 |
+| `/scan` | POST | 执行新扫描（含 insights 生成） |
 | `/config` | GET | 监控配置（敏感信息自动脱敏） |
 | `/schema` | GET | 输出规范 |
 | `/tools` | GET | 工具定义 |
@@ -510,6 +509,7 @@ ai-dataset-radar/
 │   ├── analyzers/              # 分类器与质量评分
 │   └── utils/                  # 工具库
 │       ├── async_http.py       # AsyncHTTPClient（连接池 + 重试 + 限速）
+│       ├── llm_client.py       # LLM 调用（Anthropic API insights 生成）
 │       └── cache.py            # FileCache（TTL + LRU 驱逐）
 ├── agent/                      # Agent 集成层
 │   ├── api.py                  # REST API（认证 + 限速 + 健康检查）
@@ -522,6 +522,7 @@ ai-dataset-radar/
 ├── Dockerfile                  # 容器镜像（含 Playwright）
 ├── docker-compose.yml          # scan + api 服务编排
 ├── config.yaml                 # 监控配置（组织/供应商/博客/关键词）
+├── .env.example                # 环境变量模板
 └── data/reports/               # 输出目录
 ```
 
@@ -612,6 +613,8 @@ graph LR
 - [x] Dashboard 筛选增强 (论文「仅数据集」复选框 + 博客分类下拉 + MCP radar_blogs category 参数)
 - [x] 健壮性加固 (asyncio.get_running_loop 替代已弃用 API, open() 统一 UTF-8 编码, JSON 加载异常处理)
 - [x] 全链路性能优化 (OrgTracker 组织内并行化, feedparser→线程池, 并发上限调优 blog25/x20/github15, 超时 30→20s/重试 3→2, X HEAD 跳过)
+- [x] dotenv 环境变量支持 (python-dotenv 自动加载 .env, .env.example 模板)
+- [x] Insights API 集成 (run_intel_scan API 路径复用 LLM insights 生成, 返回 insights 文本; CLI 无 API key 时 stdout 输出 prompt)
 
 ---
 
