@@ -1136,6 +1136,11 @@ async def run_intel_scan(days: int = 7) -> dict:
         org_tracker = OrgTracker(config, http_client=http_client)
         github_tracker = GitHubTracker(config, http_client=http_client)
         blog_tracker = BlogTracker(config, http_client=http_client)
+        x_tracker = (
+            XTracker(config, http_client=http_client)
+            if config.get("x_tracker", {}).get("enabled", False)
+            else None
+        )
         data_classifier = DataTypeClassifier(config)
         paper_filter = PaperFilter(config)
         report_generator = IntelReportGenerator(config)
@@ -1148,6 +1153,8 @@ async def run_intel_scan(days: int = 7) -> dict:
             "github": github_tracker.fetch_all_orgs(days=days),
             "blogs": blog_tracker.fetch_all_blogs(days=days),
         }
+        if x_tracker:
+            tasks["x"] = x_tracker.fetch_all(days=days)
 
         arxiv_config = config.get("sources", {}).get("arxiv", {})
         if arxiv_config.get("enabled", True):
@@ -1166,6 +1173,7 @@ async def run_intel_scan(days: int = 7) -> dict:
         vendor_activity = {"vendors": {}}
         github_activity = []
         blog_activity = []
+        x_activity = {"accounts": [], "search_results": []}
         papers = []
 
         keys = list(tasks.keys())
@@ -1183,6 +1191,8 @@ async def run_intel_scan(days: int = 7) -> dict:
                     github_activity = result.get("vendors", []) + result.get("labs", [])
                 elif key == "blogs":
                     blog_activity = result
+                elif key == "x":
+                    x_activity = result
                 elif key == "arxiv":
                     papers.extend(paper_filter.filter_papers(result))
                 elif key == "hf_papers":
@@ -1232,6 +1242,7 @@ async def run_intel_scan(days: int = 7) -> dict:
             "vendor_activity": vendor_activity,
             "github_activity": github_activity,
             "blog_posts": blog_activity,
+            "x_activity": x_activity,
             "datasets": all_datasets,
             "datasets_by_type": datasets_json,
             "papers": papers,

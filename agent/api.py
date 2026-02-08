@@ -268,8 +268,8 @@ async def get_summary():
 async def list_datasets(
     category: Optional[str] = Query(
         None,
-        description="Filter by category: sft_instruction, reward_model, synthetic, "
-        "multimodal, multilingual, rl_environment, code, evaluation, other",
+        description="Filter by category: sft_instruction, rlhf_preference, reward_model, "
+        "synthetic, agent_tool, multimodal, multilingual, rl_environment, code, evaluation, other",
     ),
     min_downloads: Optional[int] = Query(None, ge=0, description="Minimum download count"),
     limit: int = Query(50, ge=1, le=500, description="Maximum results to return (1-500)"),
@@ -279,8 +279,10 @@ async def list_datasets(
 
     Categories:
     - sft_instruction: Instruction-following / SFT datasets
-    - reward_model: RLHF / DPO / preference data
+    - rlhf_preference: RLHF / DPO / preference data
+    - reward_model: Reward model training data
     - synthetic: AI-generated datasets
+    - agent_tool: Agent / tool use / function calling
     - multimodal: Image / audio / video
     - multilingual: Multi-language datasets
     - rl_environment: RL / embodied / robotics

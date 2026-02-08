@@ -81,7 +81,7 @@
         "author": { "type": "string" },
         "category": {
           "type": "string",
-          "enum": ["sft_instruction", "preference", "reward_model", "synthetic", "agent", "multimodal", "multilingual", "rl_environment", "code", "evaluation", "other"],
+          "enum": ["sft_instruction", "rlhf_preference", "reward_model", "synthetic", "agent_tool", "multimodal", "multilingual", "rl_environment", "code", "evaluation", "other"],
           "description": "Auto-classified dataset type"
         },
         "downloads": { "type": "integer" },
