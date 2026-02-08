@@ -496,6 +496,12 @@ if _static_dir.is_dir():
 # ============================================================
 
 if __name__ == "__main__":
+    import threading
+    import webbrowser
+
     import uvicorn
 
-    uvicorn.run(app, host="0.0.0.0", port=8080)
+    port = int(os.environ.get("PORT", "8080"))
+    threading.Timer(1.0, lambda: webbrowser.open(f"http://localhost:{port}/dashboard")).start()
+    print(f"\n  Dashboard: http://localhost:{port}/dashboard\n")
+    uvicorn.run(app, host="0.0.0.0", port=port, log_level="warning")

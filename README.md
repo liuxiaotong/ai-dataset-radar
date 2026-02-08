@@ -177,12 +177,11 @@ data/reports/
 └── intel_report_2026-02-07_anomalies.md        # 异常排查报告 (运维)
 ```
 
-### 启动 API 服务 / Start API Service
+### 启动仪表盘 / Start Dashboard
 
 ```bash
-uvicorn agent.api:app --port 8080
-# 可视化仪表盘: http://localhost:8080/dashboard
-# 接口文档:     http://localhost:8080/docs
+python agent/api.py
+# 自动打开浏览器 → http://localhost:8080/dashboard
 ```
 
 ### 智能体调用 / Agent Usage
