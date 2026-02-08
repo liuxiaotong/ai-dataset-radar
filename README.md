@@ -220,7 +220,7 @@ uvicorn agent.api:app --port 8080
 | `/datasets` | GET | 数据集列表 (支持 category 筛选) |
 | `/github` | GET | GitHub 仓库活动 (支持 relevance 筛选) |
 | `/papers` | GET | 论文列表 (支持 dataset_only 筛选) |
-| `/blogs` | GET | 博客文章 |
+| `/blogs` | GET | 博客文章 (支持 category/source 筛选) |
 | `/scan` | POST | 执行新扫描 |
 | `/config` | GET | 监控配置（敏感信息自动脱敏） |
 | `/schema` | GET | 输出规范 |
@@ -291,7 +291,7 @@ tools = [
     Tool(
         name="radar_datasets",
         func=lambda cat: requests.get(f"http://localhost:8080/datasets?category={cat}").json(),
-        description="按类别查询数据集: sft|preference|synthetic|agent|code"
+        description="按类别查询数据集: sft_instruction|reward_model|synthetic|multimodal|code|evaluation"
     ),
 ]
 ```
@@ -478,11 +478,14 @@ watched_vendors:
   blogs:
     - name: "OpenAI Blog"
       url: "https://openai.com/blog"
+      category: us_frontier
     - name: "Anthropic Research"
       url: "https://www.anthropic.com/research"
+      category: us_frontier
     - name: "海天瑞声 SpeechOcean"
       url: "https://www.haitianruisheng.com/aboutus/news/catid-23.htm"
-    # ... 62 sources total
+      category: china
+    # ... 62 sources (categories: us_frontier, us_emerging, china, research, data_vendor)
 
 priority_data_types:
   preference: { keywords: ["rlhf", "dpo"] }
@@ -602,6 +605,8 @@ graph LR
 - [x] Web 可视化仪表盘 (`/dashboard`: 概览/数据集/GitHub/论文/博客 5 视图，Chart.js 图表，深色主题，`python agent/api.py` 一键启动)
 - [x] 博客抓取修复 (移除过度激进的信号关键词过滤，保留所有已监控 AI 实验室的博客文章)
 - [x] MCP/Schema 数据管道修复 (X/Twitter 数据写入 JSON 报告, 博客搜索字段名修正, radar_papers source+dataset_only 过滤, schema.json 全面同步实际结构)
+- [x] 博客分类标注 (config.yaml 62 个博客源添加 category 字段, BlogTracker 透传至 JSON, /blogs API 分类筛选生效)
+- [x] 数据集分类对齐 (Dashboard 下拉菜单 + API 文档 + 实际分类值统一为 sft_instruction/reward_model/synthetic 等)
 
 ---
 

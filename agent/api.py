@@ -268,7 +268,8 @@ async def get_summary():
 async def list_datasets(
     category: Optional[str] = Query(
         None,
-        description="Filter by category: sft, preference, synthetic, agent, multimodal, code, evaluation",
+        description="Filter by category: sft_instruction, reward_model, synthetic, "
+        "multimodal, multilingual, rl_environment, code, evaluation, other",
     ),
     min_downloads: Optional[int] = Query(None, ge=0, description="Minimum download count"),
     limit: int = Query(50, ge=1, le=500, description="Maximum results to return (1-500)"),
@@ -277,13 +278,15 @@ async def list_datasets(
     List datasets from the latest report with optional filters.
 
     Categories:
-    - sft: Instruction-following datasets
-    - preference: RLHF/DPO training data
+    - sft_instruction: Instruction-following / SFT datasets
+    - reward_model: RLHF / DPO / preference data
     - synthetic: AI-generated datasets
-    - agent: Tool use and agent training
-    - multimodal: Image/audio/video
+    - multimodal: Image / audio / video
+    - multilingual: Multi-language datasets
+    - rl_environment: RL / embodied / robotics
     - code: Programming datasets
     - evaluation: Benchmarks
+    - other: Uncategorized
     """
     report = get_latest_report()
     if not report:
@@ -388,8 +391,9 @@ async def list_blogs(
     limit: int = Query(50, ge=1, le=500, description="Maximum articles (1-500)"),
 ):
     """
-    Get blog articles from 17 monitored sources.
+    Get blog articles from 62+ monitored sources.
 
+    Categories: us_frontier, us_emerging, china, research, data_vendor.
     Sources include: OpenAI, Anthropic, Google AI, DeepMind, Meta AI,
     Mistral, Scale AI, Qwen, Tencent, Zhipu, and more.
     """

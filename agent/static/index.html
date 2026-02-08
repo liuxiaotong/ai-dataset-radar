@@ -94,14 +94,15 @@
     <div class="flex gap-3 mb-4 flex-wrap items-center">
       <select id="ds-category" onchange="loadDatasets()">
         <option value="">全部类别</option>
-        <option value="sft">SFT</option>
-        <option value="preference">Preference</option>
+        <option value="sft_instruction">SFT / Instruction</option>
+        <option value="reward_model">Reward Model</option>
         <option value="synthetic">Synthetic</option>
-        <option value="agent">Agent</option>
         <option value="multimodal">Multimodal</option>
         <option value="multilingual">Multilingual</option>
+        <option value="rl_environment">RL / Embodied</option>
         <option value="code">Code</option>
         <option value="evaluation">Evaluation</option>
+        <option value="other">Other</option>
       </select>
       <input id="ds-search" type="text" placeholder="搜索数据集..." oninput="filterDatasets()" class="w-56">
       <span id="ds-count" class="text-xs text-slate-500 ml-auto"></span>

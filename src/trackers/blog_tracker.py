@@ -738,6 +738,7 @@ class BlogTracker:
         result = {
             "source": name,
             "url": url,
+            "category": blog_config.get("category", ""),
             "articles": [],
             "total_articles": 0,
             "has_activity": False,
