@@ -5,7 +5,7 @@ with URL-based deduplication.
 """
 
 import time
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from typing import Optional
 from urllib.parse import urlparse, urlunparse, parse_qs, urlencode
 
@@ -108,16 +108,20 @@ class BlogRSSScraper(BaseScraper):
             return []
 
         try:
-            feed = feedparser.parse(url)
+            import requests as _requests
+
+            resp = _requests.get(url, timeout=15)
+            resp.raise_for_status()
+            feed = feedparser.parse(resp.text)
         except Exception as e:
-            logger.info("    RSS parse error for %s: %s", name, e)
+            logger.warning("    RSS fetch/parse error for %s: %s", name, e)
             return []
 
         if feed.bozo and feed.bozo_exception:
             # Feed had parsing issues but may still have entries
             pass
 
-        cutoff = datetime.utcnow() - timedelta(days=days)
+        cutoff = datetime.now(timezone.utc).replace(tzinfo=None) - timedelta(days=days)
         articles = []
 
         for entry in feed.entries[:30]:  # Limit entries per feed

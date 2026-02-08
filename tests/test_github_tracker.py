@@ -1,7 +1,7 @@
 """Tests for GitHub organization tracker."""
 
 import sys
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from unittest.mock import patch, MagicMock
 
@@ -210,7 +210,7 @@ class TestCalculateRelevance:
     def test_recency_boost(self, tracker):
         """Test recent update adds +5."""
         signals = []
-        today = datetime.utcnow().strftime("%Y-%m-%d")
+        today = datetime.now(timezone.utc).replace(tzinfo=None).strftime("%Y-%m-%d")
         repo = {"stars": 0, "updated_at": today}
         relevance = tracker._calculate_relevance(signals, repo)
         assert relevance == "medium"  # 0 + 5 (recency) = 5
@@ -234,7 +234,7 @@ class TestCalculateRelevance:
     def test_combined_scoring(self, tracker):
         """Test combined scoring from signals + stars + recency."""
         signals = ["dataset"]  # 10
-        today = datetime.utcnow().strftime("%Y-%m-%d")
+        today = datetime.now(timezone.utc).replace(tzinfo=None).strftime("%Y-%m-%d")
         repo = {"stars": 1000, "updated_at": today, "name": "real-project"}
         relevance = tracker._calculate_relevance(signals, repo)
         # 10 + 10 (stars) + 5 (recency) = 25 → high
@@ -262,7 +262,7 @@ class TestMakeRequest:
         """Test 403 rate limit returns None."""
         mock_resp = MagicMock()
         mock_resp.status_code = 403
-        mock_resp.headers = {"X-RateLimit-Reset": str(int(datetime.utcnow().timestamp()) + 60)}
+        mock_resp.headers = {"X-RateLimit-Reset": str(int(datetime.now(timezone.utc).replace(tzinfo=None).timestamp()) + 60)}
         tracker.session.get = MagicMock(return_value=mock_resp)
 
         result = tracker._make_request("https://api.github.com/test")
@@ -333,8 +333,8 @@ class TestGetOrgRepos:
 
     def test_filters_old_repos(self, tracker):
         """Test repos older than cutoff are filtered out."""
-        old_date = (datetime.utcnow() - timedelta(days=30)).strftime("%Y-%m-%dT%H:%M:%SZ")
-        recent_date = datetime.utcnow().strftime("%Y-%m-%dT%H:%M:%SZ")
+        old_date = (datetime.now(timezone.utc).replace(tzinfo=None) - timedelta(days=30)).strftime("%Y-%m-%dT%H:%M:%SZ")
+        recent_date = datetime.now(timezone.utc).replace(tzinfo=None).strftime("%Y-%m-%dT%H:%M:%SZ")
 
         tracker._make_request = MagicMock(
             return_value=[
@@ -367,7 +367,7 @@ class TestGetOrgRepos:
 
     def test_repo_info_structure(self, tracker):
         """Test returned repo dict has expected fields."""
-        now = datetime.utcnow().strftime("%Y-%m-%dT%H:%M:%SZ")
+        now = datetime.now(timezone.utc).replace(tzinfo=None).strftime("%Y-%m-%dT%H:%M:%SZ")
         tracker._make_request = MagicMock(
             return_value=[
                 {

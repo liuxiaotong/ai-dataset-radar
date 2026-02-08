@@ -211,8 +211,8 @@ class GitHubScraper(BaseScraper):
                     repos.append(parsed)
             return repos
 
-        except requests.RequestException:
-            logger.info("Error searching GitHub for '{keyword}': {e}")
+        except requests.RequestException as e:
+            logger.warning("Error searching GitHub for '%s': %s", keyword, e)
             return []
 
     def _fetch_trending(self) -> list[dict]:

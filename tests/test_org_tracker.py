@@ -2,7 +2,7 @@
 
 import sys
 import time
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from unittest.mock import patch, MagicMock
 
@@ -381,7 +381,7 @@ class TestFetchSingleOrg:
 
     def test_returns_data_when_recent(self, tracker):
         """Test returns data when org has recent datasets."""
-        recent_date = datetime.utcnow().isoformat() + "Z"
+        recent_date = datetime.now(timezone.utc).replace(tzinfo=None).isoformat() + "Z"
         tracker._fetch_org_datasets = MagicMock(
             return_value=[
                 {"id": "openai/new-dataset", "lastModified": recent_date},
@@ -401,7 +401,7 @@ class TestFetchSingleOrg:
 
     def test_filters_old_datasets(self, tracker):
         """Test old datasets are filtered out."""
-        old_date = (datetime.utcnow() - timedelta(days=30)).isoformat() + "Z"
+        old_date = (datetime.now(timezone.utc).replace(tzinfo=None) - timedelta(days=30)).isoformat() + "Z"
         tracker._fetch_org_datasets = MagicMock(
             return_value=[
                 {"id": "openai/old-dataset", "lastModified": old_date},

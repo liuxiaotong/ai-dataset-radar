@@ -7,6 +7,7 @@ Enhanced v5 scraper with tighter search queries focused on:
 """
 
 import feedparser
+import requests
 import urllib.parse
 from datetime import datetime
 from typing import Optional
@@ -94,9 +95,11 @@ class ArxivScraper(BaseScraper):
         url = f"{self.BASE_URL}?{urllib.parse.urlencode(params)}"
 
         try:
-            feed = feedparser.parse(url)
-        except Exception as e:
-            logger.info("Error fetching arXiv papers: %s", e)
+            resp = requests.get(url, timeout=30)
+            resp.raise_for_status()
+            feed = feedparser.parse(resp.text)
+        except (requests.RequestException, Exception) as e:
+            logger.warning("Error fetching arXiv papers: %s", e)
             return []
 
         if feed.bozo and feed.bozo_exception:
@@ -134,9 +137,11 @@ class ArxivScraper(BaseScraper):
         url = f"{self.BASE_URL}?{urllib.parse.urlencode(params)}"
 
         try:
-            feed = feedparser.parse(url)
-        except Exception as e:
-            logger.info("Error fetching arXiv papers: %s", e)
+            resp = requests.get(url, timeout=30)
+            resp.raise_for_status()
+            feed = feedparser.parse(resp.text)
+        except (requests.RequestException, Exception) as e:
+            logger.warning("Error fetching arXiv papers: %s", e)
             return []
 
         results = []

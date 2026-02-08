@@ -1,7 +1,7 @@
 """Tests for X/Twitter tracker."""
 
 import sys
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from unittest.mock import patch, MagicMock
 
@@ -139,7 +139,7 @@ class TestFetchRSSHubFeed:
     @patch("trackers.x_tracker.feedparser.parse")
     def test_fetch_rsshub_feed_success(self, mock_parse, tracker):
         """Test successful RSSHub feed fetch."""
-        now = datetime.utcnow()
+        now = datetime.now(timezone.utc).replace(tzinfo=None)
         mock_entry = MagicMock()
         mock_entry.published_parsed = now.timetuple()[:6] + (0, 0, 0)
         mock_entry.get = lambda key, default="": {
@@ -184,7 +184,7 @@ class TestFetchRSSHubFeed:
     @patch("trackers.x_tracker.feedparser.parse")
     def test_fetch_rsshub_feed_old_entries_filtered(self, mock_parse, tracker):
         """Test that entries older than cutoff are filtered out."""
-        old_date = datetime.utcnow() - timedelta(days=30)
+        old_date = datetime.now(timezone.utc).replace(tzinfo=None) - timedelta(days=30)
         mock_entry = MagicMock()
         mock_entry.published_parsed = old_date.timetuple()[:6] + (0, 0, 0)
         mock_entry.get = lambda key, default="": {
@@ -217,7 +217,7 @@ class TestFetchRSSHubFeed:
     @patch("trackers.x_tracker.feedparser.parse")
     def test_fetch_rsshub_html_cleaned(self, mock_parse, tracker):
         """Test that HTML tags are cleaned from summary."""
-        now = datetime.utcnow()
+        now = datetime.now(timezone.utc).replace(tzinfo=None)
         mock_entry = MagicMock()
         mock_entry.published_parsed = now.timetuple()[:6] + (0, 0, 0)
         mock_entry.get = lambda key, default="": {

@@ -7,7 +7,7 @@ tracking new repositories and updates.
 import os
 import time
 import requests
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from typing import Optional
 
 from .base import BaseScraper
@@ -118,7 +118,7 @@ class GitHubOrgScraper(BaseScraper):
             logger.info("    Error fetching repos for %s: %s", org, e)
             return []
 
-        cutoff = datetime.utcnow() - timedelta(days=days)
+        cutoff = datetime.now(timezone.utc).replace(tzinfo=None) - timedelta(days=days)
         results = []
 
         for repo in repos_data:

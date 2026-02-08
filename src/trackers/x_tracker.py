@@ -14,7 +14,7 @@ Monitors AI labs, researchers, and data vendors for:
 import re
 import time
 from concurrent.futures import ThreadPoolExecutor
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 
 import feedparser
 import requests
@@ -189,7 +189,7 @@ class XTracker:
         if not feed.entries:
             return []
 
-        cutoff = datetime.utcnow() - timedelta(days=days)
+        cutoff = datetime.now(timezone.utc).replace(tzinfo=None) - timedelta(days=days)
         tweets = []
 
         for entry in feed.entries[:30]:
@@ -256,7 +256,7 @@ class XTracker:
             return []
 
         # Step 2: Get recent tweets
-        cutoff = datetime.utcnow() - timedelta(days=days)
+        cutoff = datetime.now(timezone.utc).replace(tzinfo=None) - timedelta(days=days)
         start_time = cutoff.strftime("%Y-%m-%dT%H:%M:%SZ")
 
         tweets_url = f"https://api.twitter.com/2/users/{user_id}/tweets"
@@ -322,7 +322,7 @@ class XTracker:
             "Authorization": f"Bearer {self.bearer_token}",
         }
 
-        cutoff = datetime.utcnow() - timedelta(days=days)
+        cutoff = datetime.now(timezone.utc).replace(tzinfo=None) - timedelta(days=days)
         start_time = cutoff.strftime("%Y-%m-%dT%H:%M:%SZ")
 
         url = "https://api.twitter.com/2/tweets/search/recent"

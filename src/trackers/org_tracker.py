@@ -261,7 +261,13 @@ class OrgTracker:
 
             done_count = 0
             for future in futures:
-                result = future.result()
+                try:
+                    result = future.result()
+                except Exception as e:
+                    org_name = futures[future]
+                    logger.warning("Error fetching org %s: %s", org_name, e)
+                    done_count += 1
+                    continue
                 done_count += 1
                 if result:
                     category, org_name, org_data = result
@@ -317,7 +323,11 @@ class OrgTracker:
                 for name, info in self.watched_vendors.items()
             ]
             for future in futures:
-                tier, vendor_name, vendor_data = future.result()
+                try:
+                    tier, vendor_name, vendor_data = future.result()
+                except Exception as e:
+                    logger.warning("Error fetching vendor: %s", e)
+                    continue
                 if vendor_data["datasets"]:
                     if tier not in results:
                         results[tier] = {}

@@ -9,10 +9,18 @@ Usage:
 
 Or run directly:
     python -m agent.api
+
+Security:
+    Set RADAR_API_KEY env var to enable API key authentication.
+    Clients must pass X-API-Key header or ?api_key= query parameter.
+    If RADAR_API_KEY is not set, authentication is disabled (open access).
 """
 
 import json
+import os
 import sys
+import time
+from collections import defaultdict
 from pathlib import Path
 from typing import Optional
 
@@ -20,21 +28,80 @@ from typing import Optional
 sys.path.insert(0, str(Path(__file__).parent.parent / "src"))
 
 try:
-    from fastapi import FastAPI, HTTPException, Query
+    from fastapi import FastAPI, HTTPException, Query, Request, Security
     from fastapi.responses import JSONResponse
-    from pydantic import BaseModel
+    from fastapi.security import APIKeyHeader, APIKeyQuery
+    from pydantic import BaseModel, Field
+    from starlette.middleware.base import BaseHTTPMiddleware
 except ImportError:
     print("FastAPI not installed. Run: pip install fastapi uvicorn")
     sys.exit(1)
 
 
+# ============================================================
+# Security: API Key Authentication
+# ============================================================
+
+API_KEY = os.environ.get("RADAR_API_KEY", "")
+
+api_key_header = APIKeyHeader(name="X-API-Key", auto_error=False)
+api_key_query = APIKeyQuery(name="api_key", auto_error=False)
+
+
+async def verify_api_key(
+    header_key: Optional[str] = Security(api_key_header),
+    query_key: Optional[str] = Security(api_key_query),
+) -> Optional[str]:
+    """Verify API key from header or query parameter."""
+    if not API_KEY:
+        return None  # Auth disabled
+    key = header_key or query_key
+    if not key or key != API_KEY:
+        raise HTTPException(status_code=401, detail="Invalid or missing API key")
+    return key
+
+
+# ============================================================
+# Security: Rate Limiting Middleware
+# ============================================================
+
+# Per-IP request tracking: {ip: [(timestamp, ...),]}
+_rate_limit_store: dict[str, list[float]] = defaultdict(list)
+RATE_LIMIT_REQUESTS = int(os.environ.get("RADAR_RATE_LIMIT", "60"))
+RATE_LIMIT_WINDOW = 60  # seconds
+
+
+class RateLimitMiddleware(BaseHTTPMiddleware):
+    async def dispatch(self, request: Request, call_next):
+        client_ip = request.client.host if request.client else "unknown"
+        now = time.time()
+
+        # Clean old entries
+        _rate_limit_store[client_ip] = [
+            t for t in _rate_limit_store[client_ip] if now - t < RATE_LIMIT_WINDOW
+        ]
+
+        if len(_rate_limit_store[client_ip]) >= RATE_LIMIT_REQUESTS:
+            return JSONResponse(
+                status_code=429,
+                content={"detail": "Rate limit exceeded. Try again later."},
+                headers={"Retry-After": str(RATE_LIMIT_WINDOW)},
+            )
+
+        _rate_limit_store[client_ip].append(now)
+        response = await call_next(request)
+        return response
+
+
 app = FastAPI(
     title="AI Dataset Radar API",
     description="REST API for AI agents to access dataset intelligence",
-    version="1.0.0",
+    version="1.1.0",
     docs_url="/docs",
     redoc_url="/redoc",
 )
+
+app.add_middleware(RateLimitMiddleware)
 
 
 # ============================================================
@@ -43,7 +110,7 @@ app = FastAPI(
 
 
 class ScanRequest(BaseModel):
-    days: int = 7
+    days: int = Field(7, ge=1, le=90, description="Look-back period in days (1-90)")
 
 
 class ScanResponse(BaseModel):
@@ -120,7 +187,7 @@ async def root():
     }
 
 
-@app.post("/scan", response_model=ScanResponse)
+@app.post("/scan", response_model=ScanResponse, dependencies=[Security(verify_api_key)])
 async def run_scan(request: ScanRequest):
     """
     Run a full intelligence scan.
@@ -174,8 +241,8 @@ async def list_datasets(
         None,
         description="Filter by category: sft, preference, synthetic, agent, multimodal, code, evaluation",
     ),
-    min_downloads: Optional[int] = Query(None, description="Minimum download count"),
-    limit: int = Query(50, description="Maximum results to return"),
+    min_downloads: Optional[int] = Query(None, ge=0, description="Minimum download count"),
+    limit: int = Query(50, ge=1, le=500, description="Maximum results to return (1-500)"),
 ):
     """
     List datasets from the latest report with optional filters.
@@ -215,7 +282,7 @@ async def list_datasets(
 @app.get("/github")
 async def list_github_repos(
     relevance: str = Query("high", description="Filter: high, low, or all"),
-    limit: int = Query(50, description="Maximum results"),
+    limit: int = Query(50, ge=1, le=500, description="Maximum results (1-500)"),
 ):
     """
     Get GitHub repository activity from watched organizations.
@@ -248,7 +315,7 @@ async def list_github_repos(
 async def list_papers(
     source: str = Query("all", description="Filter: arxiv, huggingface, or all"),
     dataset_only: bool = Query(False, description="Only papers introducing datasets"),
-    limit: int = Query(50, description="Maximum results"),
+    limit: int = Query(50, ge=1, le=500, description="Maximum results (1-500)"),
 ):
     """
     Get recent papers from arXiv and HuggingFace Daily Papers.
@@ -280,7 +347,7 @@ async def list_blogs(
     category: str = Query(
         "all", description="Filter: us_frontier, us_emerging, china, research, data_vendor, all"
     ),
-    limit: int = Query(50, description="Maximum articles"),
+    limit: int = Query(50, ge=1, le=500, description="Maximum articles (1-500)"),
 ):
     """
     Get blog articles from 17 monitored sources.

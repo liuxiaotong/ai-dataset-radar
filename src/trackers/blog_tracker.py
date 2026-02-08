@@ -7,7 +7,7 @@ Monitors company blogs for:
 
 import re
 from concurrent.futures import ThreadPoolExecutor
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from typing import Optional
 from urllib.parse import urljoin, urlparse, urlunparse, parse_qs, urlencode
 
@@ -231,7 +231,7 @@ class BlogTracker:
         if not feed.entries:
             return [], "No entries found in feed"
 
-        cutoff = datetime.utcnow() - timedelta(days=days)
+        cutoff = datetime.now(timezone.utc).replace(tzinfo=None) - timedelta(days=days)
         articles = []
 
         for entry in feed.entries[:20]:  # Limit entries
@@ -350,7 +350,7 @@ class BlogTracker:
 
         soup = BeautifulSoup(resp.text, "html.parser")
         articles = []
-        cutoff = datetime.utcnow() - timedelta(days=days)
+        cutoff = datetime.now(timezone.utc).replace(tzinfo=None) - timedelta(days=days)
 
         # Remove noise sections before selecting articles
         for noise_sel in [
@@ -468,7 +468,7 @@ class BlogTracker:
             )
 
         articles = []
-        cutoff = datetime.utcnow() - timedelta(days=days)
+        cutoff = datetime.now(timezone.utc).replace(tzinfo=None) - timedelta(days=days)
         own_browser = browser is None
 
         try:

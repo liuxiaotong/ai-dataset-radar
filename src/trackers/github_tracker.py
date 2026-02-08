@@ -10,7 +10,7 @@ import os
 import re
 import time
 from concurrent.futures import ThreadPoolExecutor
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from typing import Optional
 
 import requests
@@ -174,7 +174,7 @@ class GitHubTracker:
         if not data:
             return []
 
-        cutoff = datetime.utcnow() - timedelta(days=days)
+        cutoff = datetime.now(timezone.utc).replace(tzinfo=None) - timedelta(days=days)
         recent_repos = []
 
         for repo in data:
@@ -306,7 +306,7 @@ class GitHubTracker:
             updated = repo.get("updated_at", "")
             if updated:
                 try:
-                    days_ago = (datetime.utcnow() - datetime.strptime(updated, "%Y-%m-%d")).days
+                    days_ago = (datetime.now(timezone.utc).replace(tzinfo=None) - datetime.strptime(updated, "%Y-%m-%d")).days
                     if days_ago <= 3:
                         score += 5
                 except ValueError:
