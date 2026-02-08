@@ -145,13 +145,20 @@ def get_reports_dir() -> Path:
     return Path(__file__).parent.parent / "data" / "reports"
 
 
+def _find_all_report_jsons(reports_dir: Path) -> list:
+    """Find all intel_report JSON files (date-subdir + flat layouts)."""
+    files = list(reports_dir.glob("*/intel_report_*.json"))
+    files += list(reports_dir.glob("intel_report_*.json"))
+    return sorted(set(files), reverse=True)
+
+
 def get_latest_report() -> Optional[dict]:
     """Load the latest JSON report."""
     reports_dir = get_reports_dir()
     if not reports_dir.exists():
         return None
 
-    json_files = sorted(reports_dir.glob("intel_report_*.json"), reverse=True)
+    json_files = _find_all_report_jsons(reports_dir)
     if not json_files:
         return None
 
@@ -168,7 +175,7 @@ def get_latest_report_path() -> Optional[Path]:
     if not reports_dir.exists():
         return None
 
-    json_files = sorted(reports_dir.glob("intel_report_*.json"), reverse=True)
+    json_files = _find_all_report_jsons(reports_dir)
     return json_files[0] if json_files else None
 
 

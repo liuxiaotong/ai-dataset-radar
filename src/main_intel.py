@@ -8,8 +8,9 @@ Integrates HuggingFace, GitHub, and Blog monitoring.
 import argparse
 import asyncio
 import json
+import math
 import sys
-from datetime import datetime
+from datetime import datetime, timezone
 from pathlib import Path
 
 import yaml
@@ -697,6 +698,229 @@ async def fetch_dataset_readmes(datasets: list[dict], hf_scraper: HuggingFaceScr
     return datasets
 
 
+# ---------------------------------------------------------------------------
+# DataRecipe integration
+# ---------------------------------------------------------------------------
+
+RECIPE_CATEGORY_PRIORITY = {
+    "rlhf_preference": 10,
+    "reward_model": 9,
+    "sft_instruction": 8,
+    "code": 7,
+    "agent_tool": 7,
+    "synthetic": 6,
+    "rl_environment": 5,
+    "multimodal": 4,
+    "multilingual": 3,
+    "evaluation": 2,
+    "other": 1,
+}
+
+
+def rank_datasets_for_recipe(all_datasets, datasets_by_type, limit=5):
+    """Rank datasets by value for DataRecipe deep analysis.
+
+    Scoring (0-100): downloads (max 30) + signals (max 25)
+    + category priority (max 30) + recency (max 15).
+    """
+    # Build category lookup from datasets_by_type
+    category_map = {}
+    for dtype, ds_list in datasets_by_type.items():
+        cat_key = dtype.value if hasattr(dtype, "value") else str(dtype)
+        for ds in ds_list:
+            ds_id = ds.get("id", "")
+            if ds_id:
+                category_map[ds_id] = cat_key
+
+    scored = []
+    now = datetime.now(timezone.utc)
+
+    for ds in all_datasets:
+        ds_id = ds.get("id", "")
+        if not ds_id:
+            continue
+
+        downloads = ds.get("downloads", 0) or 0
+        signals = ds.get("signals", []) or []
+        category = category_map.get(ds_id, ds.get("category", "other"))
+
+        # 1. Download score (log scale, max 30)
+        download_score = min(30, math.log10(downloads + 1) * 10)
+
+        # 2. Signal score (max 25)
+        meaningful = [s for s in signals if s and s != "-"]
+        signal_score = min(25, len(meaningful) * 8)
+
+        # 3. Category score (max 30)
+        category_score = RECIPE_CATEGORY_PRIORITY.get(category, 1) * 3
+
+        # 4. Recency bonus (max 15)
+        recency_bonus = 0
+        created_at = ds.get("created_at") or ds.get("createdAt") or ""
+        if created_at:
+            try:
+                created_dt = datetime.fromisoformat(
+                    created_at.replace("Z", "+00:00")
+                )
+                age_days = (now - created_dt).days
+                if age_days <= 14:
+                    recency_bonus = 15
+                elif age_days <= 30:
+                    recency_bonus = 8
+            except (ValueError, TypeError):
+                pass
+
+        total = download_score + signal_score + category_score + recency_bonus
+
+        ds_copy = dict(ds)
+        ds_copy["_recipe_score"] = round(total, 1)
+        ds_copy["_recipe_category"] = category
+        scored.append(ds_copy)
+
+    scored.sort(key=lambda x: x["_recipe_score"], reverse=True)
+
+    # Prefer non-"other" datasets when enough are available
+    non_other = [d for d in scored if d["_recipe_category"] != "other"]
+    if len(non_other) >= limit:
+        return non_other[:limit]
+    return scored[:limit]
+
+
+async def run_recipe_analysis(selected_datasets, reports_dir, config):
+    """Run DataRecipe deep analysis on selected datasets.
+
+    Soft dependency — returns gracefully if datarecipe is not installed.
+    Uses asyncio.to_thread() to run sync DeepAnalyzerCore without blocking.
+
+    Args:
+        selected_datasets: Ranked list from rank_datasets_for_recipe().
+        reports_dir: Date-specific reports directory (e.g. data/reports/2026-02-08/).
+        config: Radar config dict.
+    """
+    try:
+        from datarecipe.core.deep_analyzer import DeepAnalyzerCore
+        from datarecipe.integrations.radar import RadarIntegration
+    except ImportError:
+        logger.warning(
+            "DataRecipe not installed. Install with: "
+            "pip install -e /path/to/data-recipe"
+        )
+        return {"error": "datarecipe not installed", "results": []}
+
+    recipe_dir = reports_dir / "recipe"
+    recipe_dir.mkdir(parents=True, exist_ok=True)
+
+    region = config.get("recipe", {}).get("region", "china") if config else "china"
+    analyzer = DeepAnalyzerCore(
+        output_dir=str(recipe_dir),
+        region=region,
+        use_llm=False,
+    )
+
+    results = []
+    summaries = []
+
+    for i, ds in enumerate(selected_datasets, 1):
+        ds_id = ds.get("id", "")
+        score = ds.get("_recipe_score", 0)
+        category = ds.get("_recipe_category", "")
+
+        logger.info(
+            "Recipe [%d/%d]: %s (score=%.1f, category=%s)",
+            i, len(selected_datasets), ds_id, score, category,
+        )
+
+        try:
+            result = await asyncio.to_thread(
+                analyzer.analyze,
+                dataset_id=ds_id,
+                sample_size=300,
+            )
+
+            if result.success:
+                logger.info(
+                    "  OK: type=%s, cost=$%.0f",
+                    result.dataset_type,
+                    result.reproduction_cost.get("total", 0),
+                )
+                summary_path = Path(result.output_dir) / "recipe_summary.json"
+                if summary_path.exists():
+                    summary = RadarIntegration.load_summary(str(summary_path))
+                    summaries.append(summary)
+            else:
+                logger.warning("  FAIL: %s — %s", ds_id, result.error)
+
+            results.append(result.to_dict())
+
+        except Exception as e:
+            logger.warning("  Exception analyzing %s: %s", ds_id, e)
+            results.append({
+                "dataset_id": ds_id,
+                "success": False,
+                "error": str(e),
+            })
+
+    # Aggregate
+    aggregate = {}
+    if summaries:
+        aggregate = RadarIntegration.aggregate_summaries(summaries)
+
+    # Save JSON summary
+    with open(recipe_dir / "aggregate_summary.json", "w", encoding="utf-8") as f:
+        json.dump(
+            {
+                "date": date_str,
+                "datasets_selected": len(selected_datasets),
+                "datasets_analyzed": sum(1 for r in results if r.get("success")),
+                "datasets_failed": sum(1 for r in results if not r.get("success")),
+                "aggregate": aggregate,
+                "results": results,
+            },
+            f, ensure_ascii=False, indent=2, default=str,
+        )
+
+    # Save Markdown summary
+    ok_count = sum(1 for r in results if r.get("success"))
+    fail_count = sum(1 for r in results if not r.get("success"))
+    md = [
+        f"# DataRecipe Analysis — {date_str}\n",
+        f"Selected: {len(selected_datasets)} | Analyzed: {ok_count} | Failed: {fail_count}\n",
+    ]
+    if aggregate:
+        cost = aggregate.get("total_reproduction_cost", {})
+        md.append("## Aggregate\n")
+        md.append(f"- Total reproduction cost: ${cost.get('total', 0):,.0f}")
+        md.append(f"  - Human: ${cost.get('human', 0):,.0f}")
+        md.append(f"  - API: ${cost.get('api', 0):,.0f}")
+        md.append(f"- Avg human %: {aggregate.get('avg_human_percentage', 0):.1f}%")
+        md.append(f"- Types: {aggregate.get('type_distribution', {})}")
+        md.append(f"- Difficulty: {aggregate.get('difficulty_distribution', {})}\n")
+
+    md.append("## Results\n")
+    for r in results:
+        ds_id = r.get("dataset_id", "?")
+        if r.get("success"):
+            md.append(
+                f"- **{ds_id}** — type={r.get('dataset_type', '?')}, "
+                f"samples={r.get('sample_count', 0)}, "
+                f"files={len(r.get('files_generated', []))}"
+            )
+        else:
+            md.append(f"- **{ds_id}** — FAIL: {r.get('error', 'unknown')}")
+
+    with open(recipe_dir / "recipe_analysis_summary.md", "w", encoding="utf-8") as f:
+        f.write("\n".join(md) + "\n")
+
+    logger.info("Recipe summary saved to: %s", recipe_dir)
+
+    return {
+        "output_dir": str(recipe_dir),
+        "datasets_selected": len(selected_datasets),
+        "datasets_analyzed": ok_count,
+        "aggregate": aggregate,
+    }
+
+
 async def async_main(args):
     """Async main logic for the intelligence scan.
 
@@ -932,12 +1156,14 @@ async def async_main(args):
             "papers": papers,
         }
 
-        # Determine output directory and save reports
+        # Determine output directory — reports grouped by date
         output_dir = Path(config.get("report", {}).get("output_dir", "data"))
-        output_dir.mkdir(parents=True, exist_ok=True)
+        date_str = datetime.now().strftime("%Y-%m-%d")
+        reports_dir = output_dir / "reports" / date_str
+        reports_dir.mkdir(parents=True, exist_ok=True)
 
         # Initialize dual formatter
-        formatter = DualOutputFormatter(output_dir=str(output_dir / "reports"))
+        formatter = DualOutputFormatter(output_dir=str(reports_dir))
 
         # Use custom output path if specified
         if args.output:
@@ -1009,10 +1235,7 @@ async def async_main(args):
             )
 
             # Save insights prompt to file for reference
-            date_str = datetime.now().strftime("%Y-%m-%d")
-            insights_prompt_path = (
-                output_dir / "reports" / f"intel_report_{date_str}_insights_prompt.md"
-            )
+            insights_prompt_path = reports_dir / f"intel_report_{date_str}_insights_prompt.md"
             with open(insights_prompt_path, "w", encoding="utf-8") as f:
                 f.write(insights_content)
             logger.info("Insights prompt saved to: %s", insights_prompt_path)
@@ -1022,7 +1245,7 @@ async def async_main(args):
 
             insights_result = generate_insights(insights_content)
 
-            insights_path = output_dir / "reports" / f"intel_report_{date_str}_insights.md"
+            insights_path = reports_dir / f"intel_report_{date_str}_insights.md"
             if insights_result:
                 # API succeeded — save the report
                 with open(insights_path, "w", encoding="utf-8") as f:
@@ -1051,10 +1274,50 @@ async def async_main(args):
                 github_activity=github_activity,
                 papers=papers,
             )
-            anomalies_path = output_dir / "reports" / f"intel_report_{date_str}_anomalies.md"
+            anomalies_path = reports_dir / f"intel_report_{date_str}_anomalies.md"
             with open(anomalies_path, "w", encoding="utf-8") as f:
                 f.write(anomalies_content)
             logger.info("Anomalies report saved to: %s", anomalies_path)
+
+        # 10. DataRecipe deep analysis (if --recipe)
+        if getattr(args, "recipe", False) and all_datasets:
+            logger.info("=" * 60)
+            logger.info("  DataRecipe Deep Analysis")
+            logger.info("=" * 60)
+
+            selected = rank_datasets_for_recipe(
+                all_datasets=all_datasets,
+                datasets_by_type=datasets_by_type,
+                limit=getattr(args, "recipe_limit", 5),
+            )
+
+            if selected:
+                logger.info("Selected %d datasets:", len(selected))
+                for ds in selected:
+                    logger.info(
+                        "  %.1f  %s (%s)",
+                        ds["_recipe_score"], ds["id"], ds["_recipe_category"],
+                    )
+
+                recipe_result = await run_recipe_analysis(
+                    selected_datasets=selected,
+                    reports_dir=reports_dir,
+                    config=config,
+                )
+
+                if recipe_result.get("error"):
+                    logger.warning("Recipe skipped: %s", recipe_result["error"])
+                else:
+                    logger.info(
+                        "Recipe complete: %d/%d analyzed → %s",
+                        recipe_result["datasets_analyzed"],
+                        recipe_result["datasets_selected"],
+                        recipe_result["output_dir"],
+                    )
+            else:
+                logger.info("No datasets eligible for recipe analysis")
+        elif getattr(args, "recipe", False):
+            logger.warning("--recipe requested but no datasets found")
     finally:
         await http_client.close()
 
@@ -1124,6 +1387,17 @@ def main():
         "--no-insights",
         action="store_true",
         help="Skip LLM analysis prompt output (enabled by default)",
+    )
+    parser.add_argument(
+        "--recipe",
+        action="store_true",
+        help="Run DataRecipe deep analysis on top-ranked datasets after scan",
+    )
+    parser.add_argument(
+        "--recipe-limit",
+        type=int,
+        default=5,
+        help="Max datasets to analyze with DataRecipe (default: 5)",
     )
 
     args = parser.parse_args()
@@ -1259,8 +1533,10 @@ async def run_intel_scan(days: int = 7) -> dict:
         )
 
         output_dir = Path(config.get("report", {}).get("output_dir", "data"))
-        output_dir.mkdir(parents=True, exist_ok=True)
-        formatter = DualOutputFormatter(output_dir=str(output_dir / "reports"))
+        date_str = datetime.now().strftime("%Y-%m-%d")
+        reports_dir = output_dir / "reports" / date_str
+        reports_dir.mkdir(parents=True, exist_ok=True)
+        formatter = DualOutputFormatter(output_dir=str(reports_dir))
 
         datasets_json = {}
         for dtype, ds_list in datasets_by_type.items():
@@ -1298,8 +1574,6 @@ async def run_intel_scan(days: int = 7) -> dict:
                 x_activity=x_activity,
             )
 
-            date_str = datetime.now().strftime("%Y-%m-%d")
-            reports_dir = output_dir / "reports"
             insights_prompt_path = reports_dir / f"intel_report_{date_str}_insights_prompt.md"
             with open(insights_prompt_path, "w", encoding="utf-8") as f:
                 f.write(insights_content)

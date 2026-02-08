@@ -225,13 +225,20 @@ async def list_tools():
     ]
 
 
+def _find_all_report_jsons(reports_dir: Path) -> list[Path]:
+    """Find all intel_report JSON files (supports both date-subdir and flat layouts)."""
+    files = list(reports_dir.glob("*/intel_report_*.json"))  # new: reports/2026-02-08/intel_report_2026-02-08.json
+    files += list(reports_dir.glob("intel_report_*.json"))    # legacy: reports/intel_report_2026-02-08.json
+    return sorted(set(files), reverse=True)
+
+
 def get_latest_report() -> dict | None:
     """Get the latest JSON report."""
     reports_dir = PROJECT_ROOT / "data" / "reports"
     if not reports_dir.exists():
         return None
 
-    json_files = sorted(reports_dir.glob("intel_report_*.json"), reverse=True)
+    json_files = _find_all_report_jsons(reports_dir)
     if not json_files:
         return None
 
@@ -245,7 +252,7 @@ def get_latest_report_path() -> Path | None:
     if not reports_dir.exists():
         return None
 
-    json_files = sorted(reports_dir.glob("intel_report_*.json"), reverse=True)
+    json_files = _find_all_report_jsons(reports_dir)
     return json_files[0] if json_files else None
 
 
@@ -255,7 +262,10 @@ def get_report_by_date(date_str: str) -> dict | None:
     if not reports_dir.exists():
         return None
 
-    target = reports_dir / f"intel_report_{date_str}.json"
+    # Try date-subdir layout first, then legacy flat layout
+    target = reports_dir / date_str / f"intel_report_{date_str}.json"
+    if not target.exists():
+        target = reports_dir / f"intel_report_{date_str}.json"
     if target.exists():
         with open(target, "r", encoding="utf-8") as f:
             return json.load(f)
@@ -267,7 +277,7 @@ def get_all_reports_sorted() -> list[Path]:
     reports_dir = PROJECT_ROOT / "data" / "reports"
     if not reports_dir.exists():
         return []
-    return sorted(reports_dir.glob("intel_report_*.json"), reverse=True)
+    return _find_all_report_jsons(reports_dir)
 
 
 def _fmt_growth(value) -> str:

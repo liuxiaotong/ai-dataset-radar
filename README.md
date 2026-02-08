@@ -64,11 +64,12 @@ graph LR
 
 | 产物 | 路径 | 消费者 |
 |------|------|--------|
-| 情报报告 (JSON) | `data/reports/intel_report_*.json` | AI Agent |
-| 情报报告 (MD) | `data/reports/intel_report_*.md` | 人类 |
-| AI 分析报告 | `data/reports/intel_report_*_insights.md` | 决策层（含时间线） |
-| 分析提示词 | `data/reports/intel_report_*_insights_prompt.md` | LLM 输入 |
-| 异常排查报告 | `data/reports/intel_report_*_anomalies.md` | 运维 |
+| 情报报告 (JSON) | `data/reports/YYYY-MM-DD/intel_report_*.json` | AI Agent |
+| 情报报告 (MD) | `data/reports/YYYY-MM-DD/intel_report_*.md` | 人类 |
+| AI 分析报告 | `data/reports/YYYY-MM-DD/intel_report_*_insights.md` | 决策层（含时间线） |
+| 分析提示词 | `data/reports/YYYY-MM-DD/intel_report_*_insights_prompt.md` | LLM 输入 |
+| 异常排查报告 | `data/reports/YYYY-MM-DD/intel_report_*_anomalies.md` | 运维 |
+| Recipe 分析 | `data/reports/YYYY-MM-DD/recipe/` | 复刻评估 |
 | 工具定义 | `agent/tools.json` | Function Calling |
 | 输出规范 | `agent/schema.json` | 数据验证 |
 | 系统提示词 | `agent/prompts.md` | Agent 配置 |
@@ -154,6 +155,12 @@ GITHUB_TOKEN=ghp_...                # 提升 GitHub API 限额（可选）
 # 基础扫描（默认自动生成 AI 分析报告）
 python src/main_intel.py --days 7
 
+# 扫描 + 自动衔接 DataRecipe 深度分析（Top 5 数据集）
+python src/main_intel.py --days 7 --recipe
+
+# 指定分析数量
+python src/main_intel.py --days 7 --recipe --recipe-limit 3
+
 # 跳过 AI 分析
 python src/main_intel.py --days 7 --no-insights
 ```
@@ -166,14 +173,18 @@ python src/main_intel.py --days 7 --no-insights
 | 无 API key（CLI） | 将 insights prompt 直接输出到 stdout，便于 Claude Code 等 AI CLI 接管 |
 | `--no-insights` | 跳过 insights 逻辑 |
 
-**产出文件：**
+**产出文件（按日期子目录组织）：**
 ```
-data/reports/
-├── intel_report_2026-02-07.json                # 结构化数据 (Agent)
-├── intel_report_2026-02-07.md                  # 原始报告 (人类)
-├── intel_report_2026-02-07_insights_prompt.md  # 分析提示 (LLM 输入)
-├── intel_report_2026-02-07_insights.md         # AI 分析报告 (决策层)
-└── intel_report_2026-02-07_anomalies.md        # 异常排查报告 (运维)
+data/reports/2026-02-08/
+├── intel_report_2026-02-08.json                # 结构化数据 (Agent)
+├── intel_report_2026-02-08.md                  # 原始报告 (人类)
+├── intel_report_2026-02-08_insights_prompt.md  # 分析提示 (LLM 输入)
+├── intel_report_2026-02-08_insights.md         # AI 分析报告 (决策层)
+├── intel_report_2026-02-08_anomalies.md        # 异常排查报告 (运维)
+└── recipe/                                     # DataRecipe 深度分析 (--recipe)
+    ├── recipe_analysis_summary.md
+    ├── aggregate_summary.json
+    └── Anthropic__hh-rlhf/                     # 每个数据集 23+ 文件
 ```
 
 ### 启动仪表盘 / Start Dashboard
@@ -615,6 +626,8 @@ graph LR
 - [x] 全链路性能优化 (OrgTracker 组织内并行化, feedparser→线程池, 并发上限调优 blog25/x20/github15, 超时 30→20s/重试 3→2, X HEAD 跳过)
 - [x] dotenv 环境变量支持 (python-dotenv 自动加载 .env, .env.example 模板)
 - [x] Insights API 集成 (run_intel_scan API 路径复用 LLM insights 生成, 返回 insights 文本; CLI 无 API key 时 stdout 输出 prompt)
+- [x] 报告按日期子目录组织 (`data/reports/YYYY-MM-DD/`, 文件名简化, MCP/API 兼容新旧两种布局)
+- [x] DataRecipe 自动衔接 (`--recipe` 智能评分选 Top N 数据集, 自动调用 DeepAnalyzerCore 深度分析, 输出聚合报告)
 
 ---
 
