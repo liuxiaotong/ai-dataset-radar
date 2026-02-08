@@ -13,6 +13,10 @@ from datetime import datetime
 from pathlib import Path
 
 import yaml
+from dotenv import load_dotenv
+
+# Load .env file (for ANTHROPIC_API_KEY etc.)
+load_dotenv()
 
 # Add src to path
 src_dir = Path(__file__).parent
@@ -1025,10 +1029,17 @@ async def async_main(args):
                     f.write(insights_result)
                 logger.info("Insights report saved to: %s", insights_path)
             else:
-                # No API key — prompt saved to file for environment LLM (e.g. Claude Code)
-                logger.info("No ANTHROPIC_API_KEY — insights prompt saved for environment LLM")
-                logger.info("INSIGHTS_PROMPT_PATH=%s", insights_prompt_path)
-                logger.info("INSIGHTS_OUTPUT_PATH=%s", insights_path)
+                # No API key — output prompt for environment LLM (e.g. Claude Code)
+                logger.info("No ANTHROPIC_API_KEY — outputting insights prompt for environment LLM")
+                print("\n" + "=" * 60)
+                print("  INSIGHTS_PROMPT_START")
+                print("=" * 60)
+                print(insights_content)
+                print("=" * 60)
+                print("  INSIGHTS_PROMPT_END")
+                print("=" * 60)
+                print(f"INSIGHTS_OUTPUT_PATH={insights_path}")
+                print()
 
             # Generate anomalies report (separate from insights — for engineering use)
             anomalies_content = format_anomalies_report(
@@ -1273,12 +1284,48 @@ async def run_intel_scan(days: int = 7) -> dict:
 
         formatter.save_reports(markdown_content=report, data=all_data, filename_prefix="intel_report")
 
+        # LLM insights analysis (same as CLI path)
+        insights_text = None
+        try:
+            insights_content = format_insights_prompt(
+                all_datasets=all_datasets,
+                blog_activity=blog_activity,
+                github_activity=github_activity,
+                papers=papers,
+                datasets_by_type=datasets_by_type,
+                lab_activity=lab_activity,
+                vendor_activity=vendor_activity,
+                x_activity=x_activity,
+            )
+
+            date_str = datetime.now().strftime("%Y-%m-%d")
+            reports_dir = output_dir / "reports"
+            insights_prompt_path = reports_dir / f"intel_report_{date_str}_insights_prompt.md"
+            with open(insights_prompt_path, "w", encoding="utf-8") as f:
+                f.write(insights_content)
+            logger.info("Insights prompt saved to: %s", insights_prompt_path)
+
+            from utils.llm_client import generate_insights
+
+            insights_text = generate_insights(insights_content)
+            insights_path = reports_dir / f"intel_report_{date_str}_insights.md"
+            if insights_text:
+                with open(insights_path, "w", encoding="utf-8") as f:
+                    f.write(insights_text)
+                logger.info("Insights report saved to: %s", insights_path)
+            else:
+                logger.info("No ANTHROPIC_API_KEY — insights prompt saved for environment LLM")
+        except Exception as e:
+            logger.warning("Insights generation error: %s", e)
+
         return {
             "datasets": len(all_datasets),
             "papers": len(papers),
             "blogs": sum(len(b.get("articles", [])) for b in blog_activity),
             "github_repos": sum(len(a.get("repos_updated", [])) for a in github_activity),
             "classification": summary,
+            "insights": insights_text,
+            "insights_prompt_path": str(insights_prompt_path) if insights_content else None,
         }
     finally:
         await http_client.close()
