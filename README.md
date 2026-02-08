@@ -18,7 +18,7 @@
 
 **GitHub Topics**: `ai-agent`, `competitive-intelligence`, `dataset-monitoring`, `mcp`, `function-calling`
 
-监控 29 家 AI Labs、19 家数据供应商、38 个博客源、13 个 GitHub 组织、~100 个 X/Twitter 账户的训练数据动态，提供结构化输出供智能体消费。支持 Function Calling、MCP、REST API 多种接入方式。
+监控 50 家 AI Labs、27 家数据供应商、62 个博客源、15 个 GitHub 组织、98 个 X/Twitter 账户的训练数据动态，提供结构化输出供智能体消费。支持 Function Calling、MCP、REST API 多种接入方式。
 
 ## 系统概述 / System Overview
 
@@ -30,7 +30,7 @@
 
 ```mermaid
 graph LR
-    A["数据源监控<br/>48+ orgs, ~100 X accounts"] --> B["语义分类<br/>LLM+规则"]
+    A["数据源监控<br/>77 orgs, 98 X accounts, 62 blogs"] --> B["语义分类<br/>LLM+规则"]
     B --> C["报告生成<br/>JSON+MD"]
     C --> D["Agent / 人类<br/>消费/决策"]
 ```
@@ -79,6 +79,30 @@ pip install -r requirements.txt
 
 # 可选：Agent API 服务
 pip install fastapi uvicorn
+```
+
+### X/Twitter 数据源设置（RSSHub）
+
+X/Twitter 监控依赖 RSSHub 将推文转为 RSS。推荐自托管以获得最佳稳定性：
+
+```bash
+# 1. 启动 RSSHub Docker（需要 Twitter 登录 Cookie）
+#    获取 Cookie：浏览器登录 x.com → F12 → Application → Cookies → auth_token
+docker run -d --name rsshub -p 1200:1200 \
+  -e TWITTER_AUTH_TOKEN=<your_auth_token> \
+  diygod/rsshub
+
+# 2. 验证
+curl "http://localhost:1200/twitter/user/karpathy"
+```
+
+config.yaml 中已预配置本地实例 + 公共实例 fallback：
+```yaml
+x_tracker:
+  backend: auto           # auto | rsshub | api
+  rsshub_urls:            # 按顺序尝试，第一个成功即使用
+    - "http://localhost:1200"       # 自托管（推荐）
+    - "https://rsshub.app"         # 公共实例（可能不稳定）
 ```
 
 ### 配置与调度 / Configuration & Scheduling
@@ -292,11 +316,11 @@ tools = [
 
 | 来源 | 覆盖范围 |
 |------|----------|
-| **HuggingFace** | 36+ AI Labs + 19 数据供应商：OpenAI, DeepMind, Meta, Anthropic, Qwen, DeepSeek, NVIDIA, Cerebras, Arcee AI, Gretel, Scale AI, BAAI 等 |
-| **博客** | 46+ 来源：OpenAI, Anthropic, Google AI, DeepMind, Mistral 等实验室 + Lil'Log, fast.ai, Interconnects, LessWrong, Alignment Forum 等研究者博客 |
-| **GitHub** | 31 组织：openai, anthropics, deepseek-ai, NousResearch, NVIDIA, databricks, argilla-io 等 |
+| **HuggingFace** | 50 AI Labs + 27 数据供应商：OpenAI, DeepMind, Meta, Anthropic, Qwen, DeepSeek, NVIDIA, Cerebras, Arcee AI, Gretel, Scale AI, BAAI 等 |
+| **博客** | 62 来源：OpenAI, Anthropic, Google AI, DeepMind, Mistral 等实验室 + Lil'Log, fast.ai, Interconnects, LessWrong, Alignment Forum 等研究者博客 |
+| **GitHub** | 15 组织：openai, anthropics, deepseek-ai, NousResearch, NVIDIA, databricks, argilla-io 等 |
 | **论文** | arXiv (cs.CL/AI/LG) + HuggingFace Daily Papers |
-| **X/Twitter** | ~100 账户：前沿实验室、开源社区、评估基准、数据供应商、安全/对齐、亚太/欧洲、研究者与影响者 |
+| **X/Twitter** | 98 账户：前沿实验室、开源社区、评估基准、数据供应商、安全/对齐、亚太/欧洲、研究者与影响者（RSSHub 自托管 + 多实例 fallback） |
 
 ### 数据供应商分类
 
@@ -310,7 +334,7 @@ tools = [
 
 ### X/Twitter 监控账户
 
-通过 RSSHub（免费）或 X API v2 监控 ~100 个账户的数据集相关动态：
+通过自托管 RSSHub（推荐）或 X API v2 监控 98 个账户的数据集相关动态。支持多 RSSHub 实例自动 fallback + 连续失败阈值保护：
 
 | 类别 | 账户 | 数量 |
 |------|------|------|
@@ -408,7 +432,7 @@ watched_vendors:
       url: "https://www.anthropic.com/research"
     - name: "海天瑞声 SpeechOcean"
       url: "https://www.haitianruisheng.com/aboutus/news/catid-23.htm"
-    # ... 38 sources total
+    # ... 62 sources total
 
 priority_data_types:
   preference: { keywords: ["rlhf", "dpo"] }
@@ -470,15 +494,17 @@ Radar (情报采集) → DataRecipe (逆向分析) → 复刻生产
 - [x] MCP Server (11 工具: scan/summary/datasets/github/papers/blogs/config/search/diff/trend/history)
 - [x] 插件化采集器 (9 个)
 - [x] 性能优化 (并行采集、缓存、连接池)
-- [x] 测试覆盖 (390+ 用例: MCP 工具 86 + GitHub tracker 40 + Org tracker 27 + X tracker 27 + 既有 210)
+- [x] 测试覆盖 (524 用例: MCP 86 + GitHub 40 + Org 27 + X tracker 45 + API 27 + Notifier 30 + Classifier 34 + 既有 235)
 - [x] 博客抓取多策略降级 (RSS → HTML → Playwright, networkidle → domcontentloaded)
 - [x] 中国数据供应商监控 (海天瑞声、整数智能、数据堂、智源 BAAI)
-- [x] X/Twitter 监控 (~100 账户，12 类别，RSSHub/API 双后端，信号关键词过滤)
+- [x] X/Twitter 监控 (98 账户，12 类别，自托管 RSSHub + 多实例 fallback + 连续失败阈值保护)
 - [x] Insights 分析提示生成 (`--insights` 模式)
 - [x] 异常报告独立输出
-- [x] 全链路指数退避重试 (3次, HF/GitHub/RSSHub 5xx 自动恢复)
+- [x] 全链路指数退避重试 (HF/GitHub/RSSHub 5xx 自动恢复)
 - [x] 数据质量校验 (各源 0 结果自动告警, JSON 输出 data_quality_warnings)
 - [x] 博客噪声过滤 (nav/sidebar/footer 自动排除, 浏览器每 5 页重启)
+- [x] API 安全加固 (Bearer Token 认证 + 速率限制 + 输入校验)
+- [x] datetime 全面修复 (21 处 utcnow() 替换为 timezone-aware)
 - [x] GitHub 加权相关性评分 (keyword×10 + stars/100 + 近 3 天活跃加成 - 噪声惩罚)
 - [x] 研究者博客监控 (Lil'Log, fast.ai, Interconnects, LessWrong, Alignment Forum, The Gradient, Epoch AI)
 - [x] radar_search 全文搜索 (跨 5 类数据源, 支持正则, 按来源过滤)
