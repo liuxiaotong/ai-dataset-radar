@@ -720,8 +720,12 @@ RECIPE_CATEGORY_PRIORITY = {
 def rank_datasets_for_recipe(all_datasets, datasets_by_type, limit=5):
     """Rank datasets by value for DataRecipe deep analysis.
 
-    Scoring (0-100): downloads (max 30) + signals (max 25)
-    + category priority (max 30) + recency (max 15).
+    Scoring (0-100):
+      - Community traction (max 35): downloads (max 25) + likes (max 10)
+      - Category priority (max 20): weighted by training-data relevance
+      - Signals (max 18): meaningful metadata tags
+      - Recency (max 12): gradual decay over 7/14/30 days
+      - Min-downloads gate: <50 downloads → score halved
     """
     # Build category lookup from datasets_by_type
     category_map = {}
@@ -741,20 +745,24 @@ def rank_datasets_for_recipe(all_datasets, datasets_by_type, limit=5):
             continue
 
         downloads = ds.get("downloads", 0) or 0
+        likes = ds.get("likes", 0) or 0
         signals = ds.get("signals", []) or []
         category = category_map.get(ds_id, ds.get("category", "other"))
 
-        # 1. Download score (log scale, max 30)
-        download_score = min(30, math.log10(downloads + 1) * 10)
+        # 1. Download score (log scale, max 25)
+        download_score = min(25, math.log10(downloads + 1) * 8)
 
-        # 2. Signal score (max 25)
+        # 2. Likes score (sqrt scale, max 10) — community endorsement
+        likes_score = min(10, math.sqrt(likes) * 1.5)
+
+        # 3. Signal score (max 18)
         meaningful = [s for s in signals if s and s != "-"]
-        signal_score = min(25, len(meaningful) * 8)
+        signal_score = min(18, len(meaningful) * 6)
 
-        # 3. Category score (max 30)
-        category_score = RECIPE_CATEGORY_PRIORITY.get(category, 1) * 3
+        # 4. Category score (max 20)
+        category_score = RECIPE_CATEGORY_PRIORITY.get(category, 1) * 2
 
-        # 4. Recency bonus (max 15)
+        # 5. Recency bonus (gradual decay, max 12)
         recency_bonus = 0
         created_at = ds.get("created_at") or ds.get("createdAt") or ""
         if created_at:
@@ -763,14 +771,23 @@ def rank_datasets_for_recipe(all_datasets, datasets_by_type, limit=5):
                     created_at.replace("Z", "+00:00")
                 )
                 age_days = (now - created_dt).days
-                if age_days <= 14:
-                    recency_bonus = 15
-                elif age_days <= 30:
+                if age_days <= 7:
+                    recency_bonus = 12
+                elif age_days <= 14:
                     recency_bonus = 8
+                elif age_days <= 30:
+                    recency_bonus = 4
             except (ValueError, TypeError):
                 pass
 
-        total = download_score + signal_score + category_score + recency_bonus
+        total = (
+            download_score + likes_score + signal_score
+            + category_score + recency_bonus
+        )
+
+        # Gate: penalize datasets with very few downloads
+        if downloads < 50:
+            total *= 0.5
 
         ds_copy = dict(ds)
         ds_copy["_recipe_score"] = round(total, 1)
