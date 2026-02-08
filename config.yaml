@@ -1004,12 +1004,18 @@ database:
 
 x_tracker:
   enabled: true
-  # Backend: "rsshub" (free, recommended) or "api" (needs bearer token)
-  backend: rsshub
-  # RSSHub instance URL (public or self-hosted)
-  rsshub_url: "https://rsshub.app"
-  # X API v2 bearer token (only needed if backend is "api")
-  bearer_token: ""
+  # Backend: "auto" (recommended, try RSSHub then API) | "rsshub" | "api"
+  backend: auto
+  # RSSHub instance URLs (tried in order, first success wins)
+  # Public instances may be unreliable — self-host for best results:
+  #   docker run -p 1200:1200 diygod/rsshub
+  rsshub_urls:
+    - "https://rsshub.app"
+    - "https://rsshub.rssforever.com"
+    - "https://rsshub.ktachibana.party"
+  # X API v2 bearer token (fallback when RSSHub fails, or primary when backend=api)
+  # Get one at https://developer.x.com — free tier: 1500 reads/month
+  bearer_token: "${X_BEARER_TOKEN}"
 
   # Monitored accounts - AI labs, researchers, data vendors
   # Total: ~100 accounts across 12 categories

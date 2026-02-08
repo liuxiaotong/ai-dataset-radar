@@ -104,6 +104,7 @@ class XTracker:
     """Track X (Twitter) accounts for AI-related announcements.
 
     Uses RSSHub or X API v2 as backend to fetch tweets.
+    Supports multiple RSSHub instances with automatic fallback.
     """
 
     def __init__(self, config: dict):
@@ -115,11 +116,22 @@ class XTracker:
         self.config = config
         x_config = config.get("x_tracker", {})
 
-        # Backend: "rsshub" or "api"
+        # Backend: "auto" (try RSSHub then API), "rsshub", or "api"
         self.backend = x_config.get("backend", "rsshub")
 
-        # RSSHub settings
-        self.rsshub_base = x_config.get("rsshub_url", "https://rsshub.app").rstrip("/")
+        # RSSHub settings — support both single URL and list of URLs
+        rsshub_urls = x_config.get("rsshub_urls", [])
+        if not rsshub_urls:
+            # Backward compat: single rsshub_url string
+            single_url = x_config.get("rsshub_url", "https://rsshub.app")
+            rsshub_urls = [single_url]
+        self.rsshub_urls = [url.rstrip("/") for url in rsshub_urls]
+
+        # Track which RSSHub instance works (optimization: try last working one first)
+        self._last_working_rsshub = None
+        # Flag: set to True once all RSSHub instances confirmed dead
+        self._rsshub_healthy = True
+        self._rsshub_fail_logged = False
 
         # X API v2 settings
         self.bearer_token = x_config.get("bearer_token", "")
@@ -133,8 +145,8 @@ class XTracker:
         self.session = requests.Session()
         self.session.headers["User-Agent"] = "AI-Dataset-Radar/5.0"
 
-    def _fetch_with_retry(self, fetch_fn, description: str, max_retries: int = 3):
-        """Execute a fetch function with exponential backoff retry.
+    def _fetch_with_retry(self, fetch_fn, description: str, max_retries: int = 2):
+        """Execute a fetch function with retry.
 
         Args:
             fetch_fn: Callable that returns the result.
@@ -150,7 +162,7 @@ class XTracker:
             except Exception as e:
                 if attempt < max_retries - 1:
                     wait = 2 ** (attempt + 1)
-                    logger.warning(
+                    logger.debug(
                         "Retry %d/%d for %s (wait %ds): %s",
                         attempt + 1,
                         max_retries,
@@ -160,11 +172,11 @@ class XTracker:
                     )
                     time.sleep(wait)
                 else:
-                    logger.warning("All %d retries failed for %s: %s", max_retries, description, e)
+                    logger.debug("All %d retries failed for %s: %s", max_retries, description, e)
         return None
 
     def _fetch_rsshub_feed(self, username: str, days: int = 7) -> list[dict]:
-        """Fetch tweets via RSSHub RSS feed.
+        """Fetch tweets via RSSHub RSS feed, trying multiple instances.
 
         Args:
             username: X/Twitter username (without @).
@@ -173,17 +185,45 @@ class XTracker:
         Returns:
             List of tweet dicts.
         """
-        # RSSHub route: /twitter/user/:id
-        # Also supports: /twitter/keyword/:keyword
-        feed_url = f"{self.rsshub_base}/twitter/user/{username}"
+        if not self._rsshub_healthy:
+            return []
 
-        def _do_fetch():
-            resp = self.session.get(feed_url, timeout=15)
-            resp.raise_for_status()
-            return feedparser.parse(resp.text)
+        # Build ordered list of instances to try (last working one first)
+        instances = list(self.rsshub_urls)
+        if self._last_working_rsshub and self._last_working_rsshub in instances:
+            instances.remove(self._last_working_rsshub)
+            instances.insert(0, self._last_working_rsshub)
 
-        feed = self._fetch_with_retry(_do_fetch, f"RSSHub @{username}")
+        feed = None
+        for base_url in instances:
+            feed_url = f"{base_url}/twitter/user/{username}"
+
+            def _do_fetch(url=feed_url):
+                resp = self.session.get(url, timeout=10, allow_redirects=False)
+                # Detect redirect to error pages (e.g. rsshub.app → google.com/404)
+                if resp.status_code in (301, 302, 303, 307, 308):
+                    raise requests.HTTPError(
+                        f"Redirect {resp.status_code} → {resp.headers.get('Location', '?')}"
+                    )
+                resp.raise_for_status()
+                return feedparser.parse(resp.text)
+
+            result = self._fetch_with_retry(_do_fetch, f"RSSHub({base_url}) @{username}", max_retries=1)
+            if result is not None:
+                self._last_working_rsshub = base_url
+                feed = result
+                break
+
         if feed is None:
+            # All instances failed — mark unhealthy and log once
+            self._rsshub_healthy = False
+            if not self._rsshub_fail_logged:
+                logger.warning(
+                    "All RSSHub instances unreachable: %s. "
+                    "X/Twitter tracking via RSSHub disabled for this run.",
+                    ", ".join(self.rsshub_urls),
+                )
+                self._rsshub_fail_logged = True
             return []
 
         if not feed.entries:
@@ -383,10 +423,17 @@ class XTracker:
             Account activity dict.
         """
         username = username.lstrip("@")
+        tweets = []
 
-        if self.backend == "api" and self.bearer_token:
-            tweets = self._fetch_api_user_tweets(username, days)
+        if self.backend == "api":
+            tweets = self._fetch_api_user_tweets(username, days) if self.bearer_token else []
+        elif self.backend == "auto":
+            # Try RSSHub first, fallback to API
+            tweets = self._fetch_rsshub_feed(username, days)
+            if not tweets and not self._rsshub_healthy and self.bearer_token:
+                tweets = self._fetch_api_user_tweets(username, days)
         else:
+            # Default: rsshub only
             tweets = self._fetch_rsshub_feed(username, days)
 
         # Filter to relevant tweets only

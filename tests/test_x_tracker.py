@@ -21,7 +21,7 @@ class TestXTrackerInit:
         """Test initialization with empty config."""
         tracker = XTracker({})
         assert tracker.backend == "rsshub"
-        assert tracker.rsshub_base == "https://rsshub.app"
+        assert tracker.rsshub_urls == ["https://rsshub.app"]
         assert tracker.bearer_token == ""
         assert tracker.accounts == []
         assert tracker.search_keywords == []
@@ -37,8 +37,36 @@ class TestXTrackerInit:
         }
         tracker = XTracker(config)
         assert tracker.backend == "rsshub"
-        assert tracker.rsshub_base == "https://my-rsshub.example.com"
+        assert tracker.rsshub_urls == ["https://my-rsshub.example.com"]
         assert len(tracker.accounts) == 2
+
+    def test_init_rsshub_urls_list(self):
+        """Test initialization with multiple RSSHub URLs."""
+        config = {
+            "x_tracker": {
+                "rsshub_urls": [
+                    "https://rsshub1.example.com",
+                    "https://rsshub2.example.com/",
+                ],
+            }
+        }
+        tracker = XTracker(config)
+        assert tracker.rsshub_urls == [
+            "https://rsshub1.example.com",
+            "https://rsshub2.example.com",
+        ]
+
+    def test_init_auto_backend(self):
+        """Test initialization with auto backend."""
+        config = {
+            "x_tracker": {
+                "backend": "auto",
+                "bearer_token": "test_token",
+            }
+        }
+        tracker = XTracker(config)
+        assert tracker.backend == "auto"
+        assert tracker.bearer_token == "test_token"
 
     def test_init_api_backend(self):
         """Test initialization with API config."""
@@ -55,15 +83,15 @@ class TestXTrackerInit:
         assert tracker.bearer_token == "test_token_123"
         assert tracker.search_keywords == ["dataset release"]
 
-    def test_init_rsshub_url_strips_trailing_slash(self):
-        """Test that trailing slash is stripped from RSSHub URL."""
+    def test_init_backward_compat_single_url(self):
+        """Test that old rsshub_url config still works."""
         config = {
             "x_tracker": {
                 "rsshub_url": "https://rsshub.app///",
             }
         }
         tracker = XTracker(config)
-        assert tracker.rsshub_base == "https://rsshub.app"
+        assert tracker.rsshub_urls == ["https://rsshub.app"]
 
 
 class TestExtractSignals:
@@ -136,6 +164,14 @@ class TestFetchRSSHubFeed:
             }
         )
 
+    def _make_ok_resp(self, text="<rss>mock</rss>"):
+        """Helper: create a mock response that passes redirect check."""
+        resp = MagicMock()
+        resp.text = text
+        resp.status_code = 200
+        resp.raise_for_status = MagicMock()
+        return resp
+
     @patch("trackers.x_tracker.feedparser.parse")
     def test_fetch_rsshub_feed_success(self, mock_parse, tracker):
         """Test successful RSSHub feed fetch."""
@@ -152,10 +188,7 @@ class TestFetchRSSHubFeed:
         mock_feed.entries = [mock_entry]
         mock_parse.return_value = mock_feed
 
-        # Mock the HTTP session to avoid real network requests
-        mock_resp = MagicMock()
-        mock_resp.text = "<rss>mock</rss>"
-        mock_resp.raise_for_status = MagicMock()
+        mock_resp = self._make_ok_resp()
         tracker.session.get = MagicMock(return_value=mock_resp)
 
         tweets = tracker._fetch_rsshub_feed("testuser", days=7)
@@ -173,10 +206,7 @@ class TestFetchRSSHubFeed:
         mock_feed.entries = []
         mock_parse.return_value = mock_feed
 
-        mock_resp = MagicMock()
-        mock_resp.text = "<rss></rss>"
-        mock_resp.raise_for_status = MagicMock()
-        tracker.session.get = MagicMock(return_value=mock_resp)
+        tracker.session.get = MagicMock(return_value=self._make_ok_resp("<rss></rss>"))
 
         tweets = tracker._fetch_rsshub_feed("testuser")
         assert tweets == []
@@ -197,10 +227,7 @@ class TestFetchRSSHubFeed:
         mock_feed.entries = [mock_entry]
         mock_parse.return_value = mock_feed
 
-        mock_resp = MagicMock()
-        mock_resp.text = "<rss>mock</rss>"
-        mock_resp.raise_for_status = MagicMock()
-        tracker.session.get = MagicMock(return_value=mock_resp)
+        tracker.session.get = MagicMock(return_value=self._make_ok_resp())
 
         tweets = tracker._fetch_rsshub_feed("testuser", days=7)
         assert tweets == []
@@ -230,15 +257,23 @@ class TestFetchRSSHubFeed:
         mock_feed.entries = [mock_entry]
         mock_parse.return_value = mock_feed
 
-        mock_resp = MagicMock()
-        mock_resp.text = "<rss>mock</rss>"
-        mock_resp.raise_for_status = MagicMock()
-        tracker.session.get = MagicMock(return_value=mock_resp)
+        tracker.session.get = MagicMock(return_value=self._make_ok_resp())
 
         tweets = tracker._fetch_rsshub_feed("testuser", days=7)
         assert len(tweets) == 1
         assert "<" not in tweets[0]["text"]
         assert ">" not in tweets[0]["text"]
+
+    def test_fetch_rsshub_redirect_detected(self, tracker):
+        """Test that HTTP redirects (like rsshub.app → google.com/404) are rejected."""
+        redirect_resp = MagicMock()
+        redirect_resp.status_code = 302
+        redirect_resp.headers = {"Location": "https://google.com/404"}
+        tracker.session.get = MagicMock(return_value=redirect_resp)
+
+        tweets = tracker._fetch_rsshub_feed("testuser")
+        assert tweets == []
+        assert tracker._rsshub_healthy is False
 
 
 class TestFetchAPIUserTweets:
@@ -545,3 +580,134 @@ class TestSignalKeywords:
         chinese_terms = ["开源", "数据集", "模型"]
         for term in chinese_terms:
             assert term in SIGNAL_KEYWORDS, f"Missing Chinese term: {term}"
+
+
+class TestMultiInstanceFallback:
+    """Tests for multi-RSSHub-instance fallback and auto backend."""
+
+    @patch("trackers.x_tracker.feedparser.parse")
+    def test_rsshub_fallback_to_second_instance(self, mock_parse):
+        """First instance fails (503), second succeeds."""
+        tracker = XTracker({
+            "x_tracker": {
+                "rsshub_urls": [
+                    "https://bad-instance.example.com",
+                    "https://good-instance.example.com",
+                ],
+            }
+        })
+
+        now = datetime.now(timezone.utc).replace(tzinfo=None)
+        mock_entry = MagicMock()
+        mock_entry.published_parsed = now.timetuple()[:6] + (0, 0, 0)
+        mock_entry.get = lambda key, default="": {
+            "title": "New dataset",
+            "summary": "A dataset release",
+            "link": "https://x.com/test/status/1",
+        }.get(key, default)
+        mock_feed = MagicMock()
+        mock_feed.entries = [mock_entry]
+        mock_parse.return_value = mock_feed
+
+        # First call → 503 error, second call → 200 OK
+        fail_resp = MagicMock()
+        fail_resp.status_code = 503
+        fail_resp.raise_for_status = MagicMock(
+            side_effect=requests.exceptions.HTTPError("503")
+        )
+
+        ok_resp = MagicMock()
+        ok_resp.status_code = 200
+        ok_resp.text = "<rss>mock</rss>"
+        ok_resp.raise_for_status = MagicMock()
+
+        tracker.session.get = MagicMock(side_effect=[fail_resp, ok_resp])
+
+        tweets = tracker._fetch_rsshub_feed("testuser", days=7)
+        assert len(tweets) == 1
+        assert tracker._last_working_rsshub == "https://good-instance.example.com"
+
+    def test_rsshub_all_fail_marks_unhealthy(self):
+        """All RSSHub instances fail → _rsshub_healthy becomes False."""
+        tracker = XTracker({
+            "x_tracker": {
+                "rsshub_urls": [
+                    "https://dead1.example.com",
+                    "https://dead2.example.com",
+                ],
+            }
+        })
+        tracker.session.get = MagicMock(
+            side_effect=requests.exceptions.ConnectionError("refused")
+        )
+
+        tweets = tracker._fetch_rsshub_feed("testuser")
+        assert tweets == []
+        assert tracker._rsshub_healthy is False
+
+    def test_rsshub_unhealthy_skips_immediately(self):
+        """Once marked unhealthy, _fetch_rsshub_feed returns [] without HTTP calls."""
+        tracker = XTracker({})
+        tracker._rsshub_healthy = False
+        tracker.session.get = MagicMock()
+
+        tweets = tracker._fetch_rsshub_feed("testuser")
+        assert tweets == []
+        tracker.session.get.assert_not_called()
+
+    @patch.object(XTracker, "_fetch_api_user_tweets")
+    @patch.object(XTracker, "_fetch_rsshub_feed")
+    def test_auto_backend_rsshub_then_api(self, mock_rss, mock_api):
+        """auto mode: RSSHub all fail → fallback to X API."""
+        tracker = XTracker({
+            "x_tracker": {
+                "backend": "auto",
+                "bearer_token": "test_token",
+                "accounts": ["testuser"],
+            }
+        })
+        # RSSHub returns nothing and marks unhealthy
+        mock_rss.return_value = []
+        tracker._rsshub_healthy = False
+
+        mock_api.return_value = [
+            {"text": "New dataset via API", "signals": ["dataset"]},
+        ]
+
+        result = tracker.fetch_account("testuser", days=7)
+        assert result["has_activity"] is True
+        assert len(result["relevant_tweets"]) == 1
+        mock_api.assert_called_once()
+
+    @patch.object(XTracker, "_fetch_rsshub_feed")
+    def test_auto_backend_rsshub_success_no_api(self, mock_rss):
+        """auto mode: RSSHub succeeds → no API call."""
+        tracker = XTracker({
+            "x_tracker": {
+                "backend": "auto",
+                "bearer_token": "test_token",
+            }
+        })
+        mock_rss.return_value = [
+            {"text": "Dataset release", "signals": ["dataset"]},
+        ]
+
+        result = tracker.fetch_account("testuser", days=7)
+        assert result["has_activity"] is True
+        mock_rss.assert_called_once()
+
+    @patch.object(XTracker, "_fetch_rsshub_feed")
+    def test_auto_no_api_token_graceful(self, mock_rss):
+        """auto mode: RSSHub fails + no API token → returns empty gracefully."""
+        tracker = XTracker({
+            "x_tracker": {
+                "backend": "auto",
+                "bearer_token": "",
+            }
+        })
+        mock_rss.return_value = []
+        tracker._rsshub_healthy = False
+
+        result = tracker.fetch_account("testuser")
+        assert result["has_activity"] is False
+        assert result["relevant_tweets"] == []
