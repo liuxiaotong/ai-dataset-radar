@@ -155,8 +155,11 @@ def get_latest_report() -> Optional[dict]:
     if not json_files:
         return None
 
-    with open(json_files[0]) as f:
-        return json.load(f)
+    try:
+        with open(json_files[0], encoding="utf-8") as f:
+            return json.load(f)
+    except (json.JSONDecodeError, OSError):
+        return None
 
 
 def get_latest_report_path() -> Optional[Path]:
@@ -457,7 +460,7 @@ async def get_config():
     try:
         import yaml
 
-        with open(config_path) as f:
+        with open(config_path, encoding="utf-8") as f:
             config = yaml.safe_load(f)
         return _redact_secrets(config)
     except ImportError:
@@ -476,7 +479,7 @@ async def get_schema():
     if not schema_path.exists():
         raise HTTPException(status_code=404, detail="Schema file not found")
 
-    with open(schema_path) as f:
+    with open(schema_path, encoding="utf-8") as f:
         return json.load(f)
 
 
@@ -493,7 +496,7 @@ async def get_tools():
     if not tools_path.exists():
         raise HTTPException(status_code=404, detail="Tools file not found")
 
-    with open(tools_path) as f:
+    with open(tools_path, encoding="utf-8") as f:
         return json.load(f)
 
 

@@ -986,9 +986,9 @@ async def call_tool(name: str, arguments: dict):
         # Add trend line if multiple reports
         if len(reports_to_show) >= 2:
             try:
-                with open(reports_to_show[0], "r") as f:
+                with open(reports_to_show[0], "r", encoding="utf-8") as f:
                     latest = json.load(f)
-                with open(reports_to_show[-1], "r") as f:
+                with open(reports_to_show[-1], "r", encoding="utf-8") as f:
                     oldest = json.load(f)
                 s_new = latest.get("summary", {})
                 s_old = oldest.get("summary", {})

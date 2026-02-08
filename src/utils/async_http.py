@@ -27,12 +27,12 @@ class AsyncRateLimiter:
         self._last_call = 0.0
 
     async def acquire(self):
-        loop = asyncio.get_event_loop()
+        loop = asyncio.get_running_loop()
         now = loop.time()
         elapsed = now - self._last_call
         if elapsed < self._min_interval:
             await asyncio.sleep(self._min_interval - elapsed)
-        self._last_call = asyncio.get_event_loop().time()
+        self._last_call = asyncio.get_running_loop().time()
 
 
 class AsyncHTTPClient:
