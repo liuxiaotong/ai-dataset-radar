@@ -3,15 +3,12 @@
 import sys
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
-from unittest.mock import AsyncMock, MagicMock, patch
-from time import struct_time
-
-import pytest
+from unittest.mock import AsyncMock, MagicMock
 
 # Add src to path
 sys.path.insert(0, str(Path(__file__).parent.parent / "src"))
 
-from trackers.blog_tracker import BlogTracker, SIGNAL_KEYWORDS, map_blog_to_vendor
+from trackers.blog_tracker import BlogTracker, map_blog_to_vendor
 
 
 # ---------------------------------------------------------------------------

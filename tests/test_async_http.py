@@ -6,7 +6,6 @@ and async context manager support.
 """
 
 import asyncio
-import json
 import sys
 from pathlib import Path
 from unittest.mock import AsyncMock, patch
@@ -543,7 +542,7 @@ class TestAsyncHTTPClientSession:
                 m.get(TEST_URL, body=TEST_BODY, status=200)
                 result = await client.get(TEST_URL)
                 assert result == TEST_BODY
-                session = client._session
+                _ = client._session  # verify session exists before exit
         # After exiting the context manager, session should be closed
         assert client._session is None
 
