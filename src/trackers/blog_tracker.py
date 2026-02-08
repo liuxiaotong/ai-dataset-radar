@@ -493,7 +493,7 @@ class BlogTracker:
                     except Exception:
                         page.close()
                         return [], f"Page load timeout: {url}"
-                page.wait_for_timeout(2000)  # Reduced from 3s
+                page.wait_for_timeout(1000)  # Reduced from 2s; JS usually loads within 1s
 
                 # Find all article elements, excluding nav/sidebar/footer noise
                 elements = page.query_selector_all(selector)
