@@ -137,9 +137,9 @@ python src/main_intel.py --days 7 --no-insights
 
 | 环境 | 行为 |
 |------|------|
-| 设置了 `ANTHROPIC_API_KEY` | 自动调用 API 生成 `_insights.md` |
-| 未设置 API Key（如 Claude Code 中）| 打印分析提示到终端，由环境 LLM 处理 |
-| `--no-insights` | 跳过所有 insights 逻辑 |
+| 有 `ANTHROPIC_API_KEY` | 自动调用 API 生成 `_insights.md` |
+| Claude Code 等 AI CLI | 保存 prompt 文件，由环境 LLM 自动接管分析 |
+| `--no-insights` | 跳过 insights 逻辑 |
 
 **产出文件：**
 ```
@@ -294,19 +294,19 @@ tools = [
 }
 ```
 
-| 工具 | 功能 | 新增参数 |
-|------|------|----------|
-| `radar_scan` | 执行完整扫描 | `sources` — 只扫描指定数据源 |
-| `radar_summary` | 获取报告摘要 | |
-| `radar_datasets` | 按类别查询数据集 | `org` — 按组织过滤 |
-| `radar_github` | 查询 GitHub 活动 | `org` — 按组织过滤 |
-| `radar_papers` | 查询论文 | |
-| `radar_blogs` | 查询博客文章 | |
-| `radar_config` | 获取监控配置 | |
-| `radar_search` | **全文搜索** — 跨数据集/GitHub/论文/博客/X 搜索，支持正则 | `query`, `sources`, `limit` |
-| `radar_diff` | **报告对比** — 自动识别两期报告之间的新增/消失项 | `date_a`, `date_b` |
-| `radar_trend` | **趋势分析** — 增长最快/上升中/突破性数据集，支持单数据集历史曲线 | `mode`, `dataset_id`, `days`, `limit` |
-| `radar_history` | **历史时间线** — 跨期报告统计摘要对比表 + 整体变化趋势 | `limit` |
+| 工具 | 功能 | 参数 |
+|------|------|------|
+| `radar_scan` | 执行完整扫描 | `sources` |
+| `radar_summary` | 报告摘要 | |
+| `radar_datasets` | 按类别查询数据集 | `category`, `org` |
+| `radar_github` | GitHub 活动 | `org` |
+| `radar_papers` | 论文列表 | |
+| `radar_blogs` | 博客文章 | |
+| `radar_config` | 监控配置 | |
+| `radar_search` | 全文搜索（跨 5 源，支持正则） | `query`, `sources`, `limit` |
+| `radar_diff` | 报告对比（新增/消失项） | `date_a`, `date_b` |
+| `radar_trend` | 趋势分析（增长/突破） | `mode`, `dataset_id`, `days` |
+| `radar_history` | 历史时间线 | `limit` |
 
 ---
 
@@ -314,13 +314,13 @@ tools = [
 
 ### 监控范围
 
-| 来源 | 覆盖范围 |
-|------|----------|
-| **HuggingFace** | 50 AI Labs + 27 数据供应商：OpenAI, DeepMind, Meta, Anthropic, Qwen, DeepSeek, NVIDIA, Cerebras, Arcee AI, Gretel, Scale AI, BAAI 等 |
-| **博客** | 62 来源：OpenAI, Anthropic, Google AI, DeepMind, Mistral 等实验室 + Lil'Log, fast.ai, Interconnects, LessWrong, Alignment Forum 等研究者博客 |
-| **GitHub** | 15 组织：openai, anthropics, deepseek-ai, NousResearch, NVIDIA, databricks, argilla-io 等 |
-| **论文** | arXiv (cs.CL/AI/LG) + HuggingFace Daily Papers |
-| **X/Twitter** | 98 账户：前沿实验室、开源社区、评估基准、数据供应商、安全/对齐、亚太/欧洲、研究者与影响者（RSSHub 自托管 + 多实例 fallback） |
+| 来源 | 数量 | 覆盖 |
+|------|-----:|------|
+| **HuggingFace** | 77 orgs | 50 Labs + 27 供应商 |
+| **博客** | 62 源 | 实验室 + 研究者 + 独立博客 |
+| **GitHub** | 15 orgs | openai, deepseek-ai, NVIDIA 等 |
+| **论文** | 2 源 | arXiv (cs.CL/AI/LG) + HF Papers |
+| **X/Twitter** | 98 账户 | 9 类别，RSSHub 自托管 + fallback |
 
 ### 数据供应商分类
 
@@ -334,37 +334,38 @@ tools = [
 
 ### X/Twitter 监控账户
 
-通过自托管 RSSHub（推荐）或 X API v2 监控 98 个账户的数据集相关动态。支持多 RSSHub 实例自动 fallback + 连续失败阈值保护：
+通过自托管 RSSHub（推荐）或 X API v2 监控 98 个账户。多 RSSHub 实例自动 fallback + 连续失败阈值保护。
 
-| 类别 | 账户 | 数量 |
-|------|------|------|
-| **前沿实验室** | OpenAI, AnthropicAI, GoogleDeepMind, GoogleAI, MetaAI, AIatMeta, xai, NVIDIAAI | 8 |
-| **新兴/开源实验室** | MistralAI, CohereForAI, AI21Labs, togethercompute, StabilityAI, databricks, NousResearch, UnslothAI, LiquidAI_, cohere, RekaAILabs, upstageai | 12 |
-| **研究/开源** | EleutherAI, huggingface, allen_ai, lmsys_org, EpochAIResearch | 5 |
-| **中国实验室** | Alibaba_Qwen, deepseek_ai, ZhipuAI, Baichuan_Inc, 01AI_Yi, Kimi_Moonshot, MiniMax__AI, intern_lm, StepFun_ai, BAAIBeijing, SenseTime_AI, iflytek1999, Baidu_Inc, ByteDanceOSS | 14 |
-| **亚太实验室** | SakanaAILabs, hardmaru, samsungresearch, NAVER_AI_Lab, kakaocorpglobal, cyberagent_ai | 6 |
-| **欧洲 AI** | laion_ai, Aleph__Alpha, LightOnIO, LG_AI_Research, StanfordHAI | 5 |
-| **数据供应商/平台** | scale_AI, surge_ai, ArgillaIO, SnorkelAI, LabelBox, weights_biases, EvidentlyAI, TolokaMI, ProlificAc | 9 |
-| **基础设施/MLOps** | modal_labs, datologyai, kaggle | 3 |
-| **评估/基准** | lmarena_ai, ArtificialAnlys, livebench_ai, arcprize | 4 |
-| **安全/对齐/政策** | ai_risks, ShayneRedford, sayashk, JaredKaplan | 4 |
-| **研究者/影响者** | karpathy, ylecun, jimfan, natolambert, lvwerra, ClementDelangue, percyliang, Teknium1, maximelabonne, danielhanchen, rasbt, AndrewYNg, mmitchell_ai, _jasonwei, rohanpaul_ai, rm_rafailov, _philschmid, YiTayML, lilianweng, hendrycks, cwolferesearch, _lewtun, Thom_Wolf, drfeifei, osanseviero, markchen90, karlcobbe, aidangomez | 28 |
+| 类别 | 数量 | 代表账户 |
+|------|-----:|----------|
+| 前沿实验室 | 8 | OpenAI, AnthropicAI, GoogleDeepMind, MetaAI, NVIDIAAI |
+| 新兴/开源 | 12 | MistralAI, CohereForAI, StabilityAI, NousResearch |
+| 研究/开源 | 5 | AiEleuther, huggingface, allen_ai, lmsysorg |
+| 中国实验室 | 14 | Alibaba_Qwen, deepseek_ai, BaichuanAI, Kimi_Moonshot |
+| 亚太/欧洲 | 11 | SakanaAILabs, NAVER_AI_Lab, laion_ai, StanfordHAI |
+| 数据供应商 | 9 | scale_AI, HelloSurgeAI, argilla_io, LabelBox |
+| 基准/MLOps | 7 | lmarena_ai, ArtificialAnlys, kaggle, modal_labs |
+| 安全/对齐 | 4 | ai_risks, JaredKaplan |
+| 研究者 | 28 | karpathy, ylecun, jimfan, AndrewYNg, lilianweng |
 
-信号关键词自动过滤：dataset, training data, benchmark, RLHF, synthetic data, fine-tuning 等。
+信号关键词过滤：dataset, training data, benchmark, RLHF, synthetic data, fine-tuning 等。完整列表见 `config.yaml`。
 
 ### 数据集分类体系
 
-| 类别 | 关键词 | 典型数据集 |
-|------|--------|-----------|
-| **sft** | instruction, chat | Alpaca, ShareGPT |
-| **preference** | rlhf, dpo | UltraFeedback, HelpSteer |
-| **reward_model** | reward, rationale | RationaleRM |
-| **synthetic** | synthetic, generated | Magpie, Sera |
-| **agent** | tool, function | SWE-bench, WebArena |
-| **multimodal** | image, video | LLaVA, Action100M |
-| **multilingual** | multilingual, speech | WaxalNLP, EuroLLM |
-| **rl_environment** | reinforcement, simulation | ToucHD, RoboCasa |
-| **code** | code, programming | StarCoder |
+多维评分分类：关键词(+1) + 名称模式(+2) + 字段模式(+2) + 标签(+3)，阈值 ≥ 2 分。
+
+| 类别 | 关键词示例 | 典型数据集 |
+|------|-----------|-----------|
+| **sft** | instruction, chat, dialogue | Alpaca, ShareGPT |
+| **preference** | rlhf, dpo, chosen/rejected | UltraFeedback, HelpSteer |
+| **reward_model** | reward, ppo | RationaleRM |
+| **synthetic** | synthetic, distillation | Magpie, Sera |
+| **agent** | tool use, function calling | SWE-bench, WebArena |
+| **multimodal** | image, video, audio, speech, OCR, document, CLIP | LLaVA, Numb3rs, doc_split |
+| **multilingual** | multilingual, translation | WaxalNLP, EuroLLM |
+| **rl_environment** | robot, embodied, haptic, simulation | RoboCasa, ToucHD, LIBERO |
+| **code** | programming, verification, proof | StarCoder, Verus |
+| **evaluation** | benchmark, safety guard, control task | Nemotron-Safety |
 
 ---
 
@@ -497,9 +498,11 @@ Radar (情报采集) → DataRecipe (逆向分析) → 复刻生产
 - [x] 测试覆盖 (524 用例: MCP 86 + GitHub 40 + Org 27 + X tracker 45 + API 27 + Notifier 30 + Classifier 34 + 既有 235)
 - [x] 博客抓取多策略降级 (RSS → HTML → Playwright, networkidle → domcontentloaded)
 - [x] 中国数据供应商监控 (海天瑞声、整数智能、数据堂、智源 BAAI)
-- [x] X/Twitter 监控 (98 账户，12 类别，自托管 RSSHub + 多实例 fallback + 连续失败阈值保护)
+- [x] X/Twitter 监控 (98 账户，9 类别，自托管 RSSHub + 多实例 fallback + 连续失败阈值保护)
 - [x] Insights 分析提示生成 (`--insights` 模式)
-- [x] 异常报告独立输出
+- [x] 异常报告独立输出 (`_anomalies.md` 与 `_insights.md` 分离，工程信息不进管理层报告)
+- [x] 分类器增强 (覆盖率 37%→84%：新增机器人/具身、文档理解、语音、形式化验证、安全评估等关键词)
+- [x] X 账号自动修正 (5 个改名/格式错误账号修复，URL 日期提取防止旧博客文章泄漏)
 - [x] 全链路指数退避重试 (HF/GitHub/RSSHub 5xx 自动恢复)
 - [x] 数据质量校验 (各源 0 结果自动告警, JSON 输出 data_quality_warnings)
 - [x] 博客噪声过滤 (nav/sidebar/footer 自动排除, 浏览器每 5 页重启)
