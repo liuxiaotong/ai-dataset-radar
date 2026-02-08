@@ -466,9 +466,11 @@ class XTracker:
         results = {
             "accounts": [],
             "search_results": [],
+            "metadata": {},
         }
 
         # Fetch accounts in parallel
+        failed_accounts = []
         if self.accounts:
             with ThreadPoolExecutor(max_workers=2) as executor:
                 futures = {
@@ -480,6 +482,7 @@ class XTracker:
                         if activity["has_activity"]:
                             results["accounts"].append(activity)
                     except Exception as e:
+                        failed_accounts.append(futures[future])
                         logger.warning("Error fetching @%s: %s", futures[future], e)
 
         # Run keyword searches (API only)
@@ -502,5 +505,12 @@ class XTracker:
             self._rsshub_success_count,
             self._rsshub_fail_count,
         )
+
+        results["metadata"] = {
+            "rsshub_success": self._rsshub_success_count,
+            "rsshub_fail": self._rsshub_fail_count,
+            "failed_accounts": failed_accounts,
+            "total_accounts": len(self.accounts),
+        }
 
         return results

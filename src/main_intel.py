@@ -427,12 +427,151 @@ def format_insights_prompt(
 - 有哪些值得警惕的竞争威胁？
 - 建议优先关注的数据类型或技术方向
 
-### 5. 异常与待排查
-- 数据采集中是否有异常（如某数据源返回 0 结果、分类覆盖率过低等）
-- 值得人工复查的条目
-
 请用中文回答。分析应该具体、可执行，避免泛泛而谈。引用具体的数据集名称、组织名称和论文标题。
 """)
+
+    return "\n".join(lines)
+
+
+def format_anomalies_report(
+    anomalies: list[str],
+    all_datasets: list[dict],
+    datasets_by_type: dict,
+    x_activity: dict,
+    blog_activity: list[dict],
+    github_activity: list[dict],
+    papers: list[dict],
+) -> str:
+    """Generate anomalies report for engineering/program optimization.
+
+    This is separate from the insights report (which is for management).
+    The anomalies report contains data quality warnings and actionable
+    items for improving the scanning program.
+
+    Args:
+        anomalies: List of data quality warning strings.
+        all_datasets: All collected datasets.
+        datasets_by_type: Datasets grouped by classification type.
+        x_activity: X/Twitter activity data.
+        blog_activity: Blog activity data.
+        github_activity: GitHub activity data.
+        papers: Filtered papers list.
+
+    Returns:
+        Markdown string with anomalies report.
+    """
+    date_str = datetime.now().strftime("%Y-%m-%d")
+    lines = [
+        f"# 数据采集异常与待排查 — {date_str}",
+        "",
+        "> 本文件用于工程优化，不属于竞争情报分析报告。",
+        "",
+    ]
+
+    # Section 1: Data quality warnings
+    lines.append("## 1. 数据质量告警")
+    lines.append("")
+    if anomalies:
+        for a in anomalies:
+            lines.append(f"- :warning: {a}")
+    else:
+        lines.append("- 无告警，所有数据源正常返回数据")
+    lines.append("")
+
+    # Section 2: Source coverage stats
+    lines.append("## 2. 数据源覆盖统计")
+    lines.append("")
+
+    # Datasets
+    total_ds = len(all_datasets)
+    classified = 0
+    other_count = 0
+    for dtype, ds_list in datasets_by_type.items():
+        key = dtype.value if hasattr(dtype, "value") else str(dtype)
+        if key == "other":
+            other_count = len(ds_list)
+        classified += len(ds_list)
+    non_other = classified - other_count
+    lines.append("| 数据源 | 数量 | 备注 |")
+    lines.append("|--------|------|------|")
+    lines.append(
+        f"| 数据集 | {total_ds} | "
+        f"已分类 {non_other}, 未分类(other) {other_count} |"
+    )
+
+    # X/Twitter
+    x_data = x_activity or {}
+    x_accounts = x_data.get("accounts", [])
+    x_meta = x_data.get("metadata", {})
+    x_active = len(x_accounts)
+    x_tweets = sum(len(a.get("relevant_tweets", [])) for a in x_accounts)
+    rsshub_ok = x_meta.get("rsshub_success", 0)
+    rsshub_fail = x_meta.get("rsshub_fail", 0)
+    rsshub_total = rsshub_ok + rsshub_fail
+    x_note = f"活跃 {x_active}, 推文 {x_tweets}"
+    if rsshub_total > 0:
+        x_note += f", RSSHub {rsshub_ok}/{rsshub_total} ({rsshub_ok*100//rsshub_total}%)"
+    lines.append(f"| X/Twitter | {x_active} 账号 | {x_note} |")
+
+    # GitHub
+    active_github = sum(1 for a in github_activity if a.get("repos_updated"))
+    total_repos = sum(len(a.get("repos_updated", [])) for a in github_activity)
+    lines.append(f"| GitHub | {active_github} 组织 | {total_repos} 个活跃仓库 |")
+
+    # Blogs
+    active_blogs = sum(1 for a in blog_activity if a.get("articles"))
+    total_articles = sum(len(a.get("articles", [])) for a in blog_activity)
+    lines.append(f"| 博客 | {active_blogs} 源 | {total_articles} 篇文章 |")
+
+    # Papers
+    lines.append(f"| 论文 | {len(papers)} 篇 | arXiv + HF Papers |")
+    lines.append("")
+
+    # Section 3: X/Twitter failed accounts
+    failed_accounts = x_meta.get("failed_accounts", [])
+    if failed_accounts:
+        lines.append("## 3. X/Twitter 失败账号")
+        lines.append("")
+        lines.append("以下账号 RSSHub 获取失败，可能已改名、注销或被限制：")
+        lines.append("")
+        for acct in failed_accounts:
+            lines.append(f"- `@{acct}`")
+        lines.append("")
+        lines.append("**建议**：人工核查后从 `config.yaml` 中清理无效账号。")
+        lines.append("")
+
+    # Section 4: Classification coverage
+    if other_count > 0 and total_ds > 0:
+        other_ratio = other_count * 100 // total_ds
+        section_num = "4" if failed_accounts else "3"
+        lines.append(f"## {section_num}. 数据集分类覆盖率")
+        lines.append("")
+        lines.append(
+            f"- 未分类(other)占比: {other_ratio}% ({other_count}/{total_ds})"
+        )
+        lines.append("- **建议**：检查未分类数据集，考虑在 `DataTypeClassifier` 中增加关键词覆盖")
+        lines.append("")
+        # List unclassified datasets
+        other_ds = datasets_by_type.get("other", [])
+        if not other_ds:
+            # Try enum key
+            for dtype, ds_list in datasets_by_type.items():
+                key = dtype.value if hasattr(dtype, "value") else str(dtype)
+                if key == "other":
+                    other_ds = ds_list
+                    break
+        if other_ds:
+            lines.append("未分类数据集：")
+            lines.append("")
+            for ds in other_ds[:20]:
+                name = ds.get("id") or ds.get("name", "unknown")
+                desc = (ds.get("description") or "")[:80]
+                lines.append(f"- `{name}` — {desc}")
+            lines.append("")
+
+    lines.append("---")
+    lines.append(f"*自动生成于 {date_str} | 用于工程优化，非竞争情报报告*")
+    lines.append("")
 
     return "\n".join(lines)
 
@@ -897,6 +1036,21 @@ def main():
             logger.info("No ANTHROPIC_API_KEY — insights prompt saved for environment LLM")
             logger.info("INSIGHTS_PROMPT_PATH=%s", insights_prompt_path)
             logger.info("INSIGHTS_OUTPUT_PATH=%s", insights_path)
+
+        # Generate anomalies report (separate from insights — for engineering use)
+        anomalies_content = format_anomalies_report(
+            anomalies=anomalies,
+            all_datasets=all_datasets,
+            datasets_by_type=datasets_by_type,
+            x_activity=x_activity,
+            blog_activity=blog_activity,
+            github_activity=github_activity,
+            papers=papers,
+        )
+        anomalies_path = output_dir / "reports" / f"intel_report_{date_str}_anomalies.md"
+        with open(anomalies_path, "w", encoding="utf-8") as f:
+            f.write(anomalies_content)
+        logger.info("Anomalies report saved to: %s", anomalies_path)
 
 
 def run_intel_scan(days: int = 7) -> dict:

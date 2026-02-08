@@ -469,9 +469,9 @@ watched_vendors:
       type: "auto"
       rss_url: "https://www.deepmind.com/blog/feed"
     - name: "Meta AI Research"
-      url: "https://research.facebook.com/"
+      url: "https://ai.meta.com/blog/"
       type: "auto"
-      rss_url: "https://research.facebook.com/feed/"
+      rss_url: "https://engineering.fb.com/feed/"
     # --- Chinese AI Labs ---
     - name: "Zhipu AI"
       url: "https://www.zhipuai.cn/news"
@@ -1044,16 +1044,16 @@ x_tracker:
     - RekaAILabs
     - upstageai
     # ── Research / Open Source (5) ──
-    - EleutherAI
+    - AiEleuther
     - huggingface
     - allen_ai
-    - lmsys_org
+    - lmsysorg
     - EpochAIResearch
     # ── China Labs (14) ──
     - Alibaba_Qwen
     - deepseek_ai
     - ZhipuAI
-    - Baichuan_Inc
+    - BaichuanAI
     - 01AI_Yi
     - Kimi_Moonshot
     - MiniMax__AI
@@ -1079,8 +1079,8 @@ x_tracker:
     - StanfordHAI
     # ── Data Vendors & Platforms (9) ──
     - scale_AI
-    - surge_ai
-    - ArgillaIO
+    - HelloSurgeAI
+    - argilla_io
     - SnorkelAI
     - LabelBox
     - weights_biases

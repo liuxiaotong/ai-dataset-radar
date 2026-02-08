@@ -37,7 +37,7 @@ ls -t data/reports/intel_report_*.json | head -1
 2. 检查对应的 `_insights.md` 是否已存在（如果程序通过 API 已生成，则跳过）
 3. 如果 `_insights.md` 不存在：
    - 读取 `_insights_prompt.md` 的全部内容
-   - 作为环境中的 AI，根据 prompt 中的分析要求生成竞争情报分析
+   - 作为环境中的 AI，根据 prompt 中的分析要求生成竞争情报分析（只生成第 1-4 节，不含异常与待排查）
    - 将分析结果写入对应的 `_insights.md` 文件
    - 这就是"环境 LLM 接管"——你（Claude Code）就是环境中的 AI 能力
 
@@ -46,10 +46,19 @@ ls -t data/reports/intel_report_*.json | head -1
 读取 `_insights.md`，向用户展示：
 - 关键发现（Top 3-5 事件）
 - 行动建议
-- 异常项
+
+### 第五步：展示异常报告（工程用）
+
+读取 `_anomalies.md`，简要提示用户：
+- 数据质量告警
+- 需要清理的失败账号或无效数据源
+- 分类覆盖率建议
+
+注意：异常报告是给工程团队优化程序用的，不是竞争情报内容。
 
 ## 注意
 
 - 如果设置了 `ANTHROPIC_API_KEY`，程序会自动通过 API 生成 insights，第三步可跳过
 - 如果没有 API Key，程序只保存 prompt 文件，第三步由你（环境 AI）完成分析
 - 分析报告应保存为 `data/reports/intel_report_{日期}_insights.md`
+- 异常报告由程序自动生成为 `data/reports/intel_report_{日期}_anomalies.md`

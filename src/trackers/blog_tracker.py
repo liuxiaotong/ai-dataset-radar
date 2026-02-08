@@ -405,6 +405,10 @@ class BlogTracker:
                 date_str = date_elem.get("datetime", "") or date_elem.get_text(strip=True)
                 date_str = self._parse_date(date_str)
 
+            # Fallback: try to extract date from URL (e.g. /2023/04/ or /2023-04-06/)
+            if not date_str and link:
+                date_str = self._extract_date_from_url(link)
+
             # Filter by date if we have one
             if date_str:
                 try:
@@ -586,6 +590,10 @@ class BlogTracker:
                         )
                         date_str = self._parse_date(date_str)
 
+                    # Fallback: extract date from URL
+                    if not date_str and link:
+                        date_str = self._extract_date_from_url(link)
+
                     # Extract summary
                     summary = ""
                     for sum_sel in [".blog-desc", "p", ".summary", ".excerpt", "[class*='desc']"]:
@@ -631,8 +639,16 @@ class BlogTracker:
 
                 page.close()
 
-                # Build article list
+                # Build article list (with date filtering)
                 for item in items_data:
+                    # Filter out old articles
+                    if item["date"]:
+                        try:
+                            article_date = datetime.strptime(item["date"], "%Y-%m-%d")
+                            if article_date < cutoff:
+                                continue
+                        except ValueError:
+                            pass
                     article = {
                         "title": item["title"],
                         "url": item["link"] or url,
@@ -696,6 +712,33 @@ class BlogTracker:
         date_match = re.search(r"(\d{4})-(\d{2})-(\d{2})", date_str)
         if date_match:
             return date_match.group(0)
+
+        return ""
+
+    def _extract_date_from_url(self, url: str) -> str:
+        """Try to extract a date from a URL path.
+
+        Matches patterns like /2023/04/06/, /2023/4/, /2023-04-06- etc.
+
+        Args:
+            url: Article URL.
+
+        Returns:
+            Date string in YYYY-MM-DD format, or empty string.
+        """
+        # Match /YYYY/MM/DD/ or /YYYY/MM/ in URL
+        match = re.search(r"/(\d{4})/(\d{1,2})/(\d{1,2})", url)
+        if match:
+            return f"{match.group(1)}-{int(match.group(2)):02d}-{int(match.group(3)):02d}"
+
+        match = re.search(r"/(\d{4})/(\d{1,2})/", url)
+        if match:
+            return f"{match.group(1)}-{int(match.group(2)):02d}-01"
+
+        # Match YYYY-MM-DD in URL
+        match = re.search(r"/(\d{4})-(\d{2})-(\d{2})", url)
+        if match:
+            return f"{match.group(1)}-{match.group(2)}-{match.group(3)}"
 
         return ""
 
