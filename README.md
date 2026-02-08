@@ -8,7 +8,7 @@
 [![CI](https://github.com/liuxiaotong/ai-dataset-radar/actions/workflows/ci.yml/badge.svg)](https://github.com/liuxiaotong/ai-dataset-radar/actions/workflows/ci.yml)
 [![License: MIT](https://img.shields.io/badge/License-MIT-green.svg)](LICENSE)
 [![Python 3.10+](https://img.shields.io/badge/python-3.10+-blue.svg)](https://www.python.org/downloads/)
-[![Tests](https://img.shields.io/badge/tests-706_passed-brightgreen.svg)](#开发路线)
+[![Tests](https://img.shields.io/badge/tests-708_passed-brightgreen.svg)](#开发路线)
 [![Agent Ready](https://img.shields.io/badge/Agent-Ready-orange.svg)](#agent-集成)
 [![MCP](https://img.shields.io/badge/MCP-11_Tools-purple.svg)](#mcp-server)
 
@@ -45,9 +45,9 @@ graph LR
 | **多框架兼容** | HTTP API (LangChain)、MCP (Claude)、原生 SDK |
 | **开箱即用** | 预置 System Prompt、完整类型定义 |
 | **人机兼顾** | 同时输出 Markdown (人类) 与 JSON (智能体) |
-| **高性能异步** | 全链路 aiohttp + asyncio.gather，400+ 请求并发执行 |
+| **高性能异步** | 全链路 aiohttp + asyncio.gather，400+ 请求并发执行 (CLI 与 API 一致) |
 | **时间感知** | 数据集/模型/论文全链路采集并展示发布日期 |
-| **生产就绪** | Docker 部署、CI 流水线、706 测试用例、配置校验 |
+| **生产就绪** | Docker 部署、CI 流水线、708 测试用例、配置校验 |
 | **环境原生 LLM** | `--insights` 模式利用 Claude Code/App 原生能力分析 |
 
 ### 适用场景 / Use Cases
@@ -578,7 +578,7 @@ graph LR
 - [x] 全链路异步 I/O (aiohttp + asyncio.gather 替代 requests + ThreadPoolExecutor，~2x 提速)
 - [x] CI 流水线 (GitHub Actions: ruff lint + pytest, push/PR 触发)
 - [x] Docker 容器化 (Dockerfile + docker-compose: scan 扫描 + api 服务)
-- [x] 测试覆盖 (706 用例: API 65 + async_http 49 + blog_tracker 46 + intel_report 22 + MCP 86 + GitHub 44 + X 45 + Org 30 + 其余 319)
+- [x] 测试覆盖 (708 用例: API 65 + async_http 49 + blog_tracker 48 + intel_report 22 + MCP 86 + GitHub 44 + X 45 + Org 30 + 其余 319)
 - [x] 博客抓取多策略降级 (RSS → HTML → Playwright, networkidle → domcontentloaded)
 - [x] 中国数据供应商监控 (海天瑞声、整数智能、数据堂、智源 BAAI)
 - [x] X/Twitter 监控 (101 账户，9 类别，自托管 RSSHub + 多实例 fallback + 连续失败阈值保护)
@@ -606,7 +606,8 @@ graph LR
 - [x] 博客抓取修复 (移除过度激进的信号关键词过滤，保留所有已监控 AI 实验室的博客文章)
 - [x] MCP/Schema 数据管道修复 (X/Twitter 数据写入 JSON 报告, 博客搜索字段名修正, radar_papers source+dataset_only 过滤, schema.json 全面同步实际结构)
 - [x] 博客分类标注 (config.yaml 62 个博客源添加 category 字段, BlogTracker 透传至 JSON, /blogs API 分类筛选生效)
-- [x] 数据集分类对齐 (Dashboard 下拉菜单 + API 文档 + 实际分类值统一为 sft_instruction/reward_model/synthetic 等)
+- [x] 数据集分类对齐 (Dashboard 下拉菜单 + API 文档 + schema.json 枚举统一为 DataType: rlhf_preference/agent_tool 等 11 类)
+- [x] API 扫描 X/Twitter 补全 (run_intel_scan 添加 XTracker 采集 + x_activity 写入报告，API 扫描与 CLI 数据一致)
 
 ---
 
