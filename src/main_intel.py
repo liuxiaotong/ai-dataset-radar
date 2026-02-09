@@ -9,6 +9,7 @@ import argparse
 import asyncio
 import json
 import math
+import os
 import sys
 from datetime import datetime, timezone
 from pathlib import Path
@@ -954,6 +955,43 @@ async def async_main(args):
     logger.info("  AI Dataset Radar v%s", __version__)
     logger.info("  Competitive Intelligence System")
     logger.info("=" * 60)
+
+    # Preflight checks — warn about missing optional deps
+    _preflight_warnings = []
+
+    config_path = Path(args.config)
+    if not config_path.exists():
+        logger.error("Config file not found: %s", config_path.absolute())
+        logger.error("Run this command from the project root directory:")
+        logger.error("  cd /path/to/ai-dataset-radar && python src/main_intel.py")
+        return
+
+    if not args.no_blogs:
+        try:
+            from playwright.async_api import async_playwright  # noqa: F401
+        except ImportError:
+            _preflight_warnings.append(
+                "Playwright not installed — blog tracking will be limited. "
+                "Fix: pip install playwright && playwright install chromium"
+            )
+
+    if not os.environ.get("GITHUB_TOKEN"):
+        _preflight_warnings.append(
+            "No GITHUB_TOKEN — GitHub API limited to 60 req/hr (may miss data). "
+            "Fix: add GITHUB_TOKEN to .env"
+        )
+
+    if not os.environ.get("ANTHROPIC_API_KEY"):
+        _preflight_warnings.append(
+            "No ANTHROPIC_API_KEY — insights report will not auto-generate. "
+            "The prompt file will be saved for manual analysis"
+        )
+
+    if _preflight_warnings:
+        logger.warning("— Environment checks —")
+        for w in _preflight_warnings:
+            logger.warning("  ⚠ %s", w)
+        logger.warning("—" * 40)
 
     # Progress indicator — total is set after config is loaded
     _step = 0

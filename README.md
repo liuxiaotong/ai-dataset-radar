@@ -87,10 +87,16 @@ git clone https://github.com/liuxiaotong/ai-dataset-radar.git
 cd ai-dataset-radar
 pip install -r requirements.txt
 
+# 安装 Playwright 浏览器（博客抓取需要）
+playwright install chromium
+
 # 配置环境变量
 cp .env.example .env
-# 编辑 .env 填入 ANTHROPIC_API_KEY 等（可选）
+# 编辑 .env 填入你的 Token（详见 .env.example 中的说明）
 ```
+
+> **注意**：扫描命令必须从项目根目录运行（`config.yaml` 所在目录）。
+> 首次运行时程序会自动检测环境，缺少依赖会给出修复建议。
 
 ### Docker 部署
 
@@ -103,13 +109,13 @@ docker compose up api -d
 # API: http://localhost:8080/docs
 ```
 
-环境变量通过 `.env` 文件或 `docker compose` 的 `environment` 传入：
+环境变量通过 `.env` 文件或 `docker compose` 的 `environment` 传入（完整说明见 `.env.example`）：
 
-```bash
-GITHUB_TOKEN=ghp_...
-ANTHROPIC_API_KEY=sk-ant-...
-RADAR_API_KEY=your-secret-key   # API 认证密钥
-```
+| 变量 | 必需 | 作用 |
+|------|------|------|
+| `GITHUB_TOKEN` | 推荐 | GitHub API 速率 60→5000 req/hr |
+| `ANTHROPIC_API_KEY` | 可选 | 自动生成 AI 分析报告 |
+| `RADAR_API_KEY` | 可选 | REST API 认证密钥 |
 
 ### X/Twitter 数据源设置（RSSHub）
 
