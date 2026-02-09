@@ -301,8 +301,8 @@ function renderTopDatasets(datasets) {
   const sorted = [...datasets].sort((a, b) => (b.downloads || 0) - (a.downloads || 0)).slice(0, 10);
   const tbody = document.getElementById('top-datasets');
   tbody.innerHTML = sorted.map(d => `<tr>
-    <td><a href="https://huggingface.co/datasets/${d.id}" target="_blank">${d.id || '-'}</a></td>
-    <td><span class="badge badge-blue">${(d.category || 'other').replace(/_/g, ' ')}</span></td>
+    <td><a href="https://huggingface.co/datasets/${esc(d.id)}" target="_blank">${esc(d.id) || '-'}</a></td>
+    <td><span class="badge badge-blue">${esc((d.category || 'other').replace(/_/g, ' '))}</span></td>
     <td>${fmtNum(d.downloads)}</td>
   </tr>`).join('');
 }
@@ -346,13 +346,13 @@ function renderDatasets() {
   document.getElementById('ds-count').textContent = `共 ${ds.length} 个数据集`;
   const tbody = document.getElementById('ds-tbody');
   tbody.innerHTML = ds.slice(0, 200).map(d => `<tr>
-    <td><a href="https://huggingface.co/datasets/${d.id}" target="_blank">${d.id || '-'}</a></td>
-    <td>${d.author || '-'}</td>
-    <td><span class="badge badge-blue">${(d.category || 'other').replace(/_/g, ' ')}</span></td>
+    <td><a href="https://huggingface.co/datasets/${esc(d.id)}" target="_blank">${esc(d.id) || '-'}</a></td>
+    <td>${esc(d.author) || '-'}</td>
+    <td><span class="badge badge-blue">${esc((d.category || 'other').replace(/_/g, ' '))}</span></td>
     <td>${fmtNum(d.downloads)}</td>
     <td>${fmtNum(d.likes)}</td>
-    <td>${(d.languages || []).join(', ') || '-'}</td>
-    <td class="text-xs">${Array.isArray(d.license) ? d.license[0] : (d.license || '-')}</td>
+    <td>${esc((d.languages || []).join(', ')) || '-'}</td>
+    <td class="text-xs">${esc(Array.isArray(d.license) ? d.license[0] : (d.license || '-'))}</td>
   </tr>`).join('');
 }
 
@@ -390,11 +390,11 @@ function renderGithub() {
     return;
   }
   tbody.innerHTML = repos.slice(0, 200).map(r => `<tr>
-    <td><a href="${r.url || '#'}" target="_blank">${r.full_name || r.name || '-'}</a></td>
+    <td><a href="${esc(r.url) || '#'}" target="_blank">${esc(r.full_name || r.name) || '-'}</a></td>
     <td>${fmtNum(r.stars)}</td>
-    <td>${r.language || '-'}</td>
-    <td class="text-xs">${r.updated_at || '-'}</td>
-    <td>${(r.relevance_signals || r.signals || []).slice(0, 3).map(s => `<span class="badge badge-green">${s}</span>`).join(' ')}</td>
+    <td>${esc(r.language) || '-'}</td>
+    <td class="text-xs">${esc(r.updated_at) || '-'}</td>
+    <td>${(r.relevance_signals || r.signals || []).slice(0, 3).map(s => `<span class="badge badge-green">${esc(s)}</span>`).join(' ')}</td>
   </tr>`).join('');
 }
 
@@ -420,12 +420,12 @@ async function loadPapers() {
     return `<div class="card">
       <div class="flex items-start justify-between gap-4">
         <div>
-          <a href="${p.url || p.pdf_url || '#'}" target="_blank" class="font-medium">${p.title || '-'}</a>
-          <div class="text-xs text-slate-500 mt-1">${authors}${p.authors && p.authors.length > 3 ? ' ...' : ''}</div>
+          <a href="${esc(p.url || p.pdf_url) || '#'}" target="_blank" class="font-medium">${esc(p.title) || '-'}</a>
+          <div class="text-xs text-slate-500 mt-1">${esc(authors)}${p.authors && p.authors.length > 3 ? ' ...' : ''}</div>
         </div>
         <div class="flex items-center gap-2 shrink-0">
           ${srcBadge}
-          <span class="text-xs text-slate-500">${p.created_at || p.published_at || ''}</span>
+          <span class="text-xs text-slate-500">${esc(p.created_at || p.published_at) || ''}</span>
         </div>
       </div>
     </div>`;
@@ -464,17 +464,17 @@ async function loadBlogs() {
     <div class="blog-group">
       <div class="blog-header" onclick="this.nextElementSibling.classList.toggle('open')">
         <div class="flex items-center gap-2">
-          <span class="font-medium text-sm">${src}</span>
-          ${arts[0].category ? `<span class="badge badge-blue">${arts[0].category}</span>` : ''}
+          <span class="font-medium text-sm">${esc(src)}</span>
+          ${arts[0].category ? `<span class="badge badge-blue">${esc(arts[0].category)}</span>` : ''}
           <span class="badge badge-gray">${arts.length} 篇</span>
         </div>
         <svg class="w-4 h-4 text-slate-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/></svg>
       </div>
       <div class="blog-body${idx < 3 ? ' open' : ''}">
         ${arts.map(a => `<div class="py-2 border-t border-border/50">
-          <a href="${a.url || '#'}" target="_blank" class="text-sm">${a.title || '-'}</a>
-          <div class="text-xs text-slate-500 mt-0.5">${a.date || a.published_at || ''}</div>
-          ${a.summary ? `<div class="text-xs text-slate-400 mt-1">${a.summary.slice(0, 150)}</div>` : ''}
+          <a href="${esc(a.url) || '#'}" target="_blank" class="text-sm">${esc(a.title) || '-'}</a>
+          <div class="text-xs text-slate-500 mt-0.5">${esc(a.date || a.published_at) || ''}</div>
+          ${a.summary ? `<div class="text-xs text-slate-400 mt-1">${esc(a.summary.slice(0, 150))}</div>` : ''}
         </div>`).join('')}
       </div>
     </div>
@@ -484,6 +484,13 @@ async function loadBlogs() {
 // ========================================
 // Helpers
 // ========================================
+function esc(s) {
+  if (s == null) return '';
+  const d = document.createElement('div');
+  d.textContent = String(s);
+  return d.innerHTML;
+}
+
 function fmtNum(n) {
   if (n == null) return '-';
   if (n >= 1000000) return (n / 1000000).toFixed(1) + 'M';

@@ -130,7 +130,7 @@ class TestAsyncHTTPClientInit:
         assert client._concurrency_limit == 30
         assert client._per_host_limit == 10
         assert client._timeout is DEFAULT_TIMEOUT
-        assert client._headers == {"User-Agent": "AI-Dataset-Radar/5.0"}
+        assert client._headers == {"User-Agent": "AI-Dataset-Radar/6.0"}
         assert client._session is None
 
     def test_custom_init(self):

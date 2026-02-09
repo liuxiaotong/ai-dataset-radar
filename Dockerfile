@@ -14,14 +14,21 @@ COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt && \
     playwright install chromium
 
+# Run as non-root user for security
+RUN useradd -m -s /bin/bash appuser
+
 COPY src/ src/
 COPY agent/ agent/
-COPY mcp_server/ mcp_server/
 COPY config.yaml .
 COPY pyproject.toml .
 
+RUN mkdir -p data && chown -R appuser:appuser /app
+USER appuser
+
 ENV PYTHONPATH=/app/src
 ENV PYTHONUNBUFFERED=1
+
+EXPOSE 8080
 
 # Default: run scan
 CMD ["python", "src/main_intel.py", "--days", "7"]

@@ -138,7 +138,7 @@ class GitHubTracker:
         params = {"sort": "updated", "direction": "desc", "per_page": 30}
 
         data = await self._make_request(url, params)
-        if not data:
+        if not data or not isinstance(data, list):
             return []
 
         cutoff = datetime.now(timezone.utc).replace(tzinfo=None) - timedelta(days=days)

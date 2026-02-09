@@ -20,19 +20,21 @@ RETRY_STATUS_CODES = {429, 500, 502, 503, 504}
 
 
 class AsyncRateLimiter:
-    """Cooperative rate limiter for asyncio (single-threaded, no lock needed)."""
+    """Cooperative rate limiter for asyncio with lock to prevent race conditions."""
 
     def __init__(self, calls_per_second: float = 10.0):
         self._min_interval = 1.0 / calls_per_second
         self._last_call = 0.0
+        self._lock = asyncio.Lock()
 
     async def acquire(self):
-        loop = asyncio.get_running_loop()
-        now = loop.time()
-        elapsed = now - self._last_call
-        if elapsed < self._min_interval:
-            await asyncio.sleep(self._min_interval - elapsed)
-        self._last_call = asyncio.get_running_loop().time()
+        async with self._lock:
+            loop = asyncio.get_running_loop()
+            now = loop.time()
+            elapsed = now - self._last_call
+            if elapsed < self._min_interval:
+                await asyncio.sleep(self._min_interval - elapsed)
+            self._last_call = asyncio.get_running_loop().time()
 
 
 class AsyncHTTPClient:
@@ -48,7 +50,7 @@ class AsyncHTTPClient:
         self._concurrency_limit = concurrency_limit
         self._per_host_limit = per_host_limit
         self._timeout = timeout or DEFAULT_TIMEOUT
-        self._headers = headers or {"User-Agent": "AI-Dataset-Radar/5.0"}
+        self._headers = headers or {"User-Agent": "AI-Dataset-Radar/6.0"}
         self._session: Optional[aiohttp.ClientSession] = None
 
     async def _get_session(self) -> aiohttp.ClientSession:

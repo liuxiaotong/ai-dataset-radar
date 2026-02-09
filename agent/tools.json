@@ -15,7 +15,7 @@
             "description": "Number of days to scan (default: 7)",
             "default": 7,
             "minimum": 1,
-            "maximum": 30
+            "maximum": 90
           },
           "sources": {
             "type": "array",

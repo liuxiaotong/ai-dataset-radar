@@ -1350,7 +1350,7 @@ async def async_main(args):
             # Try auto-generating insights via LLM API
             from utils.llm_client import generate_insights
 
-            insights_result = generate_insights(insights_content)
+            insights_result = await asyncio.to_thread(generate_insights, insights_content)
 
             insights_path = reports_dir / f"intel_report_{date_str}_insights.md"
             if insights_result:
@@ -1700,6 +1700,8 @@ async def run_intel_scan(days: int = 7) -> dict:
 
         # LLM insights analysis (same as CLI path)
         insights_text = None
+        insights_content = None
+        insights_prompt_path = None
         try:
             insights_content = format_insights_prompt(
                 all_datasets=all_datasets,
@@ -1719,7 +1721,7 @@ async def run_intel_scan(days: int = 7) -> dict:
 
             from utils.llm_client import generate_insights
 
-            insights_text = generate_insights(insights_content)
+            insights_text = await asyncio.to_thread(generate_insights, insights_content)
             insights_path = reports_dir / f"intel_report_{date_str}_insights.md"
             if insights_text:
                 with open(insights_path, "w", encoding="utf-8") as f:

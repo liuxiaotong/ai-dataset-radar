@@ -342,9 +342,9 @@ class TestDatasetsEndpoint:
         assert resp.json()["count"] == 3
 
     def test_datasets_filter_by_category(self, client):
-        """GET /datasets?category=sft filters correctly."""
+        """GET /datasets?category=sft_instruction filters correctly (exact match)."""
         with patch("agent.api.get_latest_report", return_value=SAMPLE_REPORT):
-            resp = client.get("/datasets?category=sft")
+            resp = client.get("/datasets?category=sft_instruction")
         body = resp.json()
         assert body["count"] == 1
         assert body["datasets"][0]["id"] == "openai/alpha-sft-v1"
@@ -699,15 +699,15 @@ class TestApiKeyEnvVar:
 
 class TestEdgeCases:
     def test_datasets_category_case_insensitive(self, client):
-        """Category filter is case-insensitive (SFT matches sft)."""
+        """Category filter is case-insensitive (SFT_INSTRUCTION matches sft_instruction)."""
         with patch("agent.api.get_latest_report", return_value=SAMPLE_REPORT):
-            resp = client.get("/datasets?category=SFT")
+            resp = client.get("/datasets?category=SFT_INSTRUCTION")
         assert resp.json()["count"] == 1
 
     def test_datasets_combined_filters(self, client):
         """Multiple filters are applied together (category + min_downloads)."""
         with patch("agent.api.get_latest_report", return_value=SAMPLE_REPORT):
-            resp = client.get("/datasets?category=sft&min_downloads=10000")
+            resp = client.get("/datasets?category=sft_instruction&min_downloads=10000")
         assert resp.json()["count"] == 0
 
     def test_blogs_source_case_insensitive(self, client):

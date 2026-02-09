@@ -48,7 +48,9 @@ class RadarDatabase:
         """
         self.db_path = db_path
         self._local = threading.local()
-        os.makedirs(os.path.dirname(db_path), exist_ok=True)
+        dirname = os.path.dirname(db_path)
+        if dirname:
+            os.makedirs(dirname, exist_ok=True)
         self._init_tables()
 
     def _get_connection(self) -> sqlite3.Connection:
@@ -310,22 +312,21 @@ class RadarDatabase:
         date: Optional[str] = None,
     ) -> None:
         """Record daily statistics for a dataset."""
-        conn = self._get_connection()
-        cursor = conn.cursor()
         if date is None:
             date = datetime.now().strftime("%Y-%m-%d")
 
-        cursor.execute(
-            """
-            INSERT INTO daily_stats (dataset_id, date, downloads, likes, stars)
-            VALUES (?, ?, ?, ?, ?)
-            ON CONFLICT(dataset_id, date) DO UPDATE SET
-                downloads = excluded.downloads,
-                likes = excluded.likes,
-                stars = excluded.stars
-            """,
-            (dataset_db_id, date, downloads, likes, stars),
-        )
+        with self._transaction() as conn:
+            conn.cursor().execute(
+                """
+                INSERT INTO daily_stats (dataset_id, date, downloads, likes, stars)
+                VALUES (?, ?, ?, ?, ?)
+                ON CONFLICT(dataset_id, date) DO UPDATE SET
+                    downloads = excluded.downloads,
+                    likes = excluded.likes,
+                    stars = excluded.stars
+                """,
+                (dataset_db_id, date, downloads, likes, stars),
+            )
 
     def get_stats_history(
         self,
@@ -361,29 +362,29 @@ class RadarDatabase:
         url: Optional[str] = None,
     ) -> int:
         """Insert or update a model record."""
-        conn = self._get_connection()
-        cursor = conn.cursor()
         now = datetime.now().isoformat()
 
-        cursor.execute(
-            """
-            INSERT INTO models (model_id, name, author, downloads, likes, pipeline_tag, url, first_seen, last_updated)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
-            ON CONFLICT(model_id) DO UPDATE SET
-                name = excluded.name,
-                author = excluded.author,
-                downloads = excluded.downloads,
-                likes = excluded.likes,
-                pipeline_tag = excluded.pipeline_tag,
-                url = excluded.url,
-                last_updated = excluded.last_updated
-            """,
-            (model_id, name, author, downloads, likes, pipeline_tag, url, now, now),
-        )
+        with self._transaction() as conn:
+            cursor = conn.cursor()
+            cursor.execute(
+                """
+                INSERT INTO models (model_id, name, author, downloads, likes, pipeline_tag, url, first_seen, last_updated)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+                ON CONFLICT(model_id) DO UPDATE SET
+                    name = excluded.name,
+                    author = excluded.author,
+                    downloads = excluded.downloads,
+                    likes = excluded.likes,
+                    pipeline_tag = excluded.pipeline_tag,
+                    url = excluded.url,
+                    last_updated = excluded.last_updated
+                """,
+                (model_id, name, author, downloads, likes, pipeline_tag, url, now, now),
+            )
 
-        cursor.execute("SELECT id FROM models WHERE model_id = ?", (model_id,))
-        result = cursor.fetchone()
-        return result["id"]
+            cursor.execute("SELECT id FROM models WHERE model_id = ?", (model_id,))
+            result = cursor.fetchone()
+            return result["id"]
 
     def get_model(self, model_id: str) -> Optional[dict]:
         """Get a model by ID."""
@@ -414,19 +415,18 @@ class RadarDatabase:
         relationship: str = "training",
     ) -> None:
         """Link a model to a dataset."""
-        conn = self._get_connection()
-        cursor = conn.cursor()
         now = datetime.now().isoformat()
 
-        cursor.execute(
-            """
-            INSERT INTO model_datasets (model_id, dataset_id, relationship, discovered_at)
-            VALUES (?, ?, ?, ?)
-            ON CONFLICT(model_id, dataset_id) DO UPDATE SET
-                relationship = excluded.relationship
-            """,
-            (model_db_id, dataset_db_id, relationship, now),
-        )
+        with self._transaction() as conn:
+            conn.cursor().execute(
+                """
+                INSERT INTO model_datasets (model_id, dataset_id, relationship, discovered_at)
+                VALUES (?, ?, ?, ?)
+                ON CONFLICT(model_id, dataset_id) DO UPDATE SET
+                    relationship = excluded.relationship
+                """,
+                (model_db_id, dataset_db_id, relationship, now),
+            )
 
     def get_datasets_for_model(self, model_db_id: int) -> list[dict]:
         """Get all datasets linked to a model."""
@@ -493,21 +493,20 @@ class RadarDatabase:
         date: Optional[str] = None,
     ) -> None:
         """Record calculated trend for a dataset."""
-        conn = self._get_connection()
-        cursor = conn.cursor()
         if date is None:
             date = datetime.now().strftime("%Y-%m-%d")
 
-        cursor.execute(
-            """
-            INSERT INTO trends (dataset_id, date, downloads_7d_growth, downloads_30d_growth)
-            VALUES (?, ?, ?, ?)
-            ON CONFLICT(dataset_id, date) DO UPDATE SET
-                downloads_7d_growth = excluded.downloads_7d_growth,
-                downloads_30d_growth = excluded.downloads_30d_growth
-            """,
-            (dataset_db_id, date, downloads_7d_growth, downloads_30d_growth),
-        )
+        with self._transaction() as conn:
+            conn.cursor().execute(
+                """
+                INSERT INTO trends (dataset_id, date, downloads_7d_growth, downloads_30d_growth)
+                VALUES (?, ?, ?, ?)
+                ON CONFLICT(dataset_id, date) DO UPDATE SET
+                    downloads_7d_growth = excluded.downloads_7d_growth,
+                    downloads_30d_growth = excluded.downloads_30d_growth
+                """,
+                (dataset_db_id, date, downloads_7d_growth, downloads_30d_growth),
+            )
 
     def get_rising_datasets(
         self,
@@ -787,24 +786,23 @@ class RadarDatabase:
         paper_url: Optional[str] = None,
     ) -> None:
         """Record a SOTA model's use of a dataset."""
-        conn = self._get_connection()
-        cursor = conn.cursor()
         now = datetime.now().isoformat()
 
-        cursor.execute(
-            """
-            INSERT INTO sota_model_datasets (
-                model_name, dataset_id, usage_type, area,
-                metric_name, metric_value, paper_url, discovered_at
+        with self._transaction() as conn:
+            conn.cursor().execute(
+                """
+                INSERT INTO sota_model_datasets (
+                    model_name, dataset_id, usage_type, area,
+                    metric_name, metric_value, paper_url, discovered_at
+                )
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+                ON CONFLICT(model_name, dataset_id) DO UPDATE SET
+                    usage_type = excluded.usage_type,
+                    metric_name = excluded.metric_name,
+                    metric_value = excluded.metric_value
+                """,
+                (model_name, dataset_id, usage_type, area, metric_name, metric_value, paper_url, now),
             )
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?)
-            ON CONFLICT(model_name, dataset_id) DO UPDATE SET
-                usage_type = excluded.usage_type,
-                metric_name = excluded.metric_name,
-                metric_value = excluded.metric_value
-            """,
-            (model_name, dataset_id, usage_type, area, metric_name, metric_value, paper_url, now),
-        )
 
     def get_sota_models_for_dataset(self, dataset_id: str) -> list[dict]:
         """Get all SOTA models that use a dataset."""
@@ -849,20 +847,19 @@ class RadarDatabase:
         date: Optional[str] = None,
     ) -> None:
         """Record citation count for a paper."""
-        conn = self._get_connection()
-        cursor = conn.cursor()
         if date is None:
             date = datetime.now().strftime("%Y-%m-%d")
 
-        cursor.execute(
-            """
-            INSERT INTO citation_history (paper_id, date, citation_count)
-            VALUES (?, ?, ?)
-            ON CONFLICT(paper_id, date) DO UPDATE SET
-                citation_count = excluded.citation_count
-            """,
-            (paper_id, date, citation_count),
-        )
+        with self._transaction() as conn:
+            conn.cursor().execute(
+                """
+                INSERT INTO citation_history (paper_id, date, citation_count)
+                VALUES (?, ?, ?)
+                ON CONFLICT(paper_id, date) DO UPDATE SET
+                    citation_count = excluded.citation_count
+                """,
+                (paper_id, date, citation_count),
+            )
 
     def get_citation_history(self, paper_id: str, days: int = 30) -> list[dict]:
         """Get citation history for a paper."""

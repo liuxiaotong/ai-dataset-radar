@@ -82,6 +82,14 @@ class RateLimitMiddleware(BaseHTTPMiddleware):
             t for t in _rate_limit_store[client_ip] if now - t < RATE_LIMIT_WINDOW
         ]
 
+        # Prune empty IP keys to prevent unbounded memory growth
+        if not _rate_limit_store[client_ip]:
+            del _rate_limit_store[client_ip]
+            # Still allow this request through (no history = not rate limited)
+            _rate_limit_store[client_ip].append(now)
+            response = await call_next(request)
+            return response
+
         if len(_rate_limit_store[client_ip]) >= RATE_LIMIT_REQUESTS:
             return JSONResponse(
                 status_code=429,
@@ -256,7 +264,7 @@ async def run_scan(request: ScanRequest):
         )
 
 
-@app.get("/summary")
+@app.get("/summary", dependencies=[Security(verify_api_key)])
 async def get_summary():
     """
     Get summary of the latest intelligence report.
@@ -274,7 +282,7 @@ async def get_summary():
     }
 
 
-@app.get("/datasets")
+@app.get("/datasets", dependencies=[Security(verify_api_key)])
 async def list_datasets(
     category: Optional[str] = Query(
         None,
@@ -308,9 +316,9 @@ async def list_datasets(
 
     # Apply filters
     if category:
-        datasets = [d for d in datasets if category.lower() in d.get("category", "").lower()]
+        datasets = [d for d in datasets if d.get("category", "").lower() == category.lower()]
 
-    if min_downloads:
+    if min_downloads is not None:
         datasets = [d for d in datasets if d.get("downloads", 0) >= min_downloads]
 
     # Sort by downloads
@@ -323,7 +331,7 @@ async def list_datasets(
     }
 
 
-@app.get("/github")
+@app.get("/github", dependencies=[Security(verify_api_key)])
 async def list_github_repos(
     relevance: str = Query("high", description="Filter: high, low, or all"),
     limit: int = Query(50, ge=1, le=500, description="Maximum results (1-500)"),
@@ -346,9 +354,10 @@ async def list_github_repos(
     for org_data in github_activity:
         org_name = org_data.get("org", "")
         for repo in org_data.get("repos_updated", []):
-            if "org" not in repo:
-                repo["org"] = org_name
-            repos.append(repo)
+            repo_copy = dict(repo)
+            if "org" not in repo_copy:
+                repo_copy["org"] = org_name
+            repos.append(repo_copy)
 
     if relevance != "all":
         repos = [r for r in repos if r.get("relevance") == relevance]
@@ -364,7 +373,7 @@ async def list_github_repos(
     }
 
 
-@app.get("/papers")
+@app.get("/papers", dependencies=[Security(verify_api_key)])
 async def list_papers(
     source: str = Query("all", description="Filter: arxiv, huggingface, or all"),
     dataset_only: bool = Query(False, description="Only papers introducing datasets"),
@@ -394,7 +403,7 @@ async def list_papers(
     }
 
 
-@app.get("/blogs")
+@app.get("/blogs", dependencies=[Security(verify_api_key)])
 async def list_blogs(
     source: Optional[str] = Query(None, description="Filter by blog name"),
     category: str = Query(
@@ -444,7 +453,7 @@ def _redact_secrets(obj, sensitive_keys=("token", "api_key", "secret", "password
     """Recursively redact sensitive values from config."""
     if isinstance(obj, dict):
         return {
-            k: ("***" if any(s in k.lower() for s in sensitive_keys) and v else _redact_secrets(v, sensitive_keys))
+            k: ("***" if any(s in k.lower() for s in sensitive_keys) else _redact_secrets(v, sensitive_keys))
             for k, v in obj.items()
         }
     if isinstance(obj, list):
@@ -452,7 +461,7 @@ def _redact_secrets(obj, sensitive_keys=("token", "api_key", "secret", "password
     return obj
 
 
-@app.get("/config")
+@app.get("/config", dependencies=[Security(verify_api_key)])
 async def get_config():
     """
     Get current monitoring configuration (sensitive values redacted).
@@ -474,7 +483,7 @@ async def get_config():
         raise HTTPException(status_code=500, detail="YAML parser not available")
 
 
-@app.get("/schema")
+@app.get("/schema", dependencies=[Security(verify_api_key)])
 async def get_schema():
     """
     Get JSON schema for the report format.
@@ -490,7 +499,7 @@ async def get_schema():
         return json.load(f)
 
 
-@app.get("/tools")
+@app.get("/tools", dependencies=[Security(verify_api_key)])
 async def get_tools():
     """
     Get tool definitions for function calling.
