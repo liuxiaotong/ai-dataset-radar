@@ -33,35 +33,29 @@
 ## 架构
 
 ```mermaid
-flowchart LR
-    subgraph Sources["数据源"]
-        HF["🤗 HuggingFace<br/>86 orgs"]
-        GH["🐙 GitHub<br/>50 orgs"]
-        BL["📰 博客<br/>71 源"]
-        PA["📄 论文<br/>arXiv + HF"]
-        XR["🐦 X/Twitter<br/>125 账户"]
-        RD["💬 Reddit<br/>5 社区"]
+flowchart TD
+    subgraph S[" 6 数据源"]
+        direction LR
+        S1["HuggingFace 86 orgs"] ~~~ S2["GitHub 50 orgs"] ~~~ S3["博客 71 源"]
+        S4["论文 arXiv+HF"] ~~~ S5["X 125 账户"] ~~~ S6["Reddit 5 社区"]
     end
 
-    subgraph Process["异步处理"]
-        TR["⚡ Trackers<br/>aiohttp 并发采集"]
-        AN["🧠 Analyzers<br/>分类 · 趋势 · 竞品矩阵<br/>谱系 · 组织图谱"]
+    S --> T["Trackers — aiohttp 异步并发采集"]
+    T --> A["Analyzers — 分类 · 趋势 · 竞品矩阵 · 谱系 · 组织图谱"]
+
+    subgraph O[" 输出"]
+        direction LR
+        O1["JSON 结构化"] ~~~ O2["Markdown 报告"] ~~~ O3["AI Insights"]
     end
 
-    subgraph Output["输出"]
-        JS["📊 JSON<br/>结构化数据"]
-        MD["📝 Markdown<br/>可读报告"]
-        AI["🤖 AI Insights<br/>LLM 分析"]
+    A --> O
+
+    subgraph I[" Agent 接口"]
+        direction LR
+        I1["REST API 18 端点"] ~~~ I2["MCP 16 工具"] ~~~ I3["Skills 7 命令"] ~~~ I4["Dashboard 11 Tab"]
     end
 
-    subgraph Agent["Agent 接口"]
-        API["🌐 REST API<br/>18 端点"]
-        MCP["🔌 MCP Server<br/>16 工具"]
-        SK["⚡ Skills<br/>7 命令"]
-        DB["📈 Dashboard<br/>11 Tab"]
-    end
-
-    Sources --> TR --> AN --> Output --> Agent
+    O --> I
 ```
 
 ---
