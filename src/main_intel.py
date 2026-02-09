@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""AI Dataset Radar v5 - Competitive Intelligence System.
+"""AI Dataset Radar - Competitive Intelligence System.
 
 Main entry point for the competitive intelligence workflow.
 Integrates HuggingFace, GitHub, and Blog monitoring.
@@ -42,6 +42,7 @@ from scrapers.huggingface import HuggingFaceScraper
 from output_formatter import DualOutputFormatter
 from db import RadarDatabase
 from analyzers.trend import TrendAnalyzer
+from _version import __version__
 
 
 def load_config(config_path: str = "config.yaml") -> dict:
@@ -950,9 +951,18 @@ async def async_main(args):
 
     # Load config
     logger.info("=" * 60)
-    logger.info("  AI Dataset Radar v5")
+    logger.info("  AI Dataset Radar v%s", __version__)
     logger.info("  Competitive Intelligence System")
     logger.info("=" * 60)
+
+    # Progress indicator — total is set after config is loaded
+    _step = 0
+    _total = 0
+
+    def _progress(msg: str) -> str:
+        nonlocal _step
+        _step += 1
+        return "[%d/%d] %s" % (_step, _total, msg)
 
     config = load_config(args.config)
     validate_config(config)
@@ -997,38 +1007,59 @@ async def async_main(args):
                     http_client=http_client,
                 )
 
+        # Calculate total progress steps
+        _n = 0
+        if not args.no_labs:
+            _n += 1
+        if not args.no_vendors:
+            _n += 1
+        if not args.no_github:
+            _n += 1
+        if not args.no_blogs:
+            _n += 1
+        if x_tracker:
+            _n += 1
+        if arxiv_scraper or hf_papers_scraper:
+            _n += 1
+        _total = _n + 3  # + classify + report + finalize
+
         # Build async tasks
         tasks = {}
         if not args.no_labs:
-            logger.info("Tracking AI labs on HuggingFace...")
+            logger.info(_progress("HuggingFace Labs 追踪..."))
             tasks["labs"] = org_tracker.fetch_lab_activity(days=args.days)
 
         if not args.no_vendors:
-            logger.info("Tracking data vendors on HuggingFace...")
+            logger.info(_progress("HuggingFace Vendors 追踪..."))
             tasks["vendors"] = org_tracker.fetch_vendor_activity(days=args.days)
 
         if not args.no_github:
-            logger.info("Tracking GitHub organizations...")
+            logger.info(_progress("GitHub 组织扫描..."))
             tasks["github"] = github_tracker.fetch_all_orgs(days=args.days)
 
         if not args.no_blogs:
-            logger.info("Tracking company blogs...")
+            logger.info(_progress("博客源抓取..."))
             tasks["blogs"] = blog_tracker.fetch_all_blogs(days=args.days)
 
         if x_tracker:
-            logger.info("Tracking X/Twitter accounts...")
+            logger.info(_progress("X/Twitter 账号抓取..."))
             tasks["x"] = x_tracker.fetch_all(days=args.days)
 
         if arxiv_scraper:
-            logger.info("Fetching from arXiv...")
+            if not hf_papers_scraper:
+                logger.info(_progress("论文抓取 (arXiv)..."))
+            else:
+                logger.info(_progress("论文抓取 (arXiv + HF Papers)..."))
             tasks["arxiv"] = arxiv_scraper.fetch()
 
         if hf_papers_scraper:
-            logger.info("Fetching from HuggingFace Papers...")
+            if not arxiv_scraper:
+                logger.info(_progress("论文抓取 (HF Papers)..."))
             tasks["hf_papers"] = hf_papers_scraper.fetch()
 
         # Run all tasks concurrently
         if tasks:
+            logger.info("  ↳ 等待数据采集完成...")
             keys = list(tasks.keys())
             results = await asyncio.gather(*tasks.values(), return_exceptions=True)
 
@@ -1045,14 +1076,14 @@ async def async_main(args):
                         active_count = sum(1 for a in github_activity if a.get("repos_updated"))
                         repo_count = sum(len(a.get("repos_updated", [])) for a in github_activity)
                         logger.info(
-                            "Found %d active orgs with %d updated repos", active_count, repo_count
+                            "  ✓ GitHub: %d 组织, %d 仓库", active_count, repo_count
                         )
                     elif key == "blogs":
                         blog_activity = result
                         active_count = sum(1 for a in blog_activity if a.get("articles"))
                         article_count = sum(len(a.get("articles", [])) for a in blog_activity)
                         logger.info(
-                            "Found %d active blogs with %d relevant articles",
+                            "  ✓ 博客: %d 源, %d 篇",
                             active_count,
                             article_count,
                         )
@@ -1063,21 +1094,20 @@ async def async_main(args):
                             len(a.get("relevant_tweets", [])) for a in result.get("accounts", [])
                         )
                         logger.info(
-                            "Found %d active X accounts with %d relevant tweets",
+                            "  ✓ X: %d 账号, %d 推文",
                             x_acct_count,
                             x_tweets,
                         )
                     elif key == "arxiv":
-                        logger.info("Found %d arXiv papers", len(result))
                         papers.extend(paper_filter.filter_papers(result))
-                        logger.info("Relevant arXiv: %d", len(papers))
                     elif key == "hf_papers":
-                        logger.info("Found %d HF papers", len(result))
                         filtered = paper_filter.filter_papers(result)
                         papers.extend(filtered)
-                        logger.info("Relevant HF papers: %d", len(filtered))
                 except Exception as e:
-                    logger.warning("Error fetching %s: %s", key, e)
+                    logger.warning("  ✗ %s: %s", key, e)
+
+            if papers:
+                logger.info("  ✓ 论文: %d 篇", len(papers))
 
         # 4. Collect all datasets for classification
         all_datasets = []
@@ -1092,14 +1122,14 @@ async def async_main(args):
             for vendor_data in tier.values():
                 all_datasets.extend(vendor_data.get("datasets", []))
 
-        logger.info("Collected %d datasets from tracked organizations", len(all_datasets))
+        logger.info("  ✓ 数据集: %d 个", len(all_datasets))
 
         # 5. Fetch dataset READMEs for better classification
         if not args.no_readme and all_datasets:
             all_datasets = await fetch_dataset_readmes(all_datasets, hf_scraper)
 
         # 6. Classify datasets
-        logger.info("Classifying datasets by training type...")
+        logger.info(_progress("数据集分类..."))
         datasets_by_type = data_classifier.group_by_type(all_datasets)
 
         summary = data_classifier.summarize(all_datasets)
@@ -1136,8 +1166,38 @@ async def async_main(args):
                 logger.warning("  ⚠ %s", a)
             logger.warning("=" * 60)
 
-        # 8. Generate report
-        logger.info("Generating intelligence report...")
+        # 8. Trend analysis (before report so trends appear in output)
+        output_dir = Path(config.get("report", {}).get("output_dir", "data"))
+        trend_data = {}
+        try:
+            db_path = output_dir / "radar.db"
+            db = RadarDatabase(str(db_path))
+            trend_analyzer = TrendAnalyzer(db, config)
+
+            if all_datasets:
+                trend_analyzer.record_daily_stats(all_datasets)
+                trend_analyzer.calculate_trends()
+
+                # Inject growth rates into each dataset
+                for ds in all_datasets:
+                    ds_id = ds.get("id", "")
+                    if ds_id:
+                        ds_trend = trend_analyzer.get_dataset_trend(ds_id)
+                        if ds_trend:
+                            ds["growth_7d"] = ds_trend.get("growth_7d")
+                            ds["growth_30d"] = ds_trend.get("growth_30d")
+
+                trend_data = {
+                    "top_growing_7d": trend_analyzer.get_top_growing_datasets(days=7, limit=10),
+                    "rising_7d": trend_analyzer.get_rising_datasets(days=7, limit=10),
+                }
+
+            db.close()
+        except Exception as e:
+            logger.warning("Trend analysis skipped: %s", e)
+
+        # 9. Generate report
+        logger.info(_progress("生成报告..."))
 
         report = report_generator.generate(
             lab_activity=lab_activity,
@@ -1147,6 +1207,7 @@ async def async_main(args):
             github_activity=github_activity,
             blog_activity=blog_activity,
             x_activity=x_activity,
+            trend_data=trend_data,
         )
 
         # Prepare structured data for JSON output
@@ -1172,10 +1233,10 @@ async def async_main(args):
             "datasets": all_datasets,
             "datasets_by_type": datasets_json,
             "papers": papers,
+            "trend_data": trend_data,
         }
 
         # Determine output directory — reports grouped by date
-        output_dir = Path(config.get("report", {}).get("output_dir", "data"))
         date_str = datetime.now().strftime("%Y-%m-%d")
         reports_dir = output_dir / "reports" / date_str
         reports_dir.mkdir(parents=True, exist_ok=True)
@@ -1209,38 +1270,16 @@ async def async_main(args):
             logger.info("Report saved to: %s", md_path)
             logger.info("JSON data saved to: %s", json_path)
 
-        # 8.5 Daily change summary
+        # 9.5 Daily change summary & finalize
+        logger.info(_progress("变化追踪 & 收尾..."))
         try:
             from analyzers.change_tracker import generate_change_summary
 
             changes_path = generate_change_summary(output_dir / "reports", date_str)
             if changes_path:
-                logger.info("Change summary saved to: %s", changes_path)
-            else:
-                logger.info("Change summary: no previous report (first run)")
+                logger.info("  ✓ 变化报告: %s", changes_path)
         except Exception as e:
             logger.warning("Change summary skipped: %s", e)
-
-        # 9. Record daily stats and calculate trends
-        try:
-            db_path = output_dir / "radar.db"
-            db = RadarDatabase(str(db_path))
-            trend_analyzer = TrendAnalyzer(db, config)
-
-            if all_datasets:
-                recorded = trend_analyzer.record_daily_stats(all_datasets)
-                logger.info("Recorded daily stats for %d datasets", recorded)
-
-                trend_summary = trend_analyzer.calculate_trends()
-                logger.info(
-                    "Trends: %d calculated, %d with growth",
-                    trend_summary["trends_calculated"],
-                    trend_summary["datasets_with_growth"],
-                )
-
-            db.close()
-        except Exception as e:
-            logger.warning("Trend analysis skipped: %s", e)
 
         # Print console summary
         logger.info(
@@ -1282,17 +1321,12 @@ async def async_main(args):
                     f.write(insights_result)
                 logger.info("Insights report saved to: %s", insights_path)
             else:
-                # No API key — output prompt for environment LLM (e.g. Claude Code)
-                logger.info("No ANTHROPIC_API_KEY — outputting insights prompt for environment LLM")
-                print("\n" + "=" * 60)
-                print("  INSIGHTS_PROMPT_START")
-                print("=" * 60)
-                print(insights_content)
-                print("=" * 60)
-                print("  INSIGHTS_PROMPT_END")
-                print("=" * 60)
-                print(f"INSIGHTS_OUTPUT_PATH={insights_path}")
-                print()
+                # No API key — prompt already saved to file; environment LLM reads it
+                logger.info(
+                    "No ANTHROPIC_API_KEY — insights prompt saved for environment LLM: %s",
+                    insights_prompt_path,
+                )
+                logger.info("INSIGHTS_OUTPUT_PATH=%s", insights_path)
 
             # Generate anomalies report (separate from insights — for engineering use)
             anomalies_content = format_anomalies_report(
@@ -1355,7 +1389,7 @@ async def async_main(args):
 def main():
     """Main entry point."""
     parser = argparse.ArgumentParser(
-        description="AI Dataset Radar v5 - Competitive Intelligence System"
+        description=f"AI Dataset Radar v{__version__} - Competitive Intelligence System"
     )
     parser.add_argument(
         "--config",
@@ -1551,6 +1585,31 @@ async def run_intel_scan(days: int = 7) -> dict:
         if anomalies:
             logger.warning("Data quality warnings: %s", "; ".join(anomalies))
 
+        # Trend analysis (before report so trends appear in output)
+        output_dir = Path(config.get("report", {}).get("output_dir", "data"))
+        trend_data = {}
+        try:
+            db_path = output_dir / "radar.db"
+            db = RadarDatabase(str(db_path))
+            trend_analyzer = TrendAnalyzer(db, config)
+            if all_datasets:
+                trend_analyzer.record_daily_stats(all_datasets)
+                trend_analyzer.calculate_trends()
+                for ds in all_datasets:
+                    ds_id = ds.get("id", "")
+                    if ds_id:
+                        ds_trend = trend_analyzer.get_dataset_trend(ds_id)
+                        if ds_trend:
+                            ds["growth_7d"] = ds_trend.get("growth_7d")
+                            ds["growth_30d"] = ds_trend.get("growth_30d")
+                trend_data = {
+                    "top_growing_7d": trend_analyzer.get_top_growing_datasets(days=7, limit=10),
+                    "rising_7d": trend_analyzer.get_rising_datasets(days=7, limit=10),
+                }
+            db.close()
+        except Exception as e:
+            logger.warning("Trend analysis skipped: %s", e)
+
         # Generate and save report
         report = report_generator.generate(
             lab_activity=lab_activity,
@@ -1560,9 +1619,9 @@ async def run_intel_scan(days: int = 7) -> dict:
             github_activity=github_activity,
             blog_activity=blog_activity,
             x_activity=x_activity,
+            trend_data=trend_data,
         )
 
-        output_dir = Path(config.get("report", {}).get("output_dir", "data"))
         date_str = datetime.now().strftime("%Y-%m-%d")
         reports_dir = output_dir / "reports" / date_str
         reports_dir.mkdir(parents=True, exist_ok=True)
@@ -1586,6 +1645,7 @@ async def run_intel_scan(days: int = 7) -> dict:
             "datasets": all_datasets,
             "datasets_by_type": datasets_json,
             "papers": papers,
+            "trend_data": trend_data,
         }
 
         formatter.save_reports(markdown_content=report, data=all_data, filename_prefix="intel_report")

@@ -367,14 +367,14 @@ class TestGenerateWithData:
     def test_report_footer(self, generator, sample_lab_activity,
                            sample_vendor_activity, sample_datasets_by_type,
                            sample_papers):
-        """Report should end with the v5 footer."""
+        """Report should end with the versioned footer."""
         report = generator.generate(
             lab_activity=sample_lab_activity,
             vendor_activity=sample_vendor_activity,
             datasets_by_type=sample_datasets_by_type,
             papers=sample_papers,
         )
-        assert "AI Dataset Radar v5" in report
+        assert "AI Dataset Radar v" in report
 
     def test_summary_counts_active_labs(self, generator, sample_lab_activity,
                                         sample_vendor_activity, sample_datasets_by_type,
@@ -432,13 +432,13 @@ class TestGenerateConsoleSummary:
 
     def test_console_summary_header(self, generator, empty_lab_activity,
                                      empty_vendor_activity, empty_datasets_by_type):
-        """Console summary should contain the v5 header."""
+        """Console summary should contain the versioned header."""
         result = generator.generate_console_summary(
             lab_activity=empty_lab_activity,
             vendor_activity=empty_vendor_activity,
             datasets_by_type=empty_datasets_by_type,
         )
-        assert "AI Dataset Radar v5" in result
+        assert "AI Dataset Radar v" in result
         assert "竞争情报摘要" in result
 
     def test_console_summary_shows_lab_names(self, generator, sample_lab_activity,

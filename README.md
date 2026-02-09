@@ -47,7 +47,7 @@ graph LR
 | **人机兼顾** | 同时输出 Markdown (人类) 与 JSON (智能体) |
 | **高性能异步** | 全链路 aiohttp + asyncio.gather，400+ 请求并发执行 (CLI 与 API 一致) |
 | **时间感知** | 数据集/模型/论文全链路采集并展示发布日期 |
-| **生产就绪** | Docker 部署、CI 流水线、708 测试用例、配置校验 |
+| **生产就绪** | Docker 部署、CI 流水线、723 测试用例、配置校验 |
 | **环境原生 LLM** | `--insights` 模式利用 Claude Code/App 原生能力分析 |
 | **Skill 驱动** | 7 个 Claude Code Skills 覆盖采集→查询→分析→深潜完整工作流 |
 
@@ -172,7 +172,7 @@ python src/main_intel.py --days 7 --no-insights
 | 环境 | 行为 |
 |------|------|
 | 有 `ANTHROPIC_API_KEY` | 自动调用 API 生成 `_insights.md`（CLI 与 API 路径均支持） |
-| 无 API key（CLI） | 将 insights prompt 直接输出到 stdout，便于 Claude Code 等 AI CLI 接管 |
+| 无 API key（CLI） | 保存 prompt 文件，日志提示路径，供 Claude Code 等 AI CLI 读取分析 |
 | `--no-insights` | 跳过 insights 逻辑 |
 
 **产出文件（按日期子目录组织）：**
@@ -473,7 +473,8 @@ tools = [
     "total_github_repos_high_relevance": 80,
     "total_papers": 22,
     "total_blog_posts": 93,
-    "total_x_tweets": 47
+    "total_x_tweets": 47,
+    "total_trending_datasets": 5
   },
   "datasets": [{
     "id": "allenai/Dolci-Instruct-SFT",
@@ -481,6 +482,8 @@ tools = [
     "created_at": "2025-11-18T00:00:00.000Z",
     "last_modified": "2026-02-03T12:34:56.000Z",
     "downloads": 2610,
+    "growth_7d": 0.35,
+    "growth_30d": 1.2,
     "languages": ["en", "zh"],
     "license": "odc-by"
   }],
@@ -557,7 +560,8 @@ priority_data_types:
 ```
 ai-dataset-radar/
 ├── src/                        # 核心模块
-│   ├── main_intel.py           # 主入口（async 编排 + insights + --recipe DataRecipe 联动）
+│   ├── main_intel.py           # 主入口（async 编排 + 进度指示 + 趋势注入 + insights + --recipe）
+│   ├── _version.py             # 版本号单一来源 (__version__)
 │   ├── trackers/               # 数据追踪器（全异步 aiohttp）
 │   │   ├── org_tracker.py      # HuggingFace 组织追踪
 │   │   ├── blog_tracker.py     # 博客监控（RSS/HTML/Playwright async）
@@ -565,7 +569,7 @@ ai-dataset-radar/
 │   │   ├── x_tracker.py        # X/Twitter 账户监控（RSSHub / API）
 │   │   └── paper_tracker.py    # arXiv + HF Papers
 │   ├── scrapers/               # 数据采集器
-│   ├── analyzers/              # 分类器与质量评分（含 change_tracker 日报变化追踪）
+│   ├── analyzers/              # 分类器 + 趋势分析 + change_tracker 日报变化追踪
 │   └── utils/                  # 工具库
 │       ├── async_http.py       # AsyncHTTPClient（连接池 + 重试 + 限速）
 │       ├── llm_client.py       # LLM 调用（Anthropic API insights 生成）
@@ -717,12 +721,16 @@ Claude Desktop 中同时配置两个 MCP Server，可自然语言驱动端到端
 - [x] 健壮性加固 (asyncio.get_running_loop 替代已弃用 API, open() 统一 UTF-8 编码, JSON 加载异常处理)
 - [x] 全链路性能优化 (OrgTracker 组织内并行化, feedparser→线程池, 并发上限调优 blog25/x20/github15, 超时 30→20s/重试 3→2, X HEAD 跳过)
 - [x] dotenv 环境变量支持 (python-dotenv 自动加载 .env, .env.example 模板)
-- [x] Insights API 集成 (run_intel_scan API 路径复用 LLM insights 生成, 返回 insights 文本; CLI 无 API key 时 stdout 输出 prompt)
+- [x] Insights API 集成 (run_intel_scan API 路径复用 LLM insights 生成, 返回 insights 文本)
 - [x] 报告按日期子目录组织 (`data/reports/YYYY-MM-DD/`, MCP/API 兼容新旧两种布局)
 - [x] DataRecipe 自动衔接 (`--recipe` 智能评分选 Top N 数据集, 自动调用 DeepAnalyzerCore 深度分析, 输出聚合报告)
 - [x] Recipe 评分公式优化 (新增 likes 社区认可维度, 降低类别权重占比, 渐进式新鲜度衰减, <50 下载半分门槛)
 - [x] Claude Code Skills 深化 (7 个: scan/brief/search/diff/deep-dive/recipe/radar，覆盖采集→查询→分析→深潜完整工作流)
 - [x] 自动日报变化追踪 (每次扫描后对比前日报告生成 `_changes.md`：总量变化 + 新增/消失数据集 + 下载/Star 变动 Top 5 + 分类分布 + 新论文)
+- [x] 扫描进度指示 (`[1/N]...[N/N]` 步骤编号，动态计算总步骤数，gather 结果 ✓ 标记)
+- [x] 趋势数据写入报告 (每个 dataset 注入 growth_7d/growth_30d, Markdown 增加「📈 数据集增长趋势」节, JSON 增加 featured_trends)
+- [x] stdout 清理 (insights prompt 不再 dump 到终端，改为保存文件 + 日志提示路径)
+- [x] 版本号统一管理 (`src/_version.py` 单一来源 + git pre-commit hook 自动 patch +1)
 
 ---
 

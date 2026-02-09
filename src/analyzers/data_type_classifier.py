@@ -1,6 +1,6 @@
 """Data type classifier for categorizing datasets by training purpose.
 
-Enhanced v5 classifier with:
+Enhanced classifier with:
 - Multi-dimensional matching (name, description, README, features)
 - Multi-label classification support
 - Better handling of synthetic/versioned datasets

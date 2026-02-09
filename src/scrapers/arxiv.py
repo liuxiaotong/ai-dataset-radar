@@ -1,6 +1,6 @@
 """arXiv papers scraper for RLHF and data annotation related papers.
 
-Enhanced v5 scraper with tighter search queries focused on:
+Enhanced scraper with tighter search queries focused on:
 - RLHF / preference learning
 - Data annotation methodology
 - Training data quality

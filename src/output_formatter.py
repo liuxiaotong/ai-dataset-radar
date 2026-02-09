@@ -39,6 +39,8 @@ DATASET_OUTPUT_FIELDS = {
     "source_url",
     "url",
     "source",
+    "growth_7d",
+    "growth_30d",
 }
 
 
@@ -101,6 +103,7 @@ class DualOutputFormatter:
         labs_activity = data.get("labs_activity", {})
         vendor_activity = data.get("vendor_activity", {})
         datasets_by_type = data.get("datasets_by_type", {})
+        trend_data = data.get("trend_data", {})
 
         # Calculate period with proper start date
         period = data.get("period", {})
@@ -147,6 +150,7 @@ class DualOutputFormatter:
                     len(a.get("relevant_tweets", []))
                     for a in x_activity.get("accounts", [])
                 ),
+                "total_trending_datasets": len(trend_data.get("top_growing_7d", [])),
             },
             "labs_activity": cleaned_labs,
             "vendor_activity": cleaned_vendor,
@@ -156,6 +160,7 @@ class DualOutputFormatter:
             "papers": cleaned_papers,
             "blog_posts": blog_posts,
             "x_activity": x_activity,
+            "featured_trends": trend_data if trend_data else None,
         }
 
     def _count_github_stats(self, github_activity: list) -> dict:
