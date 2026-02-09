@@ -8,9 +8,9 @@
 [![CI](https://github.com/liuxiaotong/ai-dataset-radar/actions/workflows/ci.yml/badge.svg)](https://github.com/liuxiaotong/ai-dataset-radar/actions/workflows/ci.yml)
 [![License: MIT](https://img.shields.io/badge/License-MIT-green.svg)](LICENSE)
 [![Python 3.10+](https://img.shields.io/badge/python-3.10+-blue.svg)](https://www.python.org/downloads/)
-[![Tests](https://img.shields.io/badge/tests-723_passed-brightgreen.svg)](#开发路线)
+[![Tests](https://img.shields.io/badge/tests-855_passed-brightgreen.svg)](#开发路线)
 [![Agent Ready](https://img.shields.io/badge/Agent-Ready-orange.svg)](docs/agent-integration.md)
-[![MCP](https://img.shields.io/badge/MCP-11_Tools-purple.svg)](docs/mcp.md)
+[![MCP](https://img.shields.io/badge/MCP-16_Tools-purple.svg)](docs/mcp.md)
 
 [快速开始](#快速开始) · [使用方式](#使用方式) · [数据源](#数据源) · [生态](#生态) · [文档](docs/)
 
@@ -20,9 +20,11 @@
 
 ## 亮点
 
-- **全源覆盖** — 86 HF orgs、50 GitHub orgs、71 博客、125 X 账户、arXiv 5 领域
-- **智能体原生** — MCP 11 工具 + REST API + Function Calling + Claude Code 7 Skills
+- **全源覆盖** — 86 HF orgs、50 GitHub orgs、71 博客、125 X 账户、5 Reddit 社区、arXiv 5 领域
+- **智能体原生** — MCP 16 工具 + REST API + Function Calling + Claude Code 7 Skills
 - **高性能异步** — aiohttp + asyncio.gather 全链路并发，500+ 请求同时执行
+- **竞品分析** — 竞品矩阵、数据集谱系、组织关系图谱三维交叉分析
+- **可视化仪表盘** — 11 Tab 面板 + Chart.js 趋势图 + 全局搜索
 - **双格式输出** — JSON (Agent) + Markdown (人类) + AI 分析报告 (决策层)
 - **一键 Recipe** — `--recipe` 自动评分选 Top N 数据集，调用 DataRecipe 深度分析
 
@@ -87,7 +89,7 @@ python agent/api.py
 # → http://localhost:8080/docs（API 文档）
 ```
 
-核心端点：`/datasets`、`/github`、`/papers`、`/blogs`、`/scan`、`/summary`
+核心端点：`/datasets`、`/github`、`/papers`、`/blogs`、`/reddit`、`/scan`、`/summary`、`/search`、`/trends`、`/matrix`、`/lineage`、`/org-graph`
 
 > 完整端点列表、代码示例（OpenAI / Anthropic / LangChain）见 [Agent 集成文档](docs/agent-integration.md)。
 
@@ -104,7 +106,7 @@ python agent/api.py
 }
 ```
 
-> 11 个工具（scan/search/diff/trend/history 等）及配置详情见 [MCP 文档](docs/mcp.md)。
+> 16 个工具（scan/search/diff/trend/history/reddit/matrix/lineage/org-graph 等）及配置详情见 [MCP 文档](docs/mcp.md)。
 
 ### Claude Code Skills
 
@@ -114,7 +116,7 @@ python agent/api.py
 |------|------|------|----------|
 | `/scan` | 运行扫描 + 自动生成 AI 分析报告 | 采集 | 是 |
 | `/brief` | 快速情报简报（5 条发现 + 行动建议） | 阅读 | 否 |
-| `/search 关键词` | 跨 5 源搜索（数据集/GitHub/论文/博客/X） | 查询 | 否 |
+| `/search 关键词` | 跨 6 源搜索（数据集/GitHub/论文/博客/X/Reddit） | 查询 | 否 |
 | `/diff` | 对比两次报告（新增/消失/变化） | 对比 | 否 |
 | `/deep-dive 目标` | 组织/数据集/分类深度分析 | 分析 | 否 |
 | `/recipe 数据集ID` | DataRecipe 逆向分析（成本/Schema/难度） | 深潜 | 是 |
@@ -148,6 +150,7 @@ python agent/api.py
 | **GitHub** | 50 orgs | AI Labs + 中国开源 + 机器人 + 数据供应商 |
 | **论文** | 2 源 | arXiv (cs.CL/AI/LG/CV/RO) + HF Papers |
 | **X/Twitter** | 125 账户 | 13 类别，CEO/Leaders + 研究者 + 机器人 |
+| **Reddit** | 5 社区 | MachineLearning、LocalLLaMA、dataset、deeplearning、LanguageTechnology |
 
 > 供应商分类、X 账户明细、数据集分类体系见 [数据源文档](docs/data-sources.md)。
 > 输出 JSON Schema 见 [输出规范](docs/schema.md)。

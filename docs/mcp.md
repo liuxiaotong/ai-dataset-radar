@@ -36,21 +36,26 @@
 }
 ```
 
-## 可用工具（11 个）
+## 可用工具（16 个）
 
 | 工具 | 功能 | 参数 |
 |------|------|------|
-| `radar_scan` | 执行完整扫描 | `sources` |
+| `radar_scan` | 执行完整扫描 | `sources`, `days` |
 | `radar_summary` | 报告摘要 | |
-| `radar_datasets` | 按类别查询数据集 | `category`, `org` |
-| `radar_github` | GitHub 活动 | `org` |
-| `radar_papers` | 论文列表 | |
-| `radar_blogs` | 博客文章 | |
+| `radar_datasets` | 按类别查询数据集 | `category`, `org`, `limit` |
+| `radar_github` | GitHub 活动 | `relevance`, `org` |
+| `radar_papers` | 论文列表 | `source`, `dataset_only`, `limit` |
+| `radar_blogs` | 博客文章 | `source`, `category`, `limit` |
+| `radar_reddit` | Reddit 社区动态 | `subreddit`, `min_score`, `limit` |
 | `radar_config` | 监控配置 | |
-| `radar_search` | 全文搜索（跨 5 源，支持正则） | `query`, `sources`, `limit` |
+| `radar_search` | 全文搜索（跨 6 源，支持正则） | `query`, `sources`, `limit` |
 | `radar_diff` | 报告对比（新增/消失项） | `date_a`, `date_b` |
 | `radar_trend` | 趋势分析（增长/突破） | `mode`, `dataset_id`, `days` |
+| `radar_trends` | 历史趋势数据（时序图） | `limit` |
 | `radar_history` | 历史时间线 | `limit` |
+| `radar_matrix` | 竞品矩阵（组织×数据类型） | `top_n` |
+| `radar_lineage` | 数据集谱系（派生/版本/Fork） | `dataset_id` |
+| `radar_org_graph` | 组织关系图谱（聚类/中心性） | `org` |
 
 ## 常见问题
 
