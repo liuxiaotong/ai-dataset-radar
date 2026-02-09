@@ -2,8 +2,8 @@
 
 # AI Dataset Radar
 
-**面向 AI Agent 的训练数据竞争情报系统**  
-**Competitive intelligence feed for AI training datasets (Agent-ready)**
+**面向 AI Agent 的训练数据竞争情报系统**
+**Competitive intelligence system for AI training datasets**
 
 [![CI](https://github.com/liuxiaotong/ai-dataset-radar/actions/workflows/ci.yml/badge.svg)](https://github.com/liuxiaotong/ai-dataset-radar/actions/workflows/ci.yml)
 [![License: MIT](https://img.shields.io/badge/License-MIT-green.svg)](LICENSE)
