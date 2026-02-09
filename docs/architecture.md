@@ -12,9 +12,16 @@ ai-dataset-radar/
 │   │   ├── blog_tracker.py     # 博客监控（RSS/HTML/Playwright async）
 │   │   ├── github_tracker.py   # GitHub 组织活动
 │   │   ├── x_tracker.py        # X/Twitter 账户监控（RSSHub / API）
+│   │   ├── reddit_tracker.py   # Reddit 社区监控（公开 JSON API）
 │   │   └── paper_tracker.py    # arXiv + HF Papers
 │   ├── scrapers/               # 数据采集器
-│   ├── analyzers/              # 分类器 + 趋势分析 + change_tracker 日报变化追踪
+│   ├── analyzers/              # 分类 + 趋势 + 竞品矩阵 + 谱系 + 关系图谱
+│   │   ├── classifier.py       # DataTypeClassifier（多维评分分类）
+│   │   ├── trend.py            # TrendAnalyzer（增长/突破检测）
+│   │   ├── competitor_matrix.py # CompetitorMatrix（组织×类型交叉）
+│   │   ├── dataset_lineage.py  # DatasetLineageTracker（派生/版本/Fork）
+│   │   ├── org_graph.py        # OrgRelationshipGraph（聚类/中心性）
+│   │   └── change_tracker.py   # 日报变化追踪
 │   └── utils/                  # 工具库
 │       ├── async_http.py       # AsyncHTTPClient（连接池 + 重试 + 限速）
 │       ├── llm_client.py       # LLM 调用（Anthropic API insights 生成）

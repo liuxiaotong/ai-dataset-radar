@@ -11,6 +11,7 @@
 | **GitHub** | 50 orgs | AI Labs + 中国开源 + 机器人 + 数据供应商 |
 | **论文** | 2 源 | arXiv (cs.CL/AI/LG/CV/RO) + HF Papers |
 | **X/Twitter** | 125 账户 | 13 类别，CEO/Leaders + 研究者 + 机器人 |
+| **Reddit** | 5 社区 | MachineLearning、LocalLLaMA、dataset、deeplearning、LanguageTechnology |
 
 ## 数据供应商分类
 

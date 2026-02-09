@@ -19,14 +19,20 @@ uvicorn agent.api:app --port 8080
 
 | 端点 | 方法 | 功能 |
 |------|------|------|
-| `/dashboard` | GET | Web 可视化仪表盘（5 视图） |
+| `/dashboard` | GET | Web 可视化仪表盘（11 Tab 面板） |
 | `/ui` | GET | 重定向至仪表盘 |
 | `/health` | GET | 健康检查（认证状态、报告可用性） |
 | `/summary` | GET | 获取最新报告摘要 |
-| `/datasets` | GET | 数据集列表 (支持 category 筛选) |
-| `/github` | GET | GitHub 仓库活动 (支持 relevance 筛选) |
-| `/papers` | GET | 论文列表 (支持 dataset_only 筛选) |
+| `/datasets` | GET | 数据集列表 (支持 category/org 筛选) |
+| `/github` | GET | GitHub 仓库活动 (支持 relevance/org 筛选) |
+| `/papers` | GET | 论文列表 (支持 source/dataset_only 筛选) |
 | `/blogs` | GET | 博客文章 (支持 category/source 筛选) |
+| `/reddit` | GET | Reddit 帖子 (支持 subreddit/min_score 筛选) |
+| `/search` | GET | 跨 6 源全文搜索 (支持 q/sources/limit) |
+| `/trends` | GET | 历史趋势时序数据 (支持 limit) |
+| `/matrix` | GET | 竞品矩阵（组织×数据类型交叉分析） |
+| `/lineage` | GET | 数据集谱系（派生/版本链/Fork 树） |
+| `/org-graph` | GET | 组织关系图谱（聚类/中心性） |
 | `/scan` | POST | 执行新扫描（含 insights 生成） |
 | `/config` | GET | 监控配置（敏感信息自动脱敏） |
 | `/schema` | GET | 输出规范 |

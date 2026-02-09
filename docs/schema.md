@@ -54,6 +54,32 @@
       "username": "karpathy",
       "relevant_tweets": [{"text": "...", "url": "...", "date": "2026-02-06"}]
     }]
+  },
+  "reddit_activity": {
+    "posts": [{
+      "subreddit": "MachineLearning",
+      "title": "New RLHF dataset released",
+      "url": "https://reddit.com/r/MachineLearning/...",
+      "score": 150,
+      "signals": ["rlhf", "dataset"]
+    }],
+    "metadata": {"subreddits_checked": 5, "total_posts": 42}
+  },
+  "competitor_matrix": {
+    "matrix": {"openai": {"sft": 2, "preference": 1, "repos": 5}},
+    "top_orgs": [{"org": "openai", "total": 13}]
+  },
+  "dataset_lineage": {
+    "edges": [{"source": "openai/gsm8k", "target": "meta/gsm8k-v2", "type": "derived"}],
+    "version_chains": {"gsm8k": ["v1", "v2", "v3"]},
+    "fork_trees": {"alpaca": ["alpaca-cleaned", "alpaca-gpt4"]},
+    "root_datasets": [{"id": "openai/gsm8k", "count": 5}]
+  },
+  "org_graph": {
+    "nodes": ["openai", "meta", "google"],
+    "edges": [{"source": "openai", "target": "meta", "type": "shared_topic", "weight": 3}],
+    "clusters": [["openai", "meta", "google"]],
+    "centrality": {"openai": 0.667, "meta": 0.333}
   }
 }
 ```
