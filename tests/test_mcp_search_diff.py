@@ -595,6 +595,7 @@ class TestParameterExtensions:
             "radar_diff",
             "radar_trend",
             "radar_history",
+            "radar_reddit",
         }
         assert expected == tool_names
 

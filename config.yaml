@@ -1509,6 +1509,26 @@ x_tracker:
     - "manipulation dataset"
 
 # =============================================================================
+# Reddit 追踪配置 | Reddit Tracker
+# =============================================================================
+
+reddit_tracker:
+  enabled: true
+  subreddits:
+    - MachineLearning
+    - LanguageTechnology
+    - LocalLLaMA
+    - dataset
+    - deeplearning
+    - artificial
+  min_score: 5
+  search_keywords:
+    - "dataset release"
+    - "training data"
+    - "new benchmark"
+    - "open source dataset"
+
+# =============================================================================
 # 通知配置 | Notifications
 # =============================================================================
 

@@ -34,8 +34,12 @@ from trackers.org_tracker import OrgTracker
 from trackers.github_tracker import GitHubTracker
 from trackers.blog_tracker import BlogTracker
 from trackers.x_tracker import XTracker
+from trackers.reddit_tracker import RedditTracker
 from analyzers.data_type_classifier import DataTypeClassifier, DataType
 from analyzers.paper_filter import PaperFilter
+from analyzers.competitor_matrix import CompetitorMatrix
+from analyzers.dataset_lineage import DatasetLineageTracker
+from analyzers.org_graph import OrgRelationshipGraph
 from intel_report import IntelReportGenerator
 from scrapers.arxiv import ArxivScraper
 from scrapers.hf_papers import HFPapersScraper
@@ -120,6 +124,7 @@ def format_insights_prompt(
     lab_activity: dict = None,
     vendor_activity: dict = None,
     x_activity: dict = None,
+    reddit_activity: dict = None,
 ) -> str:
     """Format data with analysis prompt for LLM consumption.
 
@@ -430,6 +435,27 @@ def format_insights_prompt(
         lines.append("")
     if not x_accounts and not x_search:
         lines.append("无 X/Twitter 动态\n")
+
+    # ── Section 5.6: Reddit ──
+    lines.append("## 5.6、Reddit 社区动态\n")
+    reddit_data = reddit_activity or {}
+    reddit_posts = reddit_data.get("posts", [])
+    if reddit_posts:
+        for post in reddit_posts[:20]:
+            title = post.get("title", "")[:150]
+            url = post.get("url", "")
+            date = post.get("date", "")
+            score = post.get("score", 0)
+            sub = post.get("subreddit", "")
+            signals = post.get("signals", [])
+            lines.append(f"- [{date}] r/{sub} (↑{score}) {title}")
+            if url:
+                lines.append(f"  链接: {url}")
+            if signals:
+                lines.append(f"  信号: {', '.join(signals)}")
+        lines.append("")
+    else:
+        lines.append("无 Reddit 动态\n")
 
     # ── Section 6: Papers (full titles, longer abstracts) ──
     lines.append("## 六、相关论文\n")
@@ -1024,6 +1050,11 @@ async def async_main(args):
             if not args.no_x and config.get("x_tracker", {}).get("enabled", False)
             else None
         )
+        reddit_tracker = (
+            RedditTracker(config, http_client=http_client)
+            if not args.no_reddit and config.get("reddit_tracker", {}).get("enabled", False)
+            else None
+        )
         data_classifier = DataTypeClassifier(config)
         paper_filter = PaperFilter(config)
         report_generator = IntelReportGenerator(config)
@@ -1035,6 +1066,7 @@ async def async_main(args):
         github_activity = []
         blog_activity = []
         x_activity = {"accounts": [], "search_results": []}
+        reddit_activity = {"posts": [], "metadata": {}}
         papers = []
 
         # Pre-build paper scrapers
@@ -1064,6 +1096,8 @@ async def async_main(args):
             _n += 1
         if x_tracker:
             _n += 1
+        if reddit_tracker:
+            _n += 1
         if arxiv_scraper or hf_papers_scraper:
             _n += 1
         _total = _n + 3  # + classify + report + finalize
@@ -1089,6 +1123,10 @@ async def async_main(args):
         if x_tracker:
             logger.info(_progress("X/Twitter 账号抓取..."))
             tasks["x"] = x_tracker.fetch_all(days=args.days)
+
+        if reddit_tracker:
+            logger.info(_progress("Reddit 社区追踪..."))
+            tasks["reddit"] = reddit_tracker.fetch_all(days=args.days)
 
         if arxiv_scraper:
             if not hf_papers_scraper:
@@ -1143,6 +1181,10 @@ async def async_main(args):
                             x_acct_count,
                             x_tweets,
                         )
+                    elif key == "reddit":
+                        reddit_activity = result
+                        reddit_posts = len(result.get("posts", []))
+                        logger.info("  ✓ Reddit: %d 相关帖子", reddit_posts)
                     elif key == "arxiv":
                         papers.extend(paper_filter.filter_papers(result))
                     elif key == "hf_papers":
@@ -1186,6 +1228,22 @@ async def async_main(args):
 
         # 7. Papers already fetched in parallel above (arXiv + HF Papers)
 
+        # 7.1 Advanced analysis
+        logger.info(_progress("高级分析..."))
+        competitor_matrix = CompetitorMatrix(config).build(
+            datasets=all_datasets,
+            github_activity=github_activity,
+            papers=papers,
+            blog_posts=blog_activity,
+        )
+        dataset_lineage = DatasetLineageTracker(config).analyze(all_datasets)
+        org_graph = OrgRelationshipGraph(config).build(
+            datasets=all_datasets,
+            github_activity=github_activity,
+            papers=papers,
+            blog_posts=blog_activity,
+        )
+
         # 7.5 Data quality validation
         anomalies = []
         active_github = sum(1 for a in github_activity if a.get("repos_updated"))
@@ -1198,6 +1256,8 @@ async def async_main(args):
             anomalies.append("Blogs: 0 active blogs (expected >0)")
         if x_tracker and x_accounts == 0:
             anomalies.append("X/Twitter: 0 active accounts (check RSSHub/API connectivity)")
+        if reddit_tracker and len(reddit_activity.get("posts", [])) == 0:
+            anomalies.append("Reddit: 0 relevant posts (check subreddit config or Reddit API)")
         if not args.no_papers and len(papers) == 0:
             anomalies.append("Papers: 0 results from arXiv + HF Papers (check network)")
         if len(all_datasets) == 0 and not args.no_labs and not args.no_vendors:
@@ -1252,7 +1312,11 @@ async def async_main(args):
             github_activity=github_activity,
             blog_activity=blog_activity,
             x_activity=x_activity,
+            reddit_activity=reddit_activity,
             trend_data=trend_data,
+            competitor_matrix=competitor_matrix,
+            dataset_lineage=dataset_lineage,
+            org_graph=org_graph,
         )
 
         # Prepare structured data for JSON output
@@ -1275,10 +1339,14 @@ async def async_main(args):
             "github_activity": github_activity,
             "blog_posts": blog_activity,
             "x_activity": x_activity,
+            "reddit_activity": reddit_activity,
             "datasets": all_datasets,
             "datasets_by_type": datasets_json,
             "papers": papers,
             "trend_data": trend_data,
+            "competitor_matrix": competitor_matrix,
+            "dataset_lineage": dataset_lineage,
+            "org_graph": org_graph,
         }
 
         # Determine output directory — reports grouped by date
@@ -1346,6 +1414,7 @@ async def async_main(args):
                 lab_activity=lab_activity,
                 vendor_activity=vendor_activity,
                 x_activity=x_activity,
+                reddit_activity=reddit_activity,
             )
 
             # Save insights prompt to file (always — for Claude Code environment)
@@ -1500,6 +1569,11 @@ def main():
         help="Skip X/Twitter tracking",
     )
     parser.add_argument(
+        "--no-reddit",
+        action="store_true",
+        help="Skip Reddit tracking",
+    )
+    parser.add_argument(
         "--no-insights",
         action="store_true",
         help="Skip insights prompt generation entirely",
@@ -1550,6 +1624,11 @@ async def run_intel_scan(days: int = 7, api_insights: bool = False) -> dict:
             if config.get("x_tracker", {}).get("enabled", False)
             else None
         )
+        reddit_tracker = (
+            RedditTracker(config, http_client=http_client)
+            if config.get("reddit_tracker", {}).get("enabled", False)
+            else None
+        )
         data_classifier = DataTypeClassifier(config)
         paper_filter = PaperFilter(config)
         report_generator = IntelReportGenerator(config)
@@ -1564,6 +1643,8 @@ async def run_intel_scan(days: int = 7, api_insights: bool = False) -> dict:
         }
         if x_tracker:
             tasks["x"] = x_tracker.fetch_all(days=days)
+        if reddit_tracker:
+            tasks["reddit"] = reddit_tracker.fetch_all(days=days)
 
         arxiv_config = config.get("sources", {}).get("arxiv", {})
         if arxiv_config.get("enabled", True):
@@ -1583,6 +1664,7 @@ async def run_intel_scan(days: int = 7, api_insights: bool = False) -> dict:
         github_activity = []
         blog_activity = []
         x_activity = {"accounts": [], "search_results": []}
+        reddit_activity = {"posts": [], "metadata": {}}
         papers = []
 
         keys = list(tasks.keys())
@@ -1602,6 +1684,8 @@ async def run_intel_scan(days: int = 7, api_insights: bool = False) -> dict:
                     blog_activity = result
                 elif key == "x":
                     x_activity = result
+                elif key == "reddit":
+                    reddit_activity = result
                 elif key == "arxiv":
                     papers.extend(paper_filter.filter_papers(result))
                 elif key == "hf_papers":
@@ -1623,6 +1707,21 @@ async def run_intel_scan(days: int = 7, api_insights: bool = False) -> dict:
 
         datasets_by_type = data_classifier.group_by_type(all_datasets)
         summary = data_classifier.summarize(all_datasets)
+
+        # Advanced analysis
+        competitor_matrix = CompetitorMatrix(config).build(
+            datasets=all_datasets,
+            github_activity=github_activity,
+            papers=papers,
+            blog_posts=blog_activity,
+        )
+        dataset_lineage = DatasetLineageTracker(config).analyze(all_datasets)
+        org_graph = OrgRelationshipGraph(config).build(
+            datasets=all_datasets,
+            github_activity=github_activity,
+            papers=papers,
+            blog_posts=blog_activity,
+        )
 
         # Data quality validation
         anomalies = []
@@ -1678,7 +1777,11 @@ async def run_intel_scan(days: int = 7, api_insights: bool = False) -> dict:
             github_activity=github_activity,
             blog_activity=blog_activity,
             x_activity=x_activity,
+            reddit_activity=reddit_activity,
             trend_data=trend_data,
+            competitor_matrix=competitor_matrix,
+            dataset_lineage=dataset_lineage,
+            org_graph=org_graph,
         )
 
         date_str = datetime.now().strftime("%Y-%m-%d")
@@ -1701,10 +1804,14 @@ async def run_intel_scan(days: int = 7, api_insights: bool = False) -> dict:
             "github_activity": github_activity,
             "blog_posts": blog_activity,
             "x_activity": x_activity,
+            "reddit_activity": reddit_activity,
             "datasets": all_datasets,
             "datasets_by_type": datasets_json,
             "papers": papers,
             "trend_data": trend_data,
+            "competitor_matrix": competitor_matrix,
+            "dataset_lineage": dataset_lineage,
+            "org_graph": org_graph,
         }
 
         formatter.save_reports(markdown_content=report, data=all_data, filename_prefix="intel_report")
@@ -1733,6 +1840,7 @@ async def run_intel_scan(days: int = 7, api_insights: bool = False) -> dict:
                 lab_activity=lab_activity,
                 vendor_activity=vendor_activity,
                 x_activity=x_activity,
+                reddit_activity=reddit_activity,
             )
 
             insights_prompt_path = reports_dir / f"intel_report_{date_str}_insights_prompt.md"

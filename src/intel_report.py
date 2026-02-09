@@ -36,7 +36,11 @@ class IntelReportGenerator:
         github_activity: list[dict] = None,
         blog_activity: list[dict] = None,
         x_activity: dict = None,
+        reddit_activity: dict = None,
         trend_data: dict = None,
+        competitor_matrix: dict = None,
+        dataset_lineage: dict = None,
+        org_graph: dict = None,
     ) -> str:
         """Generate the full intelligence report.
 
@@ -48,6 +52,7 @@ class IntelReportGenerator:
             github_activity: GitHub organization activities.
             blog_activity: Blog/RSS activities.
             x_activity: X/Twitter activity data.
+            reddit_activity: Reddit community activity data.
             trend_data: Trend analysis results (top_growing_7d, rising_7d).
 
         Returns:
@@ -86,6 +91,18 @@ class IntelReportGenerator:
 
         # X/Twitter Activity
         lines.extend(self._generate_x_section(x_activity))
+
+        # Reddit Activity
+        lines.extend(self._generate_reddit_section(reddit_activity))
+
+        # Competitor Matrix
+        lines.extend(self._generate_competitor_matrix_section(competitor_matrix))
+
+        # Dataset Lineage
+        lines.extend(self._generate_lineage_section(dataset_lineage))
+
+        # Organization Relationship Graph
+        lines.extend(self._generate_org_graph_section(org_graph))
 
         # Footer
         lines.append("---")
@@ -569,6 +586,164 @@ class IntelReportGenerator:
                     lines.append(f"- [{text}]({url}){meta}")
                 else:
                     lines.append(f"- {text}{meta}")
+            lines.append("")
+
+        return lines
+
+    def _generate_reddit_section(self, reddit_activity: dict = None) -> list[str]:
+        """Generate Reddit community activity section."""
+        lines = []
+        if not reddit_activity:
+            return lines
+
+        posts = reddit_activity.get("posts", [])
+        if not posts:
+            return lines
+
+        lines.append("## Reddit 社区动态")
+        lines.append("")
+        lines.append(f"监控 {reddit_activity.get('metadata', {}).get('subreddits_checked', 0)} 个子版块，"
+                      f"发现 {len(posts)} 条相关帖子。")
+        lines.append("")
+
+        limit = self.limits.get("reddit_posts", 15)
+        for post in posts[:limit]:
+            title = post.get("title", "")[:120]
+            url = post.get("url", "")
+            date = post.get("date", "")
+            score = post.get("score", 0)
+            sub = post.get("subreddit", "")
+            meta = f" ({date})" if date else ""
+            prefix = f"r/{sub} ↑{score}"
+            if url:
+                lines.append(f"- **{prefix}** [{title}]({url}){meta}")
+            else:
+                lines.append(f"- **{prefix}** {title}{meta}")
+        lines.append("")
+
+        return lines
+
+    def _generate_competitor_matrix_section(self, competitor_matrix: dict = None) -> list[str]:
+        """Generate competitor matrix section."""
+        lines = []
+        if not competitor_matrix:
+            return lines
+
+        top_orgs = competitor_matrix.get("top_orgs", [])
+        if not top_orgs:
+            return lines
+
+        lines.append("## 竞争矩阵")
+        lines.append("")
+        lines.append(f"覆盖 {len(top_orgs)} 个组织的活动交叉分析。")
+        lines.append("")
+
+        # Top orgs table
+        lines.append("| 组织 | 数据集 | 仓库 | 论文 | 博客 | 总计 |")
+        lines.append("|------|--------|------|------|------|------|")
+        org_details = competitor_matrix.get("org_details", {})
+        for org, total in top_orgs[:15]:
+            d = org_details.get(org, {})
+            lines.append(
+                f"| {org} | {d.get('datasets', 0)} | {d.get('repos', 0)} | "
+                f"{d.get('papers', 0)} | {d.get('blogs', 0)} | {total} |"
+            )
+        lines.append("")
+
+        return lines
+
+    def _generate_lineage_section(self, dataset_lineage: dict = None) -> list[str]:
+        """Generate dataset lineage section."""
+        lines = []
+        if not dataset_lineage:
+            return lines
+
+        stats = dataset_lineage.get("stats", {})
+        if stats.get("total_edges", 0) == 0 and not dataset_lineage.get("version_chains") and not dataset_lineage.get("fork_trees"):
+            return lines
+
+        lines.append("## 数据集谱系")
+        lines.append("")
+        lines.append(
+            f"发现 {stats.get('derivation_edges', 0)} 条派生关系，"
+            f"{stats.get('version_chains', 0)} 个版本链，"
+            f"{stats.get('fork_groups', 0)} 个 Fork 组。"
+        )
+        lines.append("")
+
+        # Version chains
+        chains = dataset_lineage.get("version_chains", {})
+        if chains:
+            lines.append("### 版本链")
+            lines.append("")
+            for base, chain in list(chains.items())[:10]:
+                lines.append(f"- **{base}**: {' → '.join(chain)}")
+            lines.append("")
+
+        # Fork trees
+        forks = dataset_lineage.get("fork_trees", {})
+        if forks:
+            lines.append("### Fork 分支")
+            lines.append("")
+            for name, ids in list(forks.items())[:10]:
+                lines.append(f"- **{name}**: {', '.join(ids)}")
+            lines.append("")
+
+        # Root datasets
+        roots = dataset_lineage.get("root_datasets", [])
+        if roots:
+            lines.append("### 根数据集")
+            lines.append("")
+            for root in roots[:15]:
+                lines.append(f"- {root}")
+            lines.append("")
+
+        return lines
+
+    def _generate_org_graph_section(self, org_graph: dict = None) -> list[str]:
+        """Generate organization relationship graph section."""
+        lines = []
+        if not org_graph:
+            return lines
+
+        nodes = org_graph.get("nodes", [])
+        edges = org_graph.get("edges", [])
+        if not edges:
+            return lines
+
+        lines.append("## 组织关系图谱")
+        lines.append("")
+        lines.append(f"识别 {len(nodes)} 个组织节点，{len(edges)} 条关系边。")
+        lines.append("")
+
+        # Top clusters
+        clusters = org_graph.get("clusters", [])
+        if clusters:
+            lines.append("### 组织集群")
+            lines.append("")
+            for i, cluster in enumerate(clusters[:5]):
+                if len(cluster) >= 2:
+                    lines.append(f"- **集群 {i + 1}** ({len(cluster)} 个组织): {', '.join(cluster[:8])}")
+            lines.append("")
+
+        # Top centrality
+        centrality = org_graph.get("centrality", {})
+        if centrality:
+            top_central = sorted(centrality.items(), key=lambda x: x[1], reverse=True)[:10]
+            if top_central and top_central[0][1] > 0:
+                lines.append("### 核心组织 (度中心性)")
+                lines.append("")
+                for org, score in top_central:
+                    if score > 0:
+                        lines.append(f"- **{org}**: {score:.3f}")
+                lines.append("")
+
+        # Top edges
+        if edges:
+            lines.append("### 主要关系")
+            lines.append("")
+            for edge in edges[:10]:
+                lines.append(f"- {edge['source']} ↔ {edge['target']} ({edge['type']}, 权重 {edge['weight']})")
             lines.append("")
 
         return lines

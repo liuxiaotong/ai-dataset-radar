@@ -28,7 +28,8 @@
         "total_github_repos_high_relevance": { "type": "integer" },
         "total_papers": { "type": "integer" },
         "total_blog_posts": { "type": "integer" },
-        "total_x_tweets": { "type": "integer" }
+        "total_x_tweets": { "type": "integer" },
+        "total_reddit_posts": { "type": "integer" }
       }
     },
     "datasets": {
@@ -55,6 +56,11 @@
       "type": "object",
       "description": "X/Twitter activity from monitored accounts",
       "$ref": "#/definitions/XActivity"
+    },
+    "reddit_activity": {
+      "type": "object",
+      "description": "Reddit community posts from monitored subreddits",
+      "$ref": "#/definitions/RedditActivity"
     },
     "labs_activity": {
       "type": "object",
@@ -250,6 +256,39 @@
                 }
               }
             }
+          }
+        }
+      }
+    },
+    "RedditActivity": {
+      "type": "object",
+      "properties": {
+        "posts": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "subreddit": { "type": "string" },
+              "title": { "type": "string" },
+              "url": { "type": "string", "format": "uri" },
+              "selftext": { "type": "string" },
+              "score": { "type": "integer" },
+              "num_comments": { "type": "integer" },
+              "date": { "type": "string" },
+              "author": { "type": "string" },
+              "signals": {
+                "type": "array",
+                "items": { "type": "string" }
+              }
+            }
+          }
+        },
+        "metadata": {
+          "type": "object",
+          "properties": {
+            "subreddits_checked": { "type": "integer" },
+            "total_posts": { "type": "integer" },
+            "relevant_posts": { "type": "integer" }
           }
         }
       }

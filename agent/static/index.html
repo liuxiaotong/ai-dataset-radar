@@ -61,6 +61,9 @@
   <button class="tab-btn" onclick="switchTab('github')">GitHub</button>
   <button class="tab-btn" onclick="switchTab('papers')">论文</button>
   <button class="tab-btn" onclick="switchTab('blogs')">博客</button>
+  <button class="tab-btn" onclick="switchTab('reddit')">Reddit</button>
+  <button class="tab-btn" onclick="switchTab('search')">搜索</button>
+  <button class="tab-btn" onclick="switchTab('trends')">趋势</button>
 </nav>
 
 <!-- Content -->
@@ -68,11 +71,12 @@
 
   <!-- Overview Panel -->
   <div id="panel-overview" class="panel active">
-    <div class="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">
+    <div class="grid grid-cols-2 md:grid-cols-5 gap-4 mb-6">
       <div class="card"><div class="metric" id="m-datasets">-</div><div class="metric-label">数据集</div></div>
       <div class="card"><div class="metric" id="m-repos">-</div><div class="metric-label">GitHub 仓库</div></div>
       <div class="card"><div class="metric" id="m-papers">-</div><div class="metric-label">论文</div></div>
       <div class="card"><div class="metric" id="m-blogs">-</div><div class="metric-label">博客文章</div></div>
+      <div class="card"><div class="metric" id="m-reddit">-</div><div class="metric-label">Reddit 帖子</div></div>
     </div>
     <div class="grid md:grid-cols-2 gap-6">
       <div class="card">
@@ -183,6 +187,57 @@
     <div id="bl-loading" class="loading">加载中...</div>
   </div>
 
+  <!-- Reddit Panel -->
+  <div id="panel-reddit" class="panel">
+    <div class="flex gap-3 mb-4 items-center">
+      <select id="rd-subreddit" onchange="loadReddit()">
+        <option value="">全部子版</option>
+      </select>
+      <input id="rd-min-score" type="text" placeholder="最低分数" class="w-28" value="5" onchange="loadReddit()">
+      <span id="rd-count" class="text-xs text-slate-500 ml-auto"></span>
+    </div>
+    <div class="card overflow-x-auto">
+      <table>
+        <thead><tr>
+          <th onclick="sortReddit('score')">分数</th>
+          <th onclick="sortReddit('title')">标题</th>
+          <th onclick="sortReddit('subreddit')">子版</th>
+          <th onclick="sortReddit('num_comments')">评论</th>
+          <th>信号</th>
+          <th>作者</th>
+        </tr></thead>
+        <tbody id="rd-tbody"></tbody>
+      </table>
+      <div id="rd-loading" class="loading">加载中...</div>
+    </div>
+  </div>
+
+  <!-- Search Panel -->
+  <div id="panel-search" class="panel">
+    <div class="flex gap-3 mb-4 items-center">
+      <input id="sr-query" type="text" placeholder="搜索关键词..." class="w-72" onkeydown="if(event.key==='Enter')runSearch()">
+      <button onclick="runSearch()" class="tab-btn active" style="padding:0.375rem 1rem">搜索</button>
+      <span id="sr-count" class="text-xs text-slate-500 ml-auto"></span>
+    </div>
+    <div id="sr-results" class="space-y-4"></div>
+    <div id="sr-loading" class="loading" style="display:none">搜索中...</div>
+  </div>
+
+  <!-- Trends Panel -->
+  <div id="panel-trends" class="panel">
+    <div class="grid md:grid-cols-2 gap-6">
+      <div class="card">
+        <h3 class="text-sm font-semibold text-slate-400 mb-3">数据源趋势</h3>
+        <div style="max-height:400px;"><canvas id="chart-trends"></canvas></div>
+      </div>
+      <div class="card">
+        <h3 class="text-sm font-semibold text-slate-400 mb-3">数据集分类分布变化</h3>
+        <div style="max-height:400px;"><canvas id="chart-category-trends"></canvas></div>
+      </div>
+    </div>
+    <div id="tr-loading" class="loading">加载中...</div>
+  </div>
+
 </main>
 
 <script>
@@ -196,7 +251,10 @@ let allRepos = [];
 let dsSortKey = 'downloads', dsSortAsc = false;
 let ghSortKey = 'stars', ghSortAsc = false;
 let categoryChart = null;
-const loaded = { overview: false, datasets: false, github: false, papers: false, blogs: false };
+let allRedditPosts = [];
+let rdSortKey = 'score', rdSortAsc = false;
+let trendChart = null, catTrendChart = null;
+const loaded = { overview: false, datasets: false, github: false, papers: false, blogs: false, reddit: false, search: false, trends: false };
 
 // ========================================
 // API
@@ -214,7 +272,7 @@ async function fetchAPI(path) {
 // ========================================
 function switchTab(name) {
   document.querySelectorAll('.tab-btn').forEach((b, i) => {
-    b.classList.toggle('active', ['overview','datasets','github','papers','blogs'][i] === name);
+    b.classList.toggle('active', ['overview','datasets','github','papers','blogs','reddit','search','trends'][i] === name);
   });
   document.querySelectorAll('.panel').forEach(p => p.classList.remove('active'));
   document.getElementById('panel-' + name).classList.add('active');
@@ -225,6 +283,9 @@ function switchTab(name) {
     else if (name === 'github') loadGithub();
     else if (name === 'papers') loadPapers();
     else if (name === 'blogs') loadBlogs();
+    else if (name === 'reddit') loadReddit();
+    else if (name === 'search') { /* search is on-demand */ loaded.search = true; }
+    else if (name === 'trends') loadTrends();
   }
 }
 
@@ -260,6 +321,7 @@ async function loadOverview() {
   document.getElementById('m-repos').textContent = s.total_github_repos || 0;
   document.getElementById('m-papers').textContent = s.total_papers || 0;
   document.getElementById('m-blogs').textContent = s.total_blog_posts || 0;
+  document.getElementById('m-reddit').textContent = s.total_reddit_posts || 0;
 
   // Load datasets for chart + top 10
   const dsData = await fetchAPI('/datasets?limit=500');
@@ -479,6 +541,178 @@ async function loadBlogs() {
       </div>
     </div>
   `).join('');
+}
+
+// ========================================
+// Reddit
+// ========================================
+async function loadReddit() {
+  const el = document.getElementById('rd-loading');
+  el.style.display = 'block';
+  const sub = document.getElementById('rd-subreddit').value;
+  const minScore = parseInt(document.getElementById('rd-min-score').value) || 0;
+  let q = `?limit=200&min_score=${minScore}`;
+  if (sub) q += `&subreddit=${encodeURIComponent(sub)}`;
+  const data = await fetchAPI('/reddit' + q);
+  el.style.display = 'none';
+  if (!data) return;
+  allRedditPosts = data.posts || [];
+
+  // Populate subreddit filter dropdown
+  const sel = document.getElementById('rd-subreddit');
+  const current = sel.value;
+  const subs = [...new Set(allRedditPosts.map(p => p.subreddit))].sort();
+  sel.innerHTML = '<option value="">全部子版</option>' + subs.map(s => `<option value="${esc(s)}"${s === current ? ' selected' : ''}>${esc(s)}</option>`).join('');
+
+  renderReddit();
+}
+
+function sortReddit(key) {
+  if (rdSortKey === key) rdSortAsc = !rdSortAsc;
+  else { rdSortKey = key; rdSortAsc = false; }
+  renderReddit();
+}
+
+function renderReddit() {
+  const sub = document.getElementById('rd-subreddit').value;
+  let posts = allRedditPosts;
+  if (sub) posts = posts.filter(p => p.subreddit === sub);
+
+  posts = [...posts].sort((a, b) => {
+    let va = a[rdSortKey] ?? '', vb = b[rdSortKey] ?? '';
+    if (typeof va === 'number') return rdSortAsc ? va - vb : vb - va;
+    return rdSortAsc ? String(va).localeCompare(String(vb)) : String(vb).localeCompare(String(va));
+  });
+
+  document.getElementById('rd-count').textContent = `共 ${posts.length} 个帖子`;
+  const tbody = document.getElementById('rd-tbody');
+  if (posts.length === 0) {
+    tbody.innerHTML = '<tr><td colspan="6" class="text-center text-slate-500 py-6">无匹配帖子</td></tr>';
+    return;
+  }
+  tbody.innerHTML = posts.slice(0, 200).map(p => `<tr>
+    <td class="font-mono">${p.score || 0}</td>
+    <td><a href="${esc(p.url) || '#'}" target="_blank">${esc(p.title) || '-'}</a></td>
+    <td><span class="badge badge-purple">${esc(p.subreddit)}</span></td>
+    <td>${p.num_comments || 0}</td>
+    <td>${(p.signals || []).slice(0, 3).map(s => `<span class="badge badge-green">${esc(s)}</span>`).join(' ')}</td>
+    <td class="text-xs">${esc(p.author) || '-'}</td>
+  </tr>`).join('');
+}
+
+// ========================================
+// Search
+// ========================================
+async function runSearch() {
+  const q = document.getElementById('sr-query').value.trim();
+  if (!q) return;
+  const el = document.getElementById('sr-loading');
+  el.style.display = 'block';
+  const data = await fetchAPI(`/search?q=${encodeURIComponent(q)}&limit=20`);
+  el.style.display = 'none';
+  if (!data) return;
+
+  const results = data.results || {};
+  document.getElementById('sr-count').textContent = `共 ${data.total || 0} 条结果`;
+
+  const sections = [];
+  if (results.datasets && results.datasets.length) {
+    sections.push(`<div class="card"><h3 class="text-sm font-semibold text-slate-400 mb-2">数据集 (${results.datasets.length})</h3>
+      ${results.datasets.map(d => `<div class="py-1 border-t border-border/50"><a href="https://huggingface.co/datasets/${esc(d.id)}" target="_blank" class="text-sm">${esc(d.id)}</a> <span class="badge badge-blue">${esc(d.category || '')}</span></div>`).join('')}
+    </div>`);
+  }
+  if (results.github && results.github.length) {
+    sections.push(`<div class="card"><h3 class="text-sm font-semibold text-slate-400 mb-2">GitHub (${results.github.length})</h3>
+      ${results.github.map(r => `<div class="py-1 border-t border-border/50"><a href="${esc(r.url) || '#'}" target="_blank" class="text-sm">${esc(r.full_name || r.name)}</a> <span class="text-xs text-slate-500">★${r.stars || 0}</span></div>`).join('')}
+    </div>`);
+  }
+  if (results.papers && results.papers.length) {
+    sections.push(`<div class="card"><h3 class="text-sm font-semibold text-slate-400 mb-2">论文 (${results.papers.length})</h3>
+      ${results.papers.map(p => `<div class="py-1 border-t border-border/50"><a href="${esc(p.url || p.pdf_url) || '#'}" target="_blank" class="text-sm">${esc(p.title)}</a></div>`).join('')}
+    </div>`);
+  }
+  if (results.blogs && results.blogs.length) {
+    sections.push(`<div class="card"><h3 class="text-sm font-semibold text-slate-400 mb-2">博客 (${results.blogs.length})</h3>
+      ${results.blogs.map(a => `<div class="py-1 border-t border-border/50"><a href="${esc(a.url) || '#'}" target="_blank" class="text-sm">${esc(a.title)}</a> <span class="text-xs text-slate-500">${esc(a.source || '')}</span></div>`).join('')}
+    </div>`);
+  }
+  if (results.reddit && results.reddit.length) {
+    sections.push(`<div class="card"><h3 class="text-sm font-semibold text-slate-400 mb-2">Reddit (${results.reddit.length})</h3>
+      ${results.reddit.map(p => `<div class="py-1 border-t border-border/50"><a href="${esc(p.url) || '#'}" target="_blank" class="text-sm">${esc(p.title)}</a> <span class="badge badge-purple">${esc(p.subreddit || '')}</span></div>`).join('')}
+    </div>`);
+  }
+  document.getElementById('sr-results').innerHTML = sections.length ? sections.join('') : '<div class="card text-center text-slate-500 py-8">无匹配结果</div>';
+}
+
+// ========================================
+// Trends
+// ========================================
+async function loadTrends() {
+  const el = document.getElementById('tr-loading');
+  el.style.display = 'block';
+  const data = await fetchAPI('/trends?limit=30');
+  el.style.display = 'none';
+  if (!data || !data.timeline || data.timeline.length === 0) {
+    document.getElementById('panel-trends').innerHTML = '<div class="loading">暂无历史趋势数据。至少需要 2 次扫描记录。</div>';
+    return;
+  }
+
+  const timeline = data.timeline;
+  const dates = timeline.map(t => t.date);
+  const trendColors = ['#38bdf8', '#a78bfa', '#f472b6', '#fb923c', '#4ade80'];
+
+  // Source trends line chart
+  const ctx1 = document.getElementById('chart-trends').getContext('2d');
+  if (trendChart) trendChart.destroy();
+  trendChart = new Chart(ctx1, {
+    type: 'line',
+    data: {
+      labels: dates,
+      datasets: [
+        { label: '数据集', data: timeline.map(t => t.datasets), borderColor: trendColors[0], backgroundColor: trendColors[0] + '33', fill: true, tension: 0.3 },
+        { label: '仓库', data: timeline.map(t => t.repos), borderColor: trendColors[1], fill: false, tension: 0.3 },
+        { label: '论文', data: timeline.map(t => t.papers), borderColor: trendColors[2], fill: false, tension: 0.3 },
+        { label: '博客', data: timeline.map(t => t.blogs), borderColor: trendColors[3], fill: false, tension: 0.3 },
+        { label: 'Reddit', data: timeline.map(t => t.reddit), borderColor: trendColors[4], fill: false, tension: 0.3 },
+      ],
+    },
+    options: {
+      responsive: true,
+      plugins: { legend: { labels: { color: '#94a3b8', font: { size: 11 } } } },
+      scales: {
+        x: { ticks: { color: '#64748b', maxRotation: 45 }, grid: { color: '#1e293b' } },
+        y: { ticks: { color: '#64748b' }, grid: { color: '#1e293b' } },
+      },
+    },
+  });
+
+  // Category distribution bar chart
+  const catData = data.datasets_by_category || {};
+  const catLabels = Object.keys(catData);
+  if (catLabels.length && dates.length) {
+    const ctx2 = document.getElementById('chart-category-trends').getContext('2d');
+    if (catTrendChart) catTrendChart.destroy();
+    const chartColors = ['#38bdf8','#a78bfa','#f472b6','#fb923c','#4ade80','#fbbf24','#f87171','#94a3b8','#2dd4bf','#818cf8','#e879f9'];
+    catTrendChart = new Chart(ctx2, {
+      type: 'bar',
+      data: {
+        labels: dates,
+        datasets: catLabels.map((cat, i) => ({
+          label: cat.replace(/_/g, ' '),
+          data: dates.map(d => (catData[cat] || {})[d] || 0),
+          backgroundColor: chartColors[i % chartColors.length] + 'cc',
+        })),
+      },
+      options: {
+        responsive: true,
+        plugins: { legend: { labels: { color: '#94a3b8', font: { size: 10 } } } },
+        scales: {
+          x: { stacked: true, ticks: { color: '#64748b', maxRotation: 45 }, grid: { color: '#1e293b' } },
+          y: { stacked: true, ticks: { color: '#64748b' }, grid: { color: '#1e293b' } },
+        },
+      },
+    });
+  }
 }
 
 // ========================================

@@ -145,8 +145,28 @@ async def list_tools():
             },
         ),
         Tool(
+            name="radar_reddit",
+            description="获取 Reddit AI/ML 社区相关帖子（r/MachineLearning, r/LocalLLaMA 等）",
+            inputSchema={
+                "type": "object",
+                "properties": {
+                    "subreddit": {
+                        "type": "string",
+                        "description": "按子版块过滤，如 'MachineLearning', 'LocalLLaMA'",
+                        "default": "",
+                    },
+                    "min_score": {
+                        "type": "integer",
+                        "description": "最低分数过滤",
+                        "default": 0,
+                    },
+                    "limit": {"type": "integer", "description": "返回数量限制", "default": 20},
+                },
+            },
+        ),
+        Tool(
             name="radar_search",
-            description="跨所有数据源全文搜索（数据集、GitHub 仓库、论文、博客、X/Twitter），支持关键词和正则",
+            description="跨所有数据源全文搜索（数据集、GitHub、论文、博客、X/Twitter、Reddit），支持关键词和正则",
             inputSchema={
                 "type": "object",
                 "properties": {
@@ -459,6 +479,33 @@ def search_in_report(report: dict, query: str, sources: list[str], limit: int) -
                 break
         if matched:
             results["x"] = matched
+
+    # Search Reddit
+    if search_all or "reddit" in sources:
+        matched = []
+        reddit_data = report.get("reddit_activity", {})
+        for post in reddit_data.get("posts", []):
+            text = " ".join(
+                [
+                    post.get("title", ""),
+                    post.get("selftext", ""),
+                    post.get("subreddit", ""),
+                ]
+            )
+            if pattern.search(text):
+                matched.append(
+                    {
+                        "subreddit": post.get("subreddit"),
+                        "title": post.get("title", "")[:200],
+                        "url": post.get("url"),
+                        "score": post.get("score", 0),
+                        "date": post.get("date", ""),
+                    }
+                )
+            if len(matched) >= limit:
+                break
+        if matched:
+            results["reddit"] = matched
 
     return results
 
@@ -881,6 +928,44 @@ async def call_tool(name: str, arguments: dict):
         # Add summary
         active_sources = len([b for b in blog_posts if b.get("articles")])
         lines.insert(1, f"共 {active_sources} 个活跃博客源，{total_articles} 篇文章\n")
+
+        return [TextContent(type="text", text="\n".join(lines))]
+
+    elif name == "radar_reddit":
+        report = get_latest_report()
+        if not report:
+            return [TextContent(type="text", text="没有找到报告，请先运行 `radar_scan`。")]
+
+        reddit = report.get("reddit_activity", {})
+        posts = reddit.get("posts", [])
+        subreddit_filter = arguments.get("subreddit", "")
+        min_score = arguments.get("min_score", 0)
+        limit = arguments.get("limit", 20)
+
+        if subreddit_filter:
+            posts = [p for p in posts if subreddit_filter.lower() == p.get("subreddit", "").lower()]
+        if min_score:
+            posts = [p for p in posts if p.get("score", 0) >= min_score]
+
+        if not posts:
+            return [TextContent(type="text", text="没有找到相关 Reddit 帖子。")]
+
+        lines = [f"**Reddit 社区动态** ({len(posts)} 条相关帖子)\n"]
+        for post in posts[:limit]:
+            title = post.get("title", "")[:120]
+            url = post.get("url", "")
+            score = post.get("score", 0)
+            sub = post.get("subreddit", "")
+            date = post.get("date", "")
+            signals = post.get("signals", [])
+            lines.append(f"- **r/{sub}** ↑{score} [{title}]({url})")
+            meta = []
+            if date:
+                meta.append(date)
+            if signals:
+                meta.append(f"信号: {', '.join(signals[:3])}")
+            if meta:
+                lines.append(f"  - {' | '.join(meta)}")
 
         return [TextContent(type="text", text="\n".join(lines))]
 

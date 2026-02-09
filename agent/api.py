@@ -450,6 +450,38 @@ async def list_blogs(
     }
 
 
+@app.get("/reddit", dependencies=[Security(verify_api_key)])
+async def list_reddit(
+    subreddit: Optional[str] = Query(None, description="Filter by subreddit name"),
+    min_score: Optional[int] = Query(None, description="Minimum post score"),
+    limit: int = Query(50, ge=1, le=500, description="Maximum posts (1-500)"),
+):
+    """
+    Get Reddit posts from monitored AI/ML subreddits.
+
+    Monitors: r/MachineLearning, r/LocalLLaMA, r/LanguageTechnology, etc.
+    Posts are filtered by AI dataset signal keywords and minimum score.
+    """
+    report = get_latest_report()
+    if not report:
+        raise HTTPException(status_code=404, detail="No report found. Run /scan first.")
+
+    reddit = report.get("reddit_activity", {})
+    posts = reddit.get("posts", [])
+
+    if subreddit:
+        posts = [p for p in posts if subreddit.lower() == p.get("subreddit", "").lower()]
+
+    if min_score is not None:
+        posts = [p for p in posts if p.get("score", 0) >= min_score]
+
+    return {
+        "count": len(posts[:limit]),
+        "metadata": reddit.get("metadata", {}),
+        "posts": posts[:limit],
+    }
+
+
 def _redact_secrets(obj, sensitive_keys=("token", "api_key", "secret", "password", "credential")):
     """Recursively redact sensitive values from config."""
     if isinstance(obj, dict):
@@ -498,6 +530,140 @@ async def get_schema():
 
     with open(schema_path, encoding="utf-8") as f:
         return json.load(f)
+
+
+@app.get("/search", dependencies=[Security(verify_api_key)])
+async def search(
+    q: str = Query(..., min_length=1, description="Search keyword"),
+    sources: Optional[str] = Query(None, description="Comma-separated: datasets,github,papers,blogs,reddit"),
+    limit: int = Query(10, ge=1, le=100, description="Max results per source"),
+):
+    """
+    Full-text search across all data sources.
+
+    Searches datasets, GitHub repos, papers, blogs, and Reddit posts.
+    """
+    report = get_latest_report()
+    if not report:
+        raise HTTPException(status_code=404, detail="No report found. Run /scan first.")
+
+    q_lower = q.lower()
+    allowed_sources = set(sources.split(",")) if sources else {"datasets", "github", "papers", "blogs", "reddit"}
+
+    results = {}
+
+    if "datasets" in allowed_sources:
+        datasets = report.get("datasets", [])
+        matched = [
+            d for d in datasets
+            if q_lower in (d.get("id", "") + " " + d.get("description", "") + " " + d.get("author", "")).lower()
+        ]
+        results["datasets"] = matched[:limit]
+
+    if "github" in allowed_sources:
+        repos = []
+        for org_data in report.get("github_activity", []):
+            for repo in org_data.get("repos_updated", []):
+                text = (repo.get("full_name", "") + " " + repo.get("description", "") + " " + " ".join(repo.get("topics", []))).lower()
+                if q_lower in text:
+                    repos.append(repo)
+        results["github"] = repos[:limit]
+
+    if "papers" in allowed_sources:
+        papers = report.get("papers", [])
+        matched = [
+            p for p in papers
+            if q_lower in (p.get("title", "") + " " + p.get("abstract", "") + " " + " ".join(p.get("authors", []))).lower()
+        ]
+        results["papers"] = matched[:limit]
+
+    if "blogs" in allowed_sources:
+        blog_results = []
+        for blog in report.get("blog_posts", []):
+            for article in blog.get("articles", []):
+                text = (article.get("title", "") + " " + article.get("summary", "")).lower()
+                if q_lower in text:
+                    blog_results.append({**article, "source": blog.get("source")})
+        results["blogs"] = blog_results[:limit]
+
+    if "reddit" in allowed_sources:
+        reddit = report.get("reddit_activity", {})
+        posts = reddit.get("posts", [])
+        matched = [
+            p for p in posts
+            if q_lower in (p.get("title", "") + " " + p.get("selftext", "")).lower()
+        ]
+        results["reddit"] = matched[:limit]
+
+    total = sum(len(v) for v in results.values())
+    return {"query": q, "total": total, "results": results}
+
+
+@app.get("/trends", dependencies=[Security(verify_api_key)])
+async def get_trends(
+    limit: int = Query(30, ge=1, le=90, description="Number of recent reports to include"),
+):
+    """
+    Get historical trend data across reports.
+
+    Reads summary stats from each dated report to produce time-series data
+    for charting dataset counts, repos, papers, etc. over time.
+    """
+    reports_dir = get_reports_dir()
+    if not reports_dir.exists():
+        raise HTTPException(status_code=404, detail="No reports directory found.")
+
+    # Scan report directories sorted by date
+    date_dirs = sorted(
+        [d for d in reports_dir.iterdir() if d.is_dir() and len(d.name) == 10],
+        key=lambda d: d.name,
+        reverse=True,
+    )[:limit]
+
+    timeline = []
+    for date_dir in reversed(date_dirs):
+        json_files = sorted(date_dir.glob("intel_report_*.json"), reverse=True)
+        if not json_files:
+            continue
+        try:
+            with open(json_files[0], encoding="utf-8") as f:
+                data = json.load(f)
+            summary = data.get("summary", {})
+            timeline.append({
+                "date": date_dir.name,
+                "datasets": summary.get("total_datasets", 0),
+                "repos": summary.get("total_github_repos", 0),
+                "papers": summary.get("total_papers", 0),
+                "blogs": summary.get("total_blog_posts", 0),
+                "reddit": summary.get("total_reddit_posts", 0),
+            })
+        except (json.JSONDecodeError, OSError):
+            continue
+
+    # Build per-org activity over time (from datasets_by_type)
+    org_activity = {}
+    for entry in timeline:
+        date = entry["date"]
+        date_dir = reports_dir / date
+        json_files = sorted(date_dir.glob("intel_report_*.json"), reverse=True)
+        if not json_files:
+            continue
+        try:
+            with open(json_files[0], encoding="utf-8") as f:
+                data = json.load(f)
+            datasets_by_type = data.get("datasets_by_type", {})
+            for category, ds_list in datasets_by_type.items():
+                if category not in org_activity:
+                    org_activity[category] = {}
+                org_activity[category][date] = len(ds_list) if isinstance(ds_list, list) else 0
+        except (json.JSONDecodeError, OSError):
+            continue
+
+    return {
+        "count": len(timeline),
+        "timeline": timeline,
+        "datasets_by_category": org_activity,
+    }
 
 
 @app.get("/tools", dependencies=[Security(verify_api_key)])

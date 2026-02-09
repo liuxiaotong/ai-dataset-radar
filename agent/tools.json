@@ -220,8 +220,51 @@
       }
     },
     {
+      "name": "radar_reddit",
+      "description": "Get Reddit posts from monitored subreddits (MachineLearning, LocalLLaMA, dataset, etc.) filtered by AI dataset relevance signals.",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "subreddit": {
+            "type": "string",
+            "description": "Filter by specific subreddit name (e.g. 'MachineLearning')"
+          },
+          "min_score": {
+            "type": "integer",
+            "description": "Minimum post score filter (default: 5)",
+            "default": 5
+          },
+          "limit": {
+            "type": "integer",
+            "description": "Maximum number of posts to return",
+            "default": 20
+          }
+        }
+      },
+      "returns": {
+        "type": "object",
+        "description": "Reddit posts with relevance signals",
+        "properties": {
+          "posts": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "subreddit": { "type": "string" },
+                "title": { "type": "string" },
+                "url": { "type": "string" },
+                "score": { "type": "integer" },
+                "signals": { "type": "array" }
+              }
+            }
+          },
+          "metadata": { "type": "object" }
+        }
+      }
+    },
+    {
       "name": "radar_search",
-      "description": "Full-text search across all data sources (datasets, GitHub repos, papers, blogs, X/Twitter). Supports keywords and regex patterns.",
+      "description": "Full-text search across all data sources (datasets, GitHub repos, papers, blogs, X/Twitter, Reddit). Supports keywords and regex patterns.",
       "parameters": {
         "type": "object",
         "properties": {
@@ -233,7 +276,7 @@
             "type": "array",
             "items": {
               "type": "string",
-              "enum": ["datasets", "github", "papers", "blogs", "x"]
+              "enum": ["datasets", "github", "papers", "blogs", "x", "reddit"]
             },
             "description": "Limit search to specific data sources (default: all)",
             "default": []
@@ -254,7 +297,8 @@
           "github": { "type": "array" },
           "papers": { "type": "array" },
           "blogs": { "type": "array" },
-          "x": { "type": "array" }
+          "x": { "type": "array" },
+          "reddit": { "type": "array" }
         }
       }
     },
