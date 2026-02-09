@@ -951,3 +951,64 @@ class TestRadarOrgGraphTool:
             result = await call_tool("radar_org_graph", {})
             text = result[0].text
             assert "没有" in text
+
+
+# ─── radar_alerts tests ─────────────────────────────────────────────────────
+
+
+class TestRadarAlertsTool:
+    """Test radar_alerts tool execution via call_tool."""
+
+    def _write_alerts(self, tmp_path, date_str, alerts):
+        d = tmp_path / "data" / "reports" / date_str
+        d.mkdir(parents=True, exist_ok=True)
+        (d / "alerts.json").write_text(json.dumps(alerts))
+
+    @pytest.mark.asyncio
+    async def test_alerts_with_data(self, tmp_path):
+        from server import call_tool
+
+        alerts = [
+            {"rule": "zero_data_github", "severity": "critical",
+             "title": "GitHub: 0 orgs", "detail": "Check API.",
+             "timestamp": "2026-02-09T08:00:00", "fingerprint": "abc"},
+            {"rule": "trend_breakthrough", "severity": "info",
+             "title": "Breakthrough: ds1", "detail": "Growth.",
+             "timestamp": "2026-02-09T09:00:00", "fingerprint": "def"},
+        ]
+        self._write_alerts(tmp_path, "2026-02-09", alerts)
+
+        with patch("server.PROJECT_ROOT", tmp_path):
+            result = await call_tool("radar_alerts", {})
+            text = result[0].text
+            assert "告警记录" in text
+            assert "GitHub: 0 orgs" in text
+            assert "Breakthrough: ds1" in text
+            assert "CRITICAL" in text
+
+    @pytest.mark.asyncio
+    async def test_alerts_severity_filter(self, tmp_path):
+        from server import call_tool
+
+        alerts = [
+            {"rule": "r1", "severity": "critical", "title": "Crit",
+             "detail": "", "timestamp": "2026-02-09T08:00:00", "fingerprint": "a"},
+            {"rule": "r2", "severity": "info", "title": "Info",
+             "detail": "", "timestamp": "2026-02-09T09:00:00", "fingerprint": "b"},
+        ]
+        self._write_alerts(tmp_path, "2026-02-09", alerts)
+
+        with patch("server.PROJECT_ROOT", tmp_path):
+            result = await call_tool("radar_alerts", {"severity": "critical"})
+            text = result[0].text
+            assert "Crit" in text
+            assert "Info" not in text
+
+    @pytest.mark.asyncio
+    async def test_alerts_empty(self, tmp_path):
+        from server import call_tool
+
+        with patch("server.PROJECT_ROOT", tmp_path):
+            result = await call_tool("radar_alerts", {})
+            text = result[0].text
+            assert "没有" in text

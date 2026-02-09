@@ -721,7 +721,7 @@ async def get_alerts(limit: int = 50):
 
     Returns alerts from the most recent alert logs, sorted by timestamp descending.
     """
-    reports_dir = _data_dir() / "reports"
+    reports_dir = get_reports_dir()
     if not reports_dir.exists():
         return {"alerts": [], "total": 0}
 

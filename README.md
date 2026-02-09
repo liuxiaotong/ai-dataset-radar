@@ -8,7 +8,7 @@
 [![CI](https://github.com/liuxiaotong/ai-dataset-radar/actions/workflows/ci.yml/badge.svg)](https://github.com/liuxiaotong/ai-dataset-radar/actions/workflows/ci.yml)
 [![License: MIT](https://img.shields.io/badge/License-MIT-green.svg)](LICENSE)
 [![Python 3.10+](https://img.shields.io/badge/python-3.10+-blue.svg)](https://www.python.org/downloads/)
-[![Tests](https://img.shields.io/badge/tests-895_passed-brightgreen.svg)](#开发路线)
+[![Tests](https://img.shields.io/badge/tests-902_passed-brightgreen.svg)](#开发路线)
 [![Agent Ready](https://img.shields.io/badge/Agent-Ready-orange.svg)](docs/agent-integration.md)
 [![MCP](https://img.shields.io/badge/MCP-17_Tools-purple.svg)](docs/mcp.md)
 
@@ -25,7 +25,7 @@
 - **异常告警** — 7 条规则自动检测（零数据/阈值/趋势突破/变化），Email + Webhook 推送
 - **高性能异步** — aiohttp + asyncio.gather 全链路并发，500+ 请求同时执行
 - **竞品分析** — 竞品矩阵、数据集谱系、组织关系图谱三维交叉分析
-- **可视化仪表盘** — 11 Tab 面板 + Chart.js 趋势图 + 全局搜索
+- **可视化仪表盘** — 12 Tab 面板 + Chart.js 趋势图 + 全局搜索
 - **双格式输出** — JSON (Agent) + Markdown (人类) + AI 分析报告 (决策层)
 - **一键 Recipe** — `--recipe` 自动评分选 Top N 数据集，调用 DataRecipe 深度分析
 
@@ -53,7 +53,7 @@ flowchart TD
 
     subgraph I[" Agent 接口"]
         direction LR
-        I1["REST API 19 端点"] ~~~ I2["MCP 17 工具"] ~~~ I3["Skills 7 命令"] ~~~ I4["Dashboard 11 Tab"]
+        I1["REST API 19 端点"] ~~~ I2["MCP 17 工具"] ~~~ I3["Skills 7 命令"] ~~~ I4["Dashboard 12 Tab"]
     end
 
     O --> I
@@ -121,7 +121,7 @@ python agent/api.py
 ```
 
 <details>
-<summary><b>Dashboard 预览（11 Tab 面板）</b></summary>
+<summary><b>Dashboard 预览（12 Tab 面板）</b></summary>
 
 ![Dashboard Overview](docs/images/dashboard-overview.png)
 

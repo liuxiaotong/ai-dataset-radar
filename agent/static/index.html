@@ -67,6 +67,7 @@
   <button class="tab-btn" onclick="switchTab('orggraph')">图谱</button>
   <button class="tab-btn" onclick="switchTab('search')">搜索</button>
   <button class="tab-btn" onclick="switchTab('trends')">趋势</button>
+  <button class="tab-btn" onclick="switchTab('alerts')">告警</button>
 </nav>
 
 <!-- Content -->
@@ -304,6 +305,23 @@
     <div id="tr-loading" class="loading">加载中...</div>
   </div>
 
+  <!-- Alerts Panel -->
+  <div id="panel-alerts" class="panel">
+    <div class="flex gap-3 mb-4">
+      <select id="alert-severity" class="bg-card border border-border rounded px-3 py-1.5 text-sm" onchange="loadAlerts()">
+        <option value="">全部严重度</option>
+        <option value="critical">Critical</option>
+        <option value="warning">Warning</option>
+        <option value="info">Info</option>
+      </select>
+    </div>
+    <table>
+      <thead><tr><th>严重度</th><th>标题</th><th>规则</th><th>详情</th><th>时间</th></tr></thead>
+      <tbody id="alert-body"></tbody>
+    </table>
+    <div id="al-loading" class="loading">加载中...</div>
+  </div>
+
 </main>
 
 <script>
@@ -322,7 +340,7 @@ let rdSortKey = 'score', rdSortAsc = false;
 let trendChart = null, catTrendChart = null;
 let allMatrixRows = [];
 let mxSortKey = 'total', mxSortAsc = false;
-const loaded = { overview: false, datasets: false, github: false, papers: false, blogs: false, reddit: false, matrix: false, lineage: false, orggraph: false, search: false, trends: false };
+const loaded = { overview: false, datasets: false, github: false, papers: false, blogs: false, reddit: false, matrix: false, lineage: false, orggraph: false, search: false, trends: false, alerts: false };
 
 // ========================================
 // API
@@ -340,7 +358,7 @@ async function fetchAPI(path) {
 // ========================================
 function switchTab(name) {
   document.querySelectorAll('.tab-btn').forEach((b, i) => {
-    b.classList.toggle('active', ['overview','datasets','github','papers','blogs','reddit','matrix','lineage','orggraph','search','trends'][i] === name);
+    b.classList.toggle('active', ['overview','datasets','github','papers','blogs','reddit','matrix','lineage','orggraph','search','trends','alerts'][i] === name);
   });
   document.querySelectorAll('.panel').forEach(p => p.classList.remove('active'));
   document.getElementById('panel-' + name).classList.add('active');
@@ -357,6 +375,7 @@ function switchTab(name) {
     else if (name === 'orggraph') loadOrgGraph();
     else if (name === 'search') { /* search is on-demand */ loaded.search = true; }
     else if (name === 'trends') loadTrends();
+    else if (name === 'alerts') loadAlerts();
   }
 }
 
@@ -935,6 +954,29 @@ async function loadTrends() {
       },
     });
   }
+}
+
+// ========================================
+// Alerts
+// ========================================
+async function loadAlerts() {
+  const sev = document.getElementById('alert-severity').value;
+  const params = sev ? `?limit=100&severity=${sev}` : '?limit=100';
+  const data = await fetchAPI('/alerts' + params);
+  document.getElementById('al-loading').style.display = 'none';
+  if (!data || !data.alerts || data.alerts.length === 0) {
+    document.getElementById('alert-body').innerHTML = '<tr><td colspan="5" class="text-center text-slate-500 py-8">暂无告警记录</td></tr>';
+    return;
+  }
+  const icons = { critical: '🔴', warning: '🟡', info: '🔵' };
+  document.getElementById('alert-body').innerHTML = data.alerts.map(a => `<tr>
+    <td>${icons[a.severity] || '⚪'} <span class="font-semibold">${esc(a.severity?.toUpperCase())}</span></td>
+    <td>${esc(a.title)}</td>
+    <td><code class="text-xs bg-card px-1.5 py-0.5 rounded">${esc(a.rule)}</code></td>
+    <td class="text-slate-400 text-xs">${esc(a.detail)}</td>
+    <td class="text-xs text-slate-500 whitespace-nowrap">${esc(a.timestamp?.slice(0, 19))}</td>
+  </tr>`).join('');
+  loaded.alerts = true;
 }
 
 // ========================================

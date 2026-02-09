@@ -77,11 +77,11 @@ AI Dataset Radar 已完成的里程碑。
 
 - CI 流水线 (GitHub Actions: ruff lint + pytest, push/PR 触发)
 - Docker 容器化 (Dockerfile + docker-compose: scan 扫描 + api 服务)
-- 测试覆盖 (895 用例)
+- 测试覆盖 (902 用例)
 - API 安全加固 v1+v2 (Bearer Token 认证 + 速率限制 + XSS 防护 + 非 root Docker)
 - 启动配置校验 (validate_config: 必需配置段 + 类型检查)
 - 缓存大小限制 (FileCache LRU 驱逐, max_entries=1000)
 - 版本号统一管理 (`src/_version.py` 单一来源 + git pre-commit hook)
-- Web 可视化仪表盘 (`/dashboard`: 11 Tab 面板, Chart.js 趋势图, 全局搜索, 深色主题)
+- Web 可视化仪表盘 (`/dashboard`: 12 Tab 面板, Chart.js 趋势图, 全局搜索, 深色主题)
 - dotenv 环境变量支持 (python-dotenv 自动加载 .env)
 - API 扫描 X/Twitter 补全 + Markdown 报告 X/Twitter 章节

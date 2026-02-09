@@ -19,7 +19,7 @@ uvicorn agent.api:app --port 8080
 
 | 端点 | 方法 | 功能 |
 |------|------|------|
-| `/dashboard` | GET | Web 可视化仪表盘（11 Tab 面板） |
+| `/dashboard` | GET | Web 可视化仪表盘（12 Tab 面板） |
 | `/ui` | GET | 重定向至仪表盘 |
 | `/health` | GET | 健康检查（认证状态、报告可用性） |
 | `/summary` | GET | 获取最新报告摘要 |
