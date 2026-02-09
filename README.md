@@ -1,13 +1,14 @@
 <div align="center">
 
-# AI Dataset Radar
+<h1>📡 AI Dataset Radar</h1>
 
-**面向 AI Agent 的训练数据竞争情报系统**
-**Competitive intelligence system for AI training datasets**
+<p><strong>面向 AI Agent 的训练数据竞争情报系统</strong><br/>
+<em>Competitive intelligence system for AI training datasets</em></p>
 
 [![CI](https://github.com/liuxiaotong/ai-dataset-radar/actions/workflows/ci.yml/badge.svg)](https://github.com/liuxiaotong/ai-dataset-radar/actions/workflows/ci.yml)
-[![License: MIT](https://img.shields.io/badge/License-MIT-green.svg)](LICENSE)
 [![Python 3.10+](https://img.shields.io/badge/python-3.10+-blue.svg)](https://www.python.org/downloads/)
+[![License: MIT](https://img.shields.io/badge/License-MIT-green.svg)](LICENSE)
+<br/>
 [![Tests](https://img.shields.io/badge/tests-919_passed-brightgreen.svg)](#开发路线)
 [![Agent Ready](https://img.shields.io/badge/Agent-Ready-orange.svg)](docs/agent-integration.md)
 [![MCP](https://img.shields.io/badge/MCP-17_Tools-purple.svg)](docs/mcp.md)
@@ -16,23 +17,14 @@
 
 </div>
 
----
+> 🎯 **全源覆盖** 86 HF orgs · 50 GitHub orgs · 71 博客 · 125 X 账户 · 5 Reddit 社区
+> ⚡ **高性能异步** aiohttp 全链路并发，500+ 请求同时执行
+> 🤖 **智能体原生** MCP 17 工具 + REST API 19 端点 + Skills 7 命令
+> 📊 **竞品分析** 竞品矩阵 · 数据集谱系 · 组织关系图谱三维交叉分析
+> 🔔 **异常告警** 7 条规则自动检测，Email + Webhook 推送
 
-## 亮点
-
-- **全源覆盖** — 86 HF orgs、50 GitHub orgs、71 博客、125 X 账户、5 Reddit 社区、arXiv 5 领域
-- **智能体原生** — MCP 17 工具 + REST API + Function Calling + Claude Code 7 Skills
-- **异常告警** — 7 条规则自动检测（零数据/阈值/趋势突破/变化），Email + Webhook 推送
-- **增量扫描** — 水位线驱动智能窗口，后续扫描仅处理新增数据，`--full-scan` 可强制全量
-- **高性能异步** — aiohttp + asyncio.gather 全链路并发，500+ 请求同时执行
-- **竞品分析** — 竞品矩阵、数据集谱系、组织关系图谱三维交叉分析
-- **可视化仪表盘** — 12 Tab 面板 + Chart.js 趋势图 + 全局搜索
-- **双格式输出** — JSON (Agent) + Markdown (人类) + AI 分析报告 (决策层)
-- **一键 Recipe** — `--recipe` 自动评分选 Top N 数据集，调用 DataRecipe 深度分析
-
----
-
-## 架构
+<details>
+<summary>🏗️ 架构</summary>
 
 ```mermaid
 flowchart TD
@@ -59,6 +51,8 @@ flowchart TD
 
     O --> I
 ```
+
+</details>
 
 ---
 
@@ -107,11 +101,16 @@ python src/main_intel.py --full-scan --days 7       # 强制全量扫描
 python src/main_intel.py --days 7 --api-insights    # 显式调用 LLM API
 ```
 
+<details>
+<summary><b>命令参考</b></summary>
+
 | 环境 | 行为 |
 |------|------|
 | 默认 | 保存 prompt 文件，由 Claude Code 环境 LLM 分析 |
 | `--api-insights` | 调用 LLM API（Anthropic/Kimi/DeepSeek 等）生成 `_insights.md` |
 | `--no-insights` | 跳过 insights |
+
+</details>
 
 ### REST API + Dashboard
 
@@ -142,6 +141,9 @@ python agent/api.py
 
 ### MCP Server
 
+<details>
+<summary>⚙️ MCP 配置</summary>
+
 ```json
 {
   "mcpServers": {
@@ -152,6 +154,8 @@ python agent/api.py
   }
 }
 ```
+
+</details>
 
 > 17 个工具（scan/search/diff/trend/history/reddit/matrix/lineage/org-graph/alerts 等）及配置详情见 [MCP 文档](docs/mcp.md)。
 
@@ -204,11 +208,14 @@ python agent/api.py
 
 ---
 
-## 生态
+## Data Pipeline 生态
+
+<details>
+<summary>🗺️ 生态架构图</summary>
 
 ```mermaid
 graph LR
-    Radar["🔍 Radar<br/>情报发现"] -->|--recipe| Recipe["📋 Recipe<br/>逆向分析"]
+    Radar["🔍 Radar<br/>情报发现"] --> Recipe["📋 Recipe<br/>逆向分析"]
     Recipe --> Synth["🔄 Synth<br/>数据合成"]
     Recipe --> Label["🏷️ Label<br/>数据标注"]
     Synth --> Check["✅ Check<br/>数据质检"]
@@ -221,15 +228,17 @@ graph LR
     style Radar fill:#0969da,color:#fff,stroke:#0969da
 ```
 
-| 层 | 项目 | PyPI&nbsp;包 | 说明 | 仓库 |
+</details>
+
+| 层 | 项目 | PyPI 包 | 说明 | 仓库 |
 |---|---|---|---|---|
-| 情报 | **AI&nbsp;Dataset&nbsp;Radar** | knowlyr-radar | 竞争情报、趋势分析 | You&nbsp;are&nbsp;here |
-| 分析 | **DataRecipe** | knowlyr-datarecipe | 逆向分析、Schema提取、成本估算 | [GitHub](https://github.com/liuxiaotong/data-recipe) |
-| 生产 | **DataSynth** | knowlyr-datasynth | LLM批量合成、种子数据扩充 | [GitHub](https://github.com/liuxiaotong/data-synth) |
+| 情报 | **AI Dataset Radar** | knowlyr-radar | 竞争情报、趋势分析 | You are here |
+| 分析 | **DataRecipe** | knowlyr-datarecipe | 逆向分析、Schema 提取、成本估算 | [GitHub](https://github.com/liuxiaotong/data-recipe) |
+| 生产 | **DataSynth** | knowlyr-datasynth | LLM 批量合成、种子数据扩充 | [GitHub](https://github.com/liuxiaotong/data-synth) |
 | 生产 | **DataLabel** | knowlyr-datalabel | 轻量标注、多标注员合并 | [GitHub](https://github.com/liuxiaotong/data-label) |
 | 质检 | **DataCheck** | knowlyr-datacheck | 规则验证、重复检测、分布分析 | [GitHub](https://github.com/liuxiaotong/data-check) |
 | 质检 | **ModelAudit** | knowlyr-modelaudit | 蒸馏检测、模型指纹、身份验证 | [GitHub](https://github.com/liuxiaotong/model-audit) |
-| Agent | **knowlyr-agent** | knowlyr-sandbox/recorder/reward/hub | 沙箱+录制+Reward+编排 | [GitHub](https://github.com/liuxiaotong/knowlyr-agent) |
+| Agent | **knowlyr-agent** | knowlyr-sandbox / recorder / reward / hub | 沙箱 + 录制 + Reward + 编排 | [GitHub](https://github.com/liuxiaotong/knowlyr-agent) |
 
 > DataRecipe 联动详情（评分公式、输出结构、MCP 双服务配置）见 [DataRecipe 文档](docs/datarecipe.md)。
 
@@ -248,7 +257,26 @@ graph LR
 
 > 已完成里程碑见 [CHANGELOG.md](CHANGELOG.md)。
 
-## 许可证
+## 开发
+
+```bash
+# 安装依赖
+pip install -r requirements.txt && playwright install chromium
+cp .env.example .env
+
+# 运行测试 (919 个用例)
+pytest
+
+# 代码格式化 + lint
+ruff check src/
+ruff format src/
+```
+
+**测试覆盖**: 34 个测试文件，919 个测试用例。
+
+**CI**: GitHub Actions，Tag push 自动发布。定时任务 (`daily.yml`) 支持每日自动扫描。
+
+## License
 
 [MIT](LICENSE)
 
