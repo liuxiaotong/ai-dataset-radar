@@ -175,7 +175,7 @@ async def list_tools():
                         "type": "array",
                         "items": {
                             "type": "string",
-                            "enum": ["datasets", "github", "papers", "blogs", "x"],
+                            "enum": ["datasets", "github", "papers", "blogs", "x", "reddit"],
                         },
                         "description": "限制搜索的数据源（默认搜索全部）",
                         "default": [],
@@ -238,6 +238,20 @@ async def list_tools():
                     "date_b": {
                         "type": "string",
                         "description": "较新的报告日期 (YYYY-MM-DD)，留空则使用最新报告",
+                    },
+                },
+            },
+        ),
+        Tool(
+            name="radar_trends",
+            description="查看历史趋势数据：各数据源随时间的数量变化，支持折线图数据输出",
+            inputSchema={
+                "type": "object",
+                "properties": {
+                    "limit": {
+                        "type": "integer",
+                        "description": "返回最近几期报告的数据",
+                        "default": 30,
                     },
                 },
             },
@@ -1177,7 +1191,71 @@ async def call_tool(name: str, arguments: dict):
             lines.append("")
             total += len(results["x"])
 
+        if "reddit" in results:
+            lines.append(f"### Reddit ({len(results['reddit'])} 条)")
+            for item in results["reddit"]:
+                lines.append(
+                    f"- **r/{item.get('subreddit', '')}** ↑{item.get('score', 0)} {item.get('title', '')[:120]}"
+                )
+                if item.get("url"):
+                    lines.append(f"  {item['url']}")
+            lines.append("")
+            total += len(results["reddit"])
+
         lines.insert(1, f"共 {total} 条匹配结果\n")
+
+        return [TextContent(type="text", text="\n".join(lines))]
+
+    elif name == "radar_trends":
+        all_reports = get_all_reports_sorted()
+        limit = arguments.get("limit", 30)
+        reports_to_show = all_reports[:limit]
+
+        if not reports_to_show:
+            return [TextContent(type="text", text="没有找到历史报告。请先运行 `radar_scan` 积累数据。")]
+
+        lines = [f"**历史趋势数据 (最近 {len(reports_to_show)} 期)**\n"]
+        lines.append("| 日期 | 数据集 | GitHub | 论文 | 博客 | Reddit |")
+        lines.append("|------|--------|--------|------|------|--------|")
+
+        data_points = []
+        for rp in reports_to_show:
+            try:
+                with open(rp, "r", encoding="utf-8") as f:
+                    r = json.load(f)
+                s = r.get("summary", {})
+                date = r.get("generated_at", "")[:10]
+                row = {
+                    "date": date,
+                    "datasets": s.get("total_datasets", 0),
+                    "github": s.get("total_github_repos", 0),
+                    "papers": s.get("total_papers", 0),
+                    "blogs": s.get("total_blog_posts", 0),
+                    "reddit": s.get("total_reddit_posts", 0),
+                }
+                data_points.append(row)
+                lines.append(
+                    f"| {row['date']} | {row['datasets']} | {row['github']} "
+                    f"| {row['papers']} | {row['blogs']} | {row['reddit']} |"
+                )
+            except (json.JSONDecodeError, OSError):
+                continue
+
+        if len(data_points) >= 2:
+            newest = data_points[0]
+            oldest = data_points[-1]
+            lines.append("")
+            lines.append(f"**变化趋势 ({oldest['date']} → {newest['date']}):**")
+            for key, label in [
+                ("datasets", "数据集"),
+                ("github", "GitHub 仓库"),
+                ("papers", "论文"),
+                ("blogs", "博客"),
+                ("reddit", "Reddit"),
+            ]:
+                delta = newest[key] - oldest[key]
+                sign = "+" if delta > 0 else ""
+                lines.append(f"- {label}: {sign}{delta}")
 
         return [TextContent(type="text", text="\n".join(lines))]
 

@@ -62,6 +62,9 @@
   <button class="tab-btn" onclick="switchTab('papers')">论文</button>
   <button class="tab-btn" onclick="switchTab('blogs')">博客</button>
   <button class="tab-btn" onclick="switchTab('reddit')">Reddit</button>
+  <button class="tab-btn" onclick="switchTab('matrix')">竞品</button>
+  <button class="tab-btn" onclick="switchTab('lineage')">谱系</button>
+  <button class="tab-btn" onclick="switchTab('orggraph')">图谱</button>
   <button class="tab-btn" onclick="switchTab('search')">搜索</button>
   <button class="tab-btn" onclick="switchTab('trends')">趋势</button>
 </nav>
@@ -212,6 +215,69 @@
     </div>
   </div>
 
+  <!-- Matrix Panel -->
+  <div id="panel-matrix" class="panel">
+    <div class="flex gap-3 mb-4 items-center">
+      <span class="text-sm text-slate-400">组织 × 数据类型竞争矩阵</span>
+      <span id="mx-count" class="text-xs text-slate-500 ml-auto"></span>
+    </div>
+    <div class="card overflow-x-auto">
+      <table>
+        <thead><tr>
+          <th onclick="sortMatrix('org')">组织</th>
+          <th onclick="sortMatrix('datasets')">数据集</th>
+          <th onclick="sortMatrix('repos')">仓库</th>
+          <th onclick="sortMatrix('papers')">论文</th>
+          <th onclick="sortMatrix('blogs')">博客</th>
+          <th onclick="sortMatrix('total')">总计</th>
+        </tr></thead>
+        <tbody id="mx-tbody"></tbody>
+      </table>
+      <div id="mx-loading" class="loading">加载中...</div>
+    </div>
+  </div>
+
+  <!-- Lineage Panel -->
+  <div id="panel-lineage" class="panel">
+    <div class="flex gap-3 mb-4 items-center">
+      <span class="text-sm text-slate-400">数据集派生关系 / 版本链 / Fork</span>
+      <span id="ln-count" class="text-xs text-slate-500 ml-auto"></span>
+    </div>
+    <div class="grid md:grid-cols-3 gap-4 mb-4">
+      <div class="card"><div class="metric" id="ln-edges">-</div><div class="metric-label">派生关系</div></div>
+      <div class="card"><div class="metric" id="ln-chains">-</div><div class="metric-label">版本链</div></div>
+      <div class="card"><div class="metric" id="ln-forks">-</div><div class="metric-label">Fork 组</div></div>
+    </div>
+    <div id="ln-sections" class="space-y-4"></div>
+    <div id="ln-loading" class="loading">加载中...</div>
+  </div>
+
+  <!-- Org Graph Panel -->
+  <div id="panel-orggraph" class="panel">
+    <div class="flex gap-3 mb-4 items-center">
+      <span class="text-sm text-slate-400">组织间协作/竞争关系</span>
+      <span id="og-count" class="text-xs text-slate-500 ml-auto"></span>
+    </div>
+    <div class="grid md:grid-cols-2 gap-6 mb-4">
+      <div class="card">
+        <h3 class="text-sm font-semibold text-slate-400 mb-3">核心组织 (度中心性)</h3>
+        <div id="og-centrality"></div>
+      </div>
+      <div class="card">
+        <h3 class="text-sm font-semibold text-slate-400 mb-3">组织集群</h3>
+        <div id="og-clusters"></div>
+      </div>
+    </div>
+    <div class="card overflow-x-auto">
+      <h3 class="text-sm font-semibold text-slate-400 mb-3">关系边</h3>
+      <table>
+        <thead><tr><th>源</th><th>目标</th><th>类型</th><th>权重</th></tr></thead>
+        <tbody id="og-tbody"></tbody>
+      </table>
+    </div>
+    <div id="og-loading" class="loading">加载中...</div>
+  </div>
+
   <!-- Search Panel -->
   <div id="panel-search" class="panel">
     <div class="flex gap-3 mb-4 items-center">
@@ -254,7 +320,9 @@ let categoryChart = null;
 let allRedditPosts = [];
 let rdSortKey = 'score', rdSortAsc = false;
 let trendChart = null, catTrendChart = null;
-const loaded = { overview: false, datasets: false, github: false, papers: false, blogs: false, reddit: false, search: false, trends: false };
+let allMatrixRows = [];
+let mxSortKey = 'total', mxSortAsc = false;
+const loaded = { overview: false, datasets: false, github: false, papers: false, blogs: false, reddit: false, matrix: false, lineage: false, orggraph: false, search: false, trends: false };
 
 // ========================================
 // API
@@ -272,7 +340,7 @@ async function fetchAPI(path) {
 // ========================================
 function switchTab(name) {
   document.querySelectorAll('.tab-btn').forEach((b, i) => {
-    b.classList.toggle('active', ['overview','datasets','github','papers','blogs','reddit','search','trends'][i] === name);
+    b.classList.toggle('active', ['overview','datasets','github','papers','blogs','reddit','matrix','lineage','orggraph','search','trends'][i] === name);
   });
   document.querySelectorAll('.panel').forEach(p => p.classList.remove('active'));
   document.getElementById('panel-' + name).classList.add('active');
@@ -284,6 +352,9 @@ function switchTab(name) {
     else if (name === 'papers') loadPapers();
     else if (name === 'blogs') loadBlogs();
     else if (name === 'reddit') loadReddit();
+    else if (name === 'matrix') loadMatrix();
+    else if (name === 'lineage') loadLineage();
+    else if (name === 'orggraph') loadOrgGraph();
     else if (name === 'search') { /* search is on-demand */ loaded.search = true; }
     else if (name === 'trends') loadTrends();
   }
@@ -597,6 +668,157 @@ function renderReddit() {
     <td>${p.num_comments || 0}</td>
     <td>${(p.signals || []).slice(0, 3).map(s => `<span class="badge badge-green">${esc(s)}</span>`).join(' ')}</td>
     <td class="text-xs">${esc(p.author) || '-'}</td>
+  </tr>`).join('');
+}
+
+// ========================================
+// Competitor Matrix
+// ========================================
+async function loadMatrix() {
+  const el = document.getElementById('mx-loading');
+  el.style.display = 'block';
+  const data = await fetchAPI('/matrix');
+  el.style.display = 'none';
+  if (!data) return;
+
+  const topOrgs = data.top_orgs || [];
+  const details = data.org_details || {};
+  allMatrixRows = topOrgs.map(([org, total]) => {
+    const d = details[org] || {};
+    return { org, datasets: d.datasets || 0, repos: d.repos || 0, papers: d.papers || 0, blogs: d.blogs || 0, total };
+  });
+  renderMatrix();
+}
+
+function sortMatrix(key) {
+  if (mxSortKey === key) mxSortAsc = !mxSortAsc;
+  else { mxSortKey = key; mxSortAsc = false; }
+  renderMatrix();
+}
+
+function renderMatrix() {
+  let rows = [...allMatrixRows].sort((a, b) => {
+    let va = a[mxSortKey] ?? '', vb = b[mxSortKey] ?? '';
+    if (typeof va === 'number') return mxSortAsc ? va - vb : vb - va;
+    return mxSortAsc ? String(va).localeCompare(String(vb)) : String(vb).localeCompare(String(va));
+  });
+  document.getElementById('mx-count').textContent = `共 ${rows.length} 个组织`;
+  const tbody = document.getElementById('mx-tbody');
+  if (!rows.length) { tbody.innerHTML = '<tr><td colspan="6" class="text-center text-slate-500 py-6">无数据</td></tr>'; return; }
+  tbody.innerHTML = rows.slice(0, 100).map(r => `<tr>
+    <td class="font-medium">${esc(r.org)}</td>
+    <td>${r.datasets}</td><td>${r.repos}</td><td>${r.papers}</td><td>${r.blogs}</td>
+    <td class="font-mono font-bold">${r.total}</td>
+  </tr>`).join('');
+}
+
+// ========================================
+// Dataset Lineage
+// ========================================
+async function loadLineage() {
+  const el = document.getElementById('ln-loading');
+  el.style.display = 'block';
+  const data = await fetchAPI('/lineage');
+  el.style.display = 'none';
+  if (!data) return;
+
+  const stats = data.stats || {};
+  document.getElementById('ln-edges').textContent = stats.derivation_edges || 0;
+  document.getElementById('ln-chains').textContent = stats.version_chains || 0;
+  document.getElementById('ln-forks').textContent = stats.fork_groups || 0;
+  document.getElementById('ln-count').textContent = `分析 ${stats.total_datasets || 0} 个数据集`;
+
+  const sections = [];
+
+  // Version chains
+  const chains = data.version_chains || {};
+  if (Object.keys(chains).length) {
+    sections.push(`<div class="card"><h3 class="text-sm font-semibold text-slate-400 mb-2">版本链</h3>
+      ${Object.entries(chains).slice(0, 20).map(([base, chain]) =>
+        `<div class="py-1 border-t border-border/50 text-sm"><span class="font-medium">${esc(base)}</span>: ${chain.map(c => esc(c)).join(' → ')}</div>`
+      ).join('')}</div>`);
+  }
+
+  // Fork trees
+  const forks = data.fork_trees || {};
+  if (Object.keys(forks).length) {
+    sections.push(`<div class="card"><h3 class="text-sm font-semibold text-slate-400 mb-2">Fork 分支</h3>
+      ${Object.entries(forks).slice(0, 20).map(([name, ids]) =>
+        `<div class="py-1 border-t border-border/50 text-sm"><span class="font-medium">${esc(name)}</span>: ${ids.map(id => esc(id)).join(', ')}</div>`
+      ).join('')}</div>`);
+  }
+
+  // Derivation edges
+  const edges = data.edges || [];
+  const derivations = edges.filter(e => (e.type || e[2]) === 'derived_from');
+  if (derivations.length) {
+    sections.push(`<div class="card"><h3 class="text-sm font-semibold text-slate-400 mb-2">派生关系 (${derivations.length})</h3>
+      <table><thead><tr><th>子数据集</th><th>←</th><th>父数据集</th></tr></thead><tbody>
+      ${derivations.slice(0, 50).map(e => `<tr><td class="text-sm">${esc(e.child || e[0])}</td><td class="text-slate-500">derived from</td><td class="text-sm">${esc(e.parent || e[1])}</td></tr>`).join('')}
+      </tbody></table></div>`);
+  }
+
+  document.getElementById('ln-sections').innerHTML = sections.length ? sections.join('') : '<div class="card text-center text-slate-500 py-8">未发现谱系关系</div>';
+}
+
+// ========================================
+// Org Graph
+// ========================================
+async function loadOrgGraph() {
+  const el = document.getElementById('og-loading');
+  el.style.display = 'block';
+  const data = await fetchAPI('/org-graph');
+  el.style.display = 'none';
+  if (!data) return;
+
+  const nodes = data.nodes || [];
+  const edges = data.edges || [];
+  document.getElementById('og-count').textContent = `${nodes.length} 个节点，${edges.length} 条边`;
+
+  // Centrality
+  const centrality = data.centrality || {};
+  const topCentral = Object.entries(centrality).sort((a, b) => b[1] - a[1]).filter(x => x[1] > 0).slice(0, 15);
+  document.getElementById('og-centrality').innerHTML = topCentral.length
+    ? topCentral.map(([org, score]) => {
+        const pct = Math.min(score * 100 / (topCentral[0][1] || 1) * topCentral[0][1], 100);
+        return `<div class="flex items-center gap-2 py-1 text-sm">
+          <span class="w-24 truncate">${esc(org)}</span>
+          <div class="flex-1 bg-bg rounded h-2"><div class="bg-accent rounded h-2" style="width:${Math.max(pct, 4)}%"></div></div>
+          <span class="text-xs text-slate-500 w-12 text-right">${score.toFixed(3)}</span>
+        </div>`;
+      }).join('')
+    : '<div class="text-slate-500 text-sm py-4">无数据</div>';
+
+  // Clusters
+  const clusters = data.clusters || [];
+  document.getElementById('og-clusters').innerHTML = clusters.length
+    ? clusters.filter(c => c.length >= 2).slice(0, 10).map((cluster, i) =>
+        `<div class="py-1.5 border-t border-border/50 text-sm">
+          <span class="badge badge-purple">集群 ${i + 1}</span>
+          <span class="ml-2">${cluster.slice(0, 8).map(o => esc(o)).join(', ')}${cluster.length > 8 ? '...' : ''}</span>
+          <span class="text-xs text-slate-500 ml-1">(${cluster.length})</span>
+        </div>`
+      ).join('')
+    : '<div class="text-slate-500 text-sm py-4">无数据</div>';
+
+  // Edges table
+  const tbody = document.getElementById('og-tbody');
+  if (!edges.length) {
+    tbody.innerHTML = '<tr><td colspan="4" class="text-center text-slate-500 py-6">无关系数据</td></tr>';
+    return;
+  }
+  const typeBadge = {
+    'shared_dataset_author': 'badge-blue',
+    'github_fork': 'badge-green',
+    'co_citation': 'badge-purple',
+    'blog_mention': 'badge-orange',
+    'shared_topic': 'badge-gray',
+  };
+  tbody.innerHTML = edges.slice(0, 50).map(e => `<tr>
+    <td class="text-sm">${esc(e.source)}</td>
+    <td class="text-sm">${esc(e.target)}</td>
+    <td><span class="badge ${typeBadge[e.type] || 'badge-gray'}">${esc(e.type)}</span></td>
+    <td class="font-mono">${e.weight}</td>
   </tr>`).join('');
 }
 

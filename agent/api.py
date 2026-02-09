@@ -666,6 +666,54 @@ async def get_trends(
     }
 
 
+@app.get("/matrix", dependencies=[Security(verify_api_key)])
+async def get_matrix():
+    """
+    Get competitor matrix — organizations × data types cross-reference.
+
+    Shows dataset counts, repo/paper/blog activity per org with rankings.
+    """
+    report = get_latest_report()
+    if not report:
+        raise HTTPException(status_code=404, detail="No report found. Run /scan first.")
+    matrix = report.get("competitor_matrix", {})
+    if not matrix:
+        return {"matrix": {}, "rankings": {}, "top_orgs": [], "org_details": {}}
+    return matrix
+
+
+@app.get("/lineage", dependencies=[Security(verify_api_key)])
+async def get_lineage():
+    """
+    Get dataset lineage — derivation, version chains, and fork relationships.
+    """
+    report = get_latest_report()
+    if not report:
+        raise HTTPException(status_code=404, detail="No report found. Run /scan first.")
+    lineage = report.get("dataset_lineage", {})
+    if not lineage:
+        return {"edges": [], "root_datasets": [], "version_chains": {}, "fork_trees": {}, "stats": {}}
+    # Convert edge tuples to dicts for JSON
+    edges = lineage.get("edges", [])
+    if edges and isinstance(edges[0], (list, tuple)):
+        edges = [{"child": e[0], "parent": e[1], "type": e[2]} for e in edges]
+    return {**lineage, "edges": edges}
+
+
+@app.get("/org-graph", dependencies=[Security(verify_api_key)])
+async def get_org_graph():
+    """
+    Get organization relationship graph — nodes, edges, clusters, centrality.
+    """
+    report = get_latest_report()
+    if not report:
+        raise HTTPException(status_code=404, detail="No report found. Run /scan first.")
+    graph = report.get("org_graph", {})
+    if not graph:
+        return {"nodes": [], "edges": [], "clusters": [], "centrality": {}}
+    return graph
+
+
 @app.get("/tools", dependencies=[Security(verify_api_key)])
 async def get_tools():
     """

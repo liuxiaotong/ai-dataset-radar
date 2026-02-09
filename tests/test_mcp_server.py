@@ -284,6 +284,7 @@ class TestMCPServerIntegration:
             "radar_trend",
             "radar_history",
             "radar_reddit",
+            "radar_trends",
         }
 
         assert expected_tools == tool_names

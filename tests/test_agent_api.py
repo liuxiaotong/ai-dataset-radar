@@ -80,6 +80,32 @@ SAMPLE_REPORT = {
             ],
         },
     ],
+    "reddit_activity": {
+        "posts": [
+            {"subreddit": "MachineLearning", "title": "New RLHF dataset released", "url": "https://reddit.com/r/1", "score": 150, "num_comments": 42, "selftext": "training data", "author": "ai_user", "signals": ["dataset", "rlhf"]},
+            {"subreddit": "LocalLLaMA", "title": "My cat is cute", "url": "https://reddit.com/r/2", "score": 500, "num_comments": 100, "selftext": "", "author": "cat_lover", "signals": []},
+        ],
+        "metadata": {"subreddits_checked": 2, "total_posts": 2, "relevant_posts": 1},
+    },
+    "competitor_matrix": {
+        "matrix": {"openai": {"sft_instruction": 1}, "anthropic": {"rlhf_preference": 1}},
+        "rankings": {"sft_instruction": [("openai", 1)]},
+        "top_orgs": [("openai", 2), ("anthropic", 1)],
+        "org_details": {"openai": {"datasets": 1, "repos": 1, "papers": 0, "blogs": 0}, "anthropic": {"datasets": 1, "repos": 0, "papers": 0, "blogs": 0}},
+    },
+    "dataset_lineage": {
+        "edges": [("child/ds", "parent/ds", "derived_from"), ("org/data-v2", "org/data-v1", "version_of")],
+        "root_datasets": ["parent/ds", "org/data-v1"],
+        "version_chains": {"data": ["org/data-v1", "org/data-v2"]},
+        "fork_trees": {"common": ["alice/common", "bob/common"]},
+        "stats": {"total_datasets": 42, "total_edges": 2, "derivation_edges": 1, "version_chains": 1, "fork_groups": 1},
+    },
+    "org_graph": {
+        "nodes": [{"id": "openai", "display_name": "OpenAI", "dataset_count": 1}, {"id": "google", "display_name": "Google", "dataset_count": 0}],
+        "edges": [{"source": "google", "target": "openai", "type": "co_citation", "weight": 3}],
+        "clusters": [["google", "openai"]],
+        "centrality": {"google": 0.5, "openai": 0.5},
+    },
 }
 
 SAMPLE_SCHEMA = {
@@ -773,3 +799,303 @@ class TestEdgeCases:
         assert body["count"] == 1
         assert body["papers"][0]["title"] == "Paper A"
         assert body["papers"][0]["source"] == "arxiv"
+
+
+# ===================================================================
+# 16. GET /reddit
+# ===================================================================
+
+
+class TestRedditEndpoint:
+    def test_reddit_all(self, client):
+        """GET /reddit returns all posts."""
+        with patch("agent.api.get_latest_report", return_value=SAMPLE_REPORT):
+            resp = client.get("/reddit")
+        assert resp.status_code == 200
+        assert resp.json()["count"] == 2
+
+    def test_reddit_filter_by_subreddit(self, client):
+        """GET /reddit?subreddit=MachineLearning filters correctly."""
+        with patch("agent.api.get_latest_report", return_value=SAMPLE_REPORT):
+            resp = client.get("/reddit?subreddit=MachineLearning")
+        body = resp.json()
+        assert body["count"] == 1
+        assert body["posts"][0]["subreddit"] == "MachineLearning"
+
+    def test_reddit_filter_by_min_score(self, client):
+        """GET /reddit?min_score=200 filters low-score posts."""
+        with patch("agent.api.get_latest_report", return_value=SAMPLE_REPORT):
+            resp = client.get("/reddit?min_score=200")
+        body = resp.json()
+        assert body["count"] == 1
+        assert body["posts"][0]["score"] >= 200
+
+    def test_reddit_limit(self, client):
+        """GET /reddit?limit=1 caps results."""
+        with patch("agent.api.get_latest_report", return_value=SAMPLE_REPORT):
+            resp = client.get("/reddit?limit=1")
+        assert resp.json()["count"] == 1
+
+    def test_reddit_no_report(self, client):
+        """GET /reddit returns 404 when no report exists."""
+        with patch("agent.api.get_latest_report", return_value=None):
+            resp = client.get("/reddit")
+        assert resp.status_code == 404
+
+    def test_reddit_metadata_returned(self, client):
+        """GET /reddit includes metadata from report."""
+        with patch("agent.api.get_latest_report", return_value=SAMPLE_REPORT):
+            resp = client.get("/reddit")
+        body = resp.json()
+        assert body["metadata"]["subreddits_checked"] == 2
+
+
+# ===================================================================
+# 17. GET /search
+# ===================================================================
+
+
+class TestSearchEndpoint:
+    def test_search_across_all_sources(self, client):
+        """GET /search?q=dataset finds matches across datasets, papers, blogs, reddit."""
+        with patch("agent.api.get_latest_report", return_value=SAMPLE_REPORT):
+            resp = client.get("/search?q=dataset")
+        assert resp.status_code == 200
+        body = resp.json()
+        assert body["query"] == "dataset"
+        assert body["total"] >= 1
+
+    def test_search_datasets_matches(self, client):
+        """Search matches dataset IDs."""
+        with patch("agent.api.get_latest_report", return_value=SAMPLE_REPORT):
+            resp = client.get("/search?q=alpha-sft")
+        body = resp.json()
+        assert len(body["results"].get("datasets", [])) == 1
+
+    def test_search_papers_matches(self, client):
+        """Search matches paper titles."""
+        with patch("agent.api.get_latest_report", return_value=SAMPLE_REPORT):
+            resp = client.get("/search?q=Paper A")
+        body = resp.json()
+        assert len(body["results"].get("papers", [])) == 1
+
+    def test_search_blogs_matches(self, client):
+        """Search matches blog article titles."""
+        with patch("agent.api.get_latest_report", return_value=SAMPLE_REPORT):
+            resp = client.get("/search?q=New dataset release")
+        body = resp.json()
+        assert len(body["results"].get("blogs", [])) >= 1
+
+    def test_search_reddit_matches(self, client):
+        """Search matches Reddit post titles."""
+        with patch("agent.api.get_latest_report", return_value=SAMPLE_REPORT):
+            resp = client.get("/search?q=RLHF")
+        body = resp.json()
+        assert len(body["results"].get("reddit", [])) >= 1
+
+    def test_search_github_matches(self, client):
+        """Search matches repo names."""
+        with patch("agent.api.get_latest_report", return_value=SAMPLE_REPORT):
+            resp = client.get("/search?q=repo-a")
+        body = resp.json()
+        assert len(body["results"].get("github", [])) == 1
+
+    def test_search_filter_sources(self, client):
+        """GET /search?q=...&sources=datasets only searches specified sources."""
+        with patch("agent.api.get_latest_report", return_value=SAMPLE_REPORT):
+            resp = client.get("/search?q=dataset&sources=datasets")
+        body = resp.json()
+        assert "github" not in body["results"]
+        assert "papers" not in body["results"]
+
+    def test_search_limit(self, client):
+        """GET /search?q=...&limit=1 caps results per source."""
+        with patch("agent.api.get_latest_report", return_value=SAMPLE_REPORT):
+            resp = client.get("/search?q=a&limit=1")
+        body = resp.json()
+        for source_results in body["results"].values():
+            assert len(source_results) <= 1
+
+    def test_search_no_results(self, client):
+        """Search with non-matching query returns 0 results."""
+        with patch("agent.api.get_latest_report", return_value=SAMPLE_REPORT):
+            resp = client.get("/search?q=zzzznonexistent")
+        body = resp.json()
+        assert body["total"] == 0
+
+    def test_search_no_report(self, client):
+        """GET /search returns 404 when no report exists."""
+        with patch("agent.api.get_latest_report", return_value=None):
+            resp = client.get("/search?q=test")
+        assert resp.status_code == 404
+
+    def test_search_requires_query(self, client):
+        """GET /search without q returns 422."""
+        resp = client.get("/search")
+        assert resp.status_code == 422
+
+
+# ===================================================================
+# 18. GET /trends
+# ===================================================================
+
+
+class TestTrendsEndpoint:
+    def test_trends_with_data(self, client, tmp_path):
+        """GET /trends returns timeline from dated report directories."""
+        reports_dir = tmp_path / "reports"
+        for date in ["2026-02-07", "2026-02-08"]:
+            d = reports_dir / date
+            d.mkdir(parents=True)
+            (d / "intel_report_20260207.json").write_text(json.dumps({
+                "summary": {"total_datasets": 10, "total_github_repos": 5, "total_papers": 3, "total_blog_posts": 2, "total_reddit_posts": 1},
+                "datasets_by_type": {"sft_instruction": [1, 2], "code": [3]},
+            }))
+
+        with patch("agent.api.get_reports_dir", return_value=reports_dir):
+            resp = client.get("/trends")
+        assert resp.status_code == 200
+        body = resp.json()
+        assert body["count"] == 2
+        assert len(body["timeline"]) == 2
+        assert body["timeline"][0]["datasets"] == 10
+
+    def test_trends_empty(self, client, tmp_path):
+        """GET /trends returns 404 when no reports dir exists."""
+        with patch("agent.api.get_reports_dir", return_value=tmp_path / "missing"):
+            resp = client.get("/trends")
+        assert resp.status_code == 404
+
+    def test_trends_no_dated_dirs(self, client, tmp_path):
+        """GET /trends returns empty timeline when no dated dirs exist."""
+        reports_dir = tmp_path / "reports"
+        reports_dir.mkdir()
+        with patch("agent.api.get_reports_dir", return_value=reports_dir):
+            resp = client.get("/trends")
+        assert resp.status_code == 200
+        assert resp.json()["count"] == 0
+
+    def test_trends_limit(self, client, tmp_path):
+        """GET /trends?limit=1 limits to most recent report."""
+        reports_dir = tmp_path / "reports"
+        for date in ["2026-02-06", "2026-02-07", "2026-02-08"]:
+            d = reports_dir / date
+            d.mkdir(parents=True)
+            (d / "intel_report_001.json").write_text(json.dumps({
+                "summary": {"total_datasets": 10},
+                "datasets_by_type": {},
+            }))
+        with patch("agent.api.get_reports_dir", return_value=reports_dir):
+            resp = client.get("/trends?limit=1")
+        assert resp.json()["count"] == 1
+
+    def test_trends_includes_category_breakdown(self, client, tmp_path):
+        """GET /trends includes datasets_by_category."""
+        reports_dir = tmp_path / "reports"
+        d = reports_dir / "2026-02-08"
+        d.mkdir(parents=True)
+        (d / "intel_report_001.json").write_text(json.dumps({
+            "summary": {"total_datasets": 5},
+            "datasets_by_type": {"sft_instruction": [1, 2, 3], "code": [4]},
+        }))
+        with patch("agent.api.get_reports_dir", return_value=reports_dir):
+            resp = client.get("/trends")
+        body = resp.json()
+        assert "datasets_by_category" in body
+        assert body["datasets_by_category"]["sft_instruction"]["2026-02-08"] == 3
+
+
+# ===================================================================
+# 19. GET /matrix, /lineage, /org-graph
+# ===================================================================
+
+
+class TestMatrixEndpoint:
+    def test_matrix_returns_data(self, client):
+        """GET /matrix returns competitor matrix from report."""
+        with patch("agent.api.get_latest_report", return_value=SAMPLE_REPORT):
+            resp = client.get("/matrix")
+        assert resp.status_code == 200
+        body = resp.json()
+        assert len(body["top_orgs"]) == 2
+        assert "openai" in body["matrix"]
+
+    def test_matrix_no_report(self, client):
+        """GET /matrix returns 404 when no report exists."""
+        with patch("agent.api.get_latest_report", return_value=None):
+            resp = client.get("/matrix")
+        assert resp.status_code == 404
+
+    def test_matrix_empty_data(self, client):
+        """GET /matrix returns empty structure when report has no matrix."""
+        report = {**SAMPLE_REPORT, "competitor_matrix": None}
+        with patch("agent.api.get_latest_report", return_value=report):
+            resp = client.get("/matrix")
+        assert resp.status_code == 200
+        assert resp.json()["matrix"] == {}
+
+
+class TestLineageEndpoint:
+    def test_lineage_returns_data(self, client):
+        """GET /lineage returns lineage data with edges converted to dicts."""
+        with patch("agent.api.get_latest_report", return_value=SAMPLE_REPORT):
+            resp = client.get("/lineage")
+        assert resp.status_code == 200
+        body = resp.json()
+        assert len(body["edges"]) == 2
+        # Tuples should be converted to dicts
+        assert "child" in body["edges"][0]
+        assert "parent" in body["edges"][0]
+
+    def test_lineage_no_report(self, client):
+        """GET /lineage returns 404 when no report exists."""
+        with patch("agent.api.get_latest_report", return_value=None):
+            resp = client.get("/lineage")
+        assert resp.status_code == 404
+
+    def test_lineage_version_chains(self, client):
+        """GET /lineage returns version chains."""
+        with patch("agent.api.get_latest_report", return_value=SAMPLE_REPORT):
+            resp = client.get("/lineage")
+        body = resp.json()
+        assert "data" in body["version_chains"]
+
+    def test_lineage_fork_trees(self, client):
+        """GET /lineage returns fork trees."""
+        with patch("agent.api.get_latest_report", return_value=SAMPLE_REPORT):
+            resp = client.get("/lineage")
+        body = resp.json()
+        assert "common" in body["fork_trees"]
+
+
+class TestOrgGraphEndpoint:
+    def test_org_graph_returns_data(self, client):
+        """GET /org-graph returns graph data."""
+        with patch("agent.api.get_latest_report", return_value=SAMPLE_REPORT):
+            resp = client.get("/org-graph")
+        assert resp.status_code == 200
+        body = resp.json()
+        assert len(body["nodes"]) == 2
+        assert len(body["edges"]) == 1
+        assert len(body["clusters"]) == 1
+
+    def test_org_graph_no_report(self, client):
+        """GET /org-graph returns 404 when no report exists."""
+        with patch("agent.api.get_latest_report", return_value=None):
+            resp = client.get("/org-graph")
+        assert resp.status_code == 404
+
+    def test_org_graph_centrality(self, client):
+        """GET /org-graph returns centrality scores."""
+        with patch("agent.api.get_latest_report", return_value=SAMPLE_REPORT):
+            resp = client.get("/org-graph")
+        body = resp.json()
+        assert body["centrality"]["openai"] == 0.5
+
+    def test_org_graph_empty(self, client):
+        """GET /org-graph returns empty structure when no graph data."""
+        report = {**SAMPLE_REPORT, "org_graph": None}
+        with patch("agent.api.get_latest_report", return_value=report):
+            resp = client.get("/org-graph")
+        assert resp.status_code == 200
+        assert resp.json()["nodes"] == []
