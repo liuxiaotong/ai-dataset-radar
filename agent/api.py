@@ -714,6 +714,40 @@ async def get_org_graph():
     return graph
 
 
+@app.get("/alerts", dependencies=[Security(verify_api_key)])
+async def get_alerts(limit: int = 50):
+    """
+    Get recent alert history.
+
+    Returns alerts from the most recent alert logs, sorted by timestamp descending.
+    """
+    reports_dir = _data_dir() / "reports"
+    if not reports_dir.exists():
+        return {"alerts": [], "total": 0}
+
+    all_alerts = []
+    # Scan date-specific alert files
+    for date_dir in sorted(reports_dir.iterdir(), reverse=True):
+        if not date_dir.is_dir() or not date_dir.name[:4].isdigit():
+            continue
+        alert_file = date_dir / "alerts.json"
+        if alert_file.exists():
+            try:
+                with open(alert_file, encoding="utf-8") as f:
+                    alerts = json.load(f)
+                all_alerts.extend(alerts)
+            except (json.JSONDecodeError, ValueError):
+                continue
+        if len(all_alerts) >= limit:
+            break
+
+    # Sort by timestamp descending, limit
+    all_alerts.sort(key=lambda a: a.get("timestamp", ""), reverse=True)
+    all_alerts = all_alerts[:limit]
+
+    return {"alerts": all_alerts, "total": len(all_alerts)}
+
+
 @app.get("/tools", dependencies=[Security(verify_api_key)])
 async def get_tools():
     """

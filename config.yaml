@@ -1540,3 +1540,35 @@ notifications:
   markdown:
     enabled: true
     output_dir: data
+
+  email:
+    enabled: false
+    smtp_server: ${SMTP_SERVER}
+    smtp_port: 587
+    username: ${SMTP_USERNAME}
+    password: ${SMTP_PASSWORD}
+    from_addr: ${EMAIL_FROM}
+    to_addrs:
+      - ${EMAIL_TO}
+
+  webhook:
+    enabled: false
+    url: ${WEBHOOK_URL}
+
+# =============================================================================
+# 告警配置 | Alerting
+# =============================================================================
+
+alerting:
+  enabled: true
+  channels:
+    - webhook
+    - email
+  dedup_hours: 24
+  rules:
+    zero_data: true
+    threshold_dataset_drop: 0.3      # 数据集总量下降 30% 触发
+    trend_breakthrough: true          # 突破性数据集（0→1000+ downloads）
+    trend_rapid_growth: 2.0           # 7 日增长 >200%
+    change_new_org: true              # 新组织首次出现
+    change_dataset_removed: true      # 已追踪数据集被删除

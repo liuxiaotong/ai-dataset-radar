@@ -449,6 +449,47 @@
           "removed_items": { "type": "object" }
         }
       }
+    },
+    {
+      "name": "radar_alerts",
+      "description": "Get recent alert history. Returns alerts triggered by anomaly detection rules (zero data, threshold drops, trend breakthroughs, change detection).",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "severity": {
+            "type": "string",
+            "description": "Filter by severity level",
+            "enum": ["critical", "warning", "info"]
+          },
+          "limit": {
+            "type": "integer",
+            "description": "Maximum number of alerts to return (default: 50)",
+            "default": 50,
+            "minimum": 1,
+            "maximum": 200
+          }
+        }
+      },
+      "returns": {
+        "type": "object",
+        "properties": {
+          "alerts": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "rule": { "type": "string" },
+                "severity": { "type": "string" },
+                "title": { "type": "string" },
+                "detail": { "type": "string" },
+                "timestamp": { "type": "string" },
+                "fingerprint": { "type": "string" }
+              }
+            }
+          },
+          "total": { "type": "integer" }
+        }
+      }
     }
   ]
 }

@@ -1394,6 +1394,25 @@ async def async_main(args):
         except Exception as e:
             logger.warning("Change summary skipped: %s", e)
 
+        # 9.6 Alert evaluation
+        alert_cfg = config.get("alerting", {})
+        if alert_cfg.get("enabled", False):
+            try:
+                from alerting import AlertManager
+                from analyzers.change_tracker import find_previous_report
+
+                alert_mgr = AlertManager(config)
+                prev_path = find_previous_report(output_dir / "reports", date_str)
+                prev_report = None
+                if prev_path:
+                    with open(prev_path, "r", encoding="utf-8") as f:
+                        prev_report = json.load(f)
+                alerts = alert_mgr.evaluate(all_data, prev_report)
+                if alerts:
+                    logger.info("  ✓ Triggered %d alert(s)", len(alerts))
+            except Exception as e:
+                logger.warning("Alert evaluation skipped: %s", e)
+
         # Print console summary
         logger.info(
             report_generator.generate_console_summary(
@@ -1825,6 +1844,25 @@ async def run_intel_scan(days: int = 7, api_insights: bool = False) -> dict:
                 logger.info("Change summary saved to: %s", changes_path)
         except Exception as e:
             logger.warning("Change summary skipped: %s", e)
+
+        # Alert evaluation
+        alert_cfg = config.get("alerting", {})
+        if alert_cfg.get("enabled", False):
+            try:
+                from alerting import AlertManager
+                from analyzers.change_tracker import find_previous_report
+
+                alert_mgr = AlertManager(config)
+                prev_path = find_previous_report(output_dir / "reports", date_str)
+                prev_report = None
+                if prev_path:
+                    with open(prev_path, "r", encoding="utf-8") as f:
+                        prev_report = json.load(f)
+                alerts = alert_mgr.evaluate(all_data, prev_report)
+                if alerts:
+                    logger.info("Triggered %d alert(s)", len(alerts))
+            except Exception as e:
+                logger.warning("Alert evaluation skipped: %s", e)
 
         # Insights prompt (always saved for environment LLM)
         insights_text = None

@@ -288,6 +288,7 @@ class TestMCPServerIntegration:
             "radar_matrix",
             "radar_lineage",
             "radar_org_graph",
+            "radar_alerts",
         }
 
         assert expected_tools == tool_names

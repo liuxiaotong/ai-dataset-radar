@@ -358,6 +358,27 @@
           }
         }
       }
+    },
+    "alerts": {
+      "type": "array",
+      "description": "Triggered alerts from anomaly detection rules",
+      "items": {
+        "type": "object",
+        "properties": {
+          "rule": {
+            "type": "string",
+            "description": "Rule identifier (e.g. zero_data_github, trend_breakthrough)"
+          },
+          "severity": {
+            "type": "string",
+            "enum": ["critical", "warning", "info"]
+          },
+          "title": { "type": "string", "description": "Human-readable alert title" },
+          "detail": { "type": "string", "description": "Detailed description" },
+          "timestamp": { "type": "string", "format": "date-time" },
+          "fingerprint": { "type": "string", "description": "Deduplication hash" }
+        }
+      }
     }
   }
 }

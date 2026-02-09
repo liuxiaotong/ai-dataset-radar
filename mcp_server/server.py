@@ -296,6 +296,25 @@ async def list_tools():
                 },
             },
         ),
+        Tool(
+            name="radar_alerts",
+            description="获取最近的告警记录：零数据、阈值、趋势突破、变化检测等",
+            inputSchema={
+                "type": "object",
+                "properties": {
+                    "severity": {
+                        "type": "string",
+                        "description": "按严重度过滤 (critical/warning/info)",
+                        "enum": ["critical", "warning", "info"],
+                    },
+                    "limit": {
+                        "type": "integer",
+                        "description": "返回的最大告警数量 (默认 50)",
+                        "default": 50,
+                    },
+                },
+            },
+        ),
     ]
 
 
@@ -1536,6 +1555,50 @@ async def call_tool(name: str, arguments: dict):
                 tgt = e.get("target", "")
                 rel = e.get("type", "")
                 lines.append(f"- {src} ↔ {tgt} ({rel})")
+
+        return [TextContent(type="text", text="\n".join(lines))]
+
+    elif name == "radar_alerts":
+        reports_dir = PROJECT_ROOT / "data" / "reports"
+        if not reports_dir.exists():
+            return [TextContent(type="text", text="没有找到告警记录。")]
+
+        severity_filter = arguments.get("severity", "")
+        limit = arguments.get("limit", 50)
+
+        all_alerts = []
+        for date_dir in sorted(reports_dir.iterdir(), reverse=True):
+            if not date_dir.is_dir() or not date_dir.name[:4].isdigit():
+                continue
+            alert_file = date_dir / "alerts.json"
+            if alert_file.exists():
+                try:
+                    with open(alert_file, "r", encoding="utf-8") as f:
+                        all_alerts.extend(json.load(f))
+                except (json.JSONDecodeError, ValueError):
+                    continue
+            if len(all_alerts) >= limit * 2:
+                break
+
+        if severity_filter:
+            all_alerts = [a for a in all_alerts if a.get("severity") == severity_filter]
+
+        all_alerts.sort(key=lambda a: a.get("timestamp", ""), reverse=True)
+        all_alerts = all_alerts[:limit]
+
+        if not all_alerts:
+            return [TextContent(type="text", text="没有告警记录。")]
+
+        lines = [f"**告警记录** ({len(all_alerts)} 条)\n"]
+        for a in all_alerts:
+            sev = a.get("severity", "info").upper()
+            icon = {"CRITICAL": "🔴", "WARNING": "🟡", "INFO": "🔵"}.get(sev, "⚪")
+            lines.append(f"{icon} **[{sev}]** {a.get('title', '')}")
+            lines.append(f"  规则: {a.get('rule', '')} | 时间: {a.get('timestamp', '')}")
+            detail = a.get("detail", "")
+            if detail:
+                lines.append(f"  {detail}")
+            lines.append("")
 
         return [TextContent(type="text", text="\n".join(lines))]
 
