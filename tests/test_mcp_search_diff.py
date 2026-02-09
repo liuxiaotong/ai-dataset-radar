@@ -575,8 +575,8 @@ class TestParameterExtensions:
         assert "radar_search" in tool_names
         assert "radar_diff" in tool_names
 
-    def test_all_13_tools_registered(self):
-        """Test all 13 tools are registered."""
+    def test_all_16_tools_registered(self):
+        """Test all 16 tools are registered."""
         from server import list_tools
         import asyncio
 
@@ -597,6 +597,9 @@ class TestParameterExtensions:
             "radar_history",
             "radar_reddit",
             "radar_trends",
+            "radar_matrix",
+            "radar_lineage",
+            "radar_org_graph",
         }
         assert expected == tool_names
 
@@ -645,3 +648,305 @@ class TestHelperFunctions:
         with patch("server.PROJECT_ROOT", tmp_path):
             paths = get_all_reports_sorted()
             assert paths == []
+
+
+# ─── radar_reddit execution tests ─────────────────────────────────────────────
+
+
+class TestRadarRedditTool:
+    """Test radar_reddit tool execution via call_tool."""
+
+    @pytest.fixture
+    def report_with_reddit(self, rich_report):
+        rich_report["reddit_activity"] = {
+            "posts": [
+                {
+                    "subreddit": "MachineLearning",
+                    "title": "New RLHF dataset released",
+                    "url": "https://reddit.com/r/MachineLearning/1",
+                    "score": 150,
+                    "date": "2024-01-30",
+                    "signals": ["rlhf", "dataset"],
+                },
+                {
+                    "subreddit": "LocalLLaMA",
+                    "title": "Fine-tuning with synthetic data",
+                    "url": "https://reddit.com/r/LocalLLaMA/2",
+                    "score": 80,
+                    "date": "2024-01-29",
+                    "signals": ["synthetic"],
+                },
+                {
+                    "subreddit": "MachineLearning",
+                    "title": "Low quality post",
+                    "url": "https://reddit.com/r/MachineLearning/3",
+                    "score": 5,
+                    "date": "2024-01-28",
+                    "signals": [],
+                },
+            ],
+            "metadata": {"subreddits_checked": 5, "total_posts": 3},
+        }
+        return rich_report
+
+    @pytest.mark.asyncio
+    async def test_reddit_returns_posts(self, report_with_reddit, tmp_path):
+        from server import call_tool
+
+        _write_report(tmp_path, "2024-02-01", report_with_reddit)
+
+        with patch("server.PROJECT_ROOT", tmp_path):
+            result = await call_tool("radar_reddit", {})
+            text = result[0].text
+            assert "Reddit" in text
+            assert "RLHF" in text
+
+    @pytest.mark.asyncio
+    async def test_reddit_filter_subreddit(self, report_with_reddit, tmp_path):
+        from server import call_tool
+
+        _write_report(tmp_path, "2024-02-01", report_with_reddit)
+
+        with patch("server.PROJECT_ROOT", tmp_path):
+            result = await call_tool("radar_reddit", {"subreddit": "LocalLLaMA"})
+            text = result[0].text
+            assert "LocalLLaMA" in text
+            assert "MachineLearning" not in text.split("Reddit")[1]  # not in post list
+
+    @pytest.mark.asyncio
+    async def test_reddit_filter_min_score(self, report_with_reddit, tmp_path):
+        from server import call_tool
+
+        _write_report(tmp_path, "2024-02-01", report_with_reddit)
+
+        with patch("server.PROJECT_ROOT", tmp_path):
+            result = await call_tool("radar_reddit", {"min_score": 100})
+            text = result[0].text
+            assert "RLHF" in text
+            assert "Low quality" not in text
+
+    @pytest.mark.asyncio
+    async def test_reddit_no_report(self, tmp_path):
+        from server import call_tool
+
+        with patch("server.PROJECT_ROOT", tmp_path):
+            result = await call_tool("radar_reddit", {})
+            text = result[0].text
+            assert "没有找到报告" in text
+
+
+# ─── radar_trends execution tests ─────────────────────────────────────────────
+
+
+class TestRadarTrendsTool:
+    """Test radar_trends tool execution via call_tool."""
+
+    @pytest.mark.asyncio
+    async def test_trends_returns_table(self, rich_report, tmp_path):
+        from server import call_tool
+
+        _write_report(tmp_path, "2024-01-25", {
+            **rich_report,
+            "generated_at": "2024-01-25T10:00:00",
+            "summary": {**rich_report["summary"], "total_datasets": 3},
+        })
+        _write_report(tmp_path, "2024-02-01", rich_report)
+
+        with patch("server.PROJECT_ROOT", tmp_path):
+            result = await call_tool("radar_trends", {})
+            text = result[0].text
+            assert "历史趋势" in text
+            assert "数据集" in text
+            assert "2024-02-01" in text
+
+    @pytest.mark.asyncio
+    async def test_trends_shows_delta(self, rich_report, tmp_path):
+        from server import call_tool
+
+        _write_report(tmp_path, "2024-01-25", {
+            **rich_report,
+            "generated_at": "2024-01-25T10:00:00",
+            "summary": {**rich_report["summary"], "total_datasets": 3},
+        })
+        _write_report(tmp_path, "2024-02-01", rich_report)
+
+        with patch("server.PROJECT_ROOT", tmp_path):
+            result = await call_tool("radar_trends", {})
+            text = result[0].text
+            assert "变化趋势" in text
+            assert "+2" in text  # datasets: 3 → 5
+
+    @pytest.mark.asyncio
+    async def test_trends_no_reports(self, tmp_path):
+        from server import call_tool
+
+        with patch("server.PROJECT_ROOT", tmp_path):
+            result = await call_tool("radar_trends", {})
+            text = result[0].text
+            assert "没有找到" in text
+
+
+# ─── radar_matrix execution tests ─────────────────────────────────────────────
+
+
+class TestRadarMatrixTool:
+    """Test radar_matrix tool execution via call_tool."""
+
+    @pytest.fixture
+    def report_with_matrix(self, rich_report):
+        rich_report["competitor_matrix"] = {
+            "matrix": {
+                "openai": {"sft": 2, "preference": 1, "repos": 5, "papers": 3, "blogs": 2},
+                "meta": {"sft": 3, "repos": 2, "papers": 1, "blogs": 1},
+            },
+            "top_orgs": [
+                {"org": "openai", "total": 13},
+                {"org": "meta", "total": 7},
+            ],
+            "rankings": {},
+        }
+        return rich_report
+
+    @pytest.mark.asyncio
+    async def test_matrix_returns_table(self, report_with_matrix, tmp_path):
+        from server import call_tool
+
+        _write_report(tmp_path, "2024-02-01", report_with_matrix)
+
+        with patch("server.PROJECT_ROOT", tmp_path):
+            result = await call_tool("radar_matrix", {})
+            text = result[0].text
+            assert "竞品矩阵" in text
+            assert "openai" in text
+            assert "meta" in text
+
+    @pytest.mark.asyncio
+    async def test_matrix_no_data(self, rich_report, tmp_path):
+        from server import call_tool
+
+        _write_report(tmp_path, "2024-02-01", rich_report)
+
+        with patch("server.PROJECT_ROOT", tmp_path):
+            result = await call_tool("radar_matrix", {})
+            text = result[0].text
+            assert "没有" in text
+
+
+# ─── radar_lineage execution tests ────────────────────────────────────────────
+
+
+class TestRadarLineageTool:
+    """Test radar_lineage tool execution via call_tool."""
+
+    @pytest.fixture
+    def report_with_lineage(self, rich_report):
+        rich_report["dataset_lineage"] = {
+            "edges": [
+                {"source": "openai/gsm8k", "target": "meta/gsm8k-v2", "type": "derived"},
+                {"source": "openai/gsm8k", "target": "nvidia/gsm8k-chat", "type": "fine_tuned"},
+            ],
+            "root_datasets": [
+                {"id": "openai/gsm8k", "count": 2},
+            ],
+            "version_chains": {
+                "gsm8k": ["gsm8k-v1", "gsm8k-v2", "gsm8k-v3"],
+            },
+            "fork_trees": {
+                "alpaca": ["alpaca-cleaned", "alpaca-gpt4"],
+            },
+            "stats": {"total_edges": 2, "version_chains": 1, "fork_trees": 1},
+        }
+        return rich_report
+
+    @pytest.mark.asyncio
+    async def test_lineage_returns_overview(self, report_with_lineage, tmp_path):
+        from server import call_tool
+
+        _write_report(tmp_path, "2024-02-01", report_with_lineage)
+
+        with patch("server.PROJECT_ROOT", tmp_path):
+            result = await call_tool("radar_lineage", {})
+            text = result[0].text
+            assert "谱系" in text
+            assert "版本链" in text
+            assert "gsm8k" in text
+
+    @pytest.mark.asyncio
+    async def test_lineage_filter_by_dataset(self, report_with_lineage, tmp_path):
+        from server import call_tool
+
+        _write_report(tmp_path, "2024-02-01", report_with_lineage)
+
+        with patch("server.PROJECT_ROOT", tmp_path):
+            result = await call_tool("radar_lineage", {"dataset_id": "openai/gsm8k"})
+            text = result[0].text
+            assert "openai/gsm8k" in text
+            assert "meta/gsm8k-v2" in text
+
+    @pytest.mark.asyncio
+    async def test_lineage_no_data(self, rich_report, tmp_path):
+        from server import call_tool
+
+        _write_report(tmp_path, "2024-02-01", rich_report)
+
+        with patch("server.PROJECT_ROOT", tmp_path):
+            result = await call_tool("radar_lineage", {})
+            text = result[0].text
+            assert "没有" in text
+
+
+# ─── radar_org_graph execution tests ──────────────────────────────────────────
+
+
+class TestRadarOrgGraphTool:
+    """Test radar_org_graph tool execution via call_tool."""
+
+    @pytest.fixture
+    def report_with_graph(self, rich_report):
+        rich_report["org_graph"] = {
+            "nodes": ["openai", "meta", "google", "anthropic"],
+            "edges": [
+                {"source": "openai", "target": "meta", "type": "shared_topic", "weight": 3},
+                {"source": "google", "target": "anthropic", "type": "co_citation", "weight": 2},
+                {"source": "openai", "target": "google", "type": "shared_dataset_author", "weight": 1},
+            ],
+            "clusters": [["openai", "meta", "google"], ["anthropic"]],
+            "centrality": {"openai": 0.667, "meta": 0.333, "google": 0.667, "anthropic": 0.333},
+        }
+        return rich_report
+
+    @pytest.mark.asyncio
+    async def test_org_graph_returns_overview(self, report_with_graph, tmp_path):
+        from server import call_tool
+
+        _write_report(tmp_path, "2024-02-01", report_with_graph)
+
+        with patch("server.PROJECT_ROOT", tmp_path):
+            result = await call_tool("radar_org_graph", {})
+            text = result[0].text
+            assert "组织关系" in text
+            assert "中心性" in text
+            assert "openai" in text
+
+    @pytest.mark.asyncio
+    async def test_org_graph_filter_by_org(self, report_with_graph, tmp_path):
+        from server import call_tool
+
+        _write_report(tmp_path, "2024-02-01", report_with_graph)
+
+        with patch("server.PROJECT_ROOT", tmp_path):
+            result = await call_tool("radar_org_graph", {"org": "openai"})
+            text = result[0].text
+            assert "openai" in text
+            assert "meta" in text  # connected to openai
+
+    @pytest.mark.asyncio
+    async def test_org_graph_no_data(self, rich_report, tmp_path):
+        from server import call_tool
+
+        _write_report(tmp_path, "2024-02-01", rich_report)
+
+        with patch("server.PROJECT_ROOT", tmp_path):
+            result = await call_tool("radar_org_graph", {})
+            text = result[0].text
+            assert "没有" in text

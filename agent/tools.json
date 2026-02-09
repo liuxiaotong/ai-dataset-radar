@@ -355,6 +355,76 @@
       }
     },
     {
+      "name": "radar_trends",
+      "description": "View historical trend data: quantity changes across data sources over time, suitable for time-series visualization.",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "limit": {
+            "type": "integer",
+            "description": "Number of recent reports to include",
+            "default": 30
+          }
+        }
+      },
+      "returns": {
+        "type": "object",
+        "description": "Time-series table with per-source counts and overall deltas"
+      }
+    },
+    {
+      "name": "radar_matrix",
+      "description": "Get competitor matrix: cross-reference organizations vs data types, showing dataset/repo/paper/blog counts per org.",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "top_n": {
+            "type": "integer",
+            "description": "Number of top organizations to include",
+            "default": 20
+          }
+        }
+      },
+      "returns": {
+        "type": "object",
+        "description": "Competitor matrix with org rankings and category breakdowns"
+      }
+    },
+    {
+      "name": "radar_lineage",
+      "description": "Get dataset lineage analysis: derivation edges, version chains, fork trees, and root datasets.",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "dataset_id": {
+            "type": "string",
+            "description": "Filter lineage for a specific dataset ID"
+          }
+        }
+      },
+      "returns": {
+        "type": "object",
+        "description": "Lineage graph with edges, version chains, fork trees, and root datasets"
+      }
+    },
+    {
+      "name": "radar_org_graph",
+      "description": "Get organization relationship graph: inter-org collaboration edges, clusters, and centrality scores.",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "org": {
+            "type": "string",
+            "description": "Filter relationships for a specific organization"
+          }
+        }
+      },
+      "returns": {
+        "type": "object",
+        "description": "Graph with nodes, edges, clusters, and centrality rankings"
+      }
+    },
+    {
       "name": "radar_diff",
       "description": "Compare two intelligence reports to identify changes: new/removed datasets, repos, papers, and blog articles.",
       "parameters": {

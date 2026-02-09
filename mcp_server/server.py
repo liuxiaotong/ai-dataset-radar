@@ -46,7 +46,7 @@ async def list_tools():
                         "type": "array",
                         "items": {
                             "type": "string",
-                            "enum": ["github", "blogs", "papers", "labs", "vendors", "x"],
+                            "enum": ["github", "blogs", "papers", "labs", "vendors", "x", "reddit"],
                         },
                         "description": "只扫描指定的数据源（默认全部扫描）",
                         "default": [],
@@ -252,6 +252,46 @@ async def list_tools():
                         "type": "integer",
                         "description": "返回最近几期报告的数据",
                         "default": 30,
+                    },
+                },
+            },
+        ),
+        Tool(
+            name="radar_matrix",
+            description="获取竞品矩阵：各组织在不同数据类型上的数据集/仓库/论文/博客数量交叉分析",
+            inputSchema={
+                "type": "object",
+                "properties": {
+                    "top_n": {
+                        "type": "integer",
+                        "description": "返回前 N 个组织",
+                        "default": 20,
+                    },
+                },
+            },
+        ),
+        Tool(
+            name="radar_lineage",
+            description="获取数据集谱系分析：派生关系、版本链、Fork 树和根数据集",
+            inputSchema={
+                "type": "object",
+                "properties": {
+                    "dataset_id": {
+                        "type": "string",
+                        "description": "按数据集 ID 过滤谱系",
+                    },
+                },
+            },
+        ),
+        Tool(
+            name="radar_org_graph",
+            description="获取组织关系图谱：组织间协作边、聚类和中心性排名",
+            inputSchema={
+                "type": "object",
+                "properties": {
+                    "org": {
+                        "type": "string",
+                        "description": "按组织名过滤关系",
                     },
                 },
             },
@@ -628,7 +668,7 @@ async def call_tool(name: str, arguments: dict):
 
         # Map source filters to CLI flags
         if sources:
-            all_sources = {"github", "blogs", "papers", "labs", "vendors", "x"}
+            all_sources = {"github", "blogs", "papers", "labs", "vendors", "x", "reddit"}
             skip = all_sources - set(sources)
             flag_map = {
                 "github": "--no-github",
@@ -637,6 +677,7 @@ async def call_tool(name: str, arguments: dict):
                 "labs": "--no-labs",
                 "vendors": "--no-vendors",
                 "x": "--no-x",
+                "reddit": "--no-reddit",
             }
             for src in skip:
                 if src in flag_map:
@@ -1343,6 +1384,156 @@ async def call_tool(name: str, arguments: dict):
 
         if not diff["summary_changes"] and not diff["new_items"] and not diff["removed_items"]:
             lines.append("两份报告内容完全一致，无变化。")
+
+        return [TextContent(type="text", text="\n".join(lines))]
+
+    elif name == "radar_matrix":
+        report = get_latest_report()
+        if not report:
+            return [TextContent(type="text", text="没有找到报告，请先运行 `radar_scan`。")]
+
+        matrix_data = report.get("competitor_matrix", {})
+        if not matrix_data:
+            return [TextContent(type="text", text="报告中没有竞品矩阵数据。请确保扫描时包含了数据集。")]
+
+        top_n = arguments.get("top_n", 20)
+        top_orgs = matrix_data.get("top_orgs", [])[:top_n]
+        matrix = matrix_data.get("matrix", {})
+
+        lines = [f"**竞品矩阵** ({len(top_orgs)} 个组织)\n"]
+        lines.append("| 组织 | 数据集 | 仓库 | 论文 | 博客 | 总计 |")
+        lines.append("|------|--------|------|------|------|------|")
+
+        for org in top_orgs:
+            org_name = org.get("org", "")
+            m = matrix.get(org_name, {})
+            datasets = sum(v for k, v in m.items() if k not in ("repos", "papers", "blogs"))
+            repos = m.get("repos", 0)
+            papers = m.get("papers", 0)
+            blogs = m.get("blogs", 0)
+            total = org.get("total", datasets + repos + papers + blogs)
+            lines.append(f"| {org_name} | {datasets} | {repos} | {papers} | {blogs} | {total} |")
+
+        return [TextContent(type="text", text="\n".join(lines))]
+
+    elif name == "radar_lineage":
+        report = get_latest_report()
+        if not report:
+            return [TextContent(type="text", text="没有找到报告，请先运行 `radar_scan`。")]
+
+        lineage = report.get("dataset_lineage", {})
+        if not lineage:
+            return [TextContent(type="text", text="报告中没有数据集谱系数据。")]
+
+        dataset_id = arguments.get("dataset_id", "")
+        edges = lineage.get("edges", [])
+        version_chains = lineage.get("version_chains", {})
+        fork_trees = lineage.get("fork_trees", {})
+        root_datasets = lineage.get("root_datasets", [])
+
+        lines = ["**数据集谱系分析**\n"]
+
+        if dataset_id:
+            # Filter for specific dataset
+            related_edges = [
+                e for e in edges if dataset_id in str(e.get("source", "")) or dataset_id in str(e.get("target", ""))
+            ]
+            if related_edges:
+                lines.append(f"### 与 {dataset_id} 相关的派生关系")
+                for e in related_edges:
+                    src = e.get("source", "") if isinstance(e, dict) else e[0]
+                    tgt = e.get("target", "") if isinstance(e, dict) else e[1]
+                    rel = e.get("type", "derived") if isinstance(e, dict) else (e[2] if len(e) > 2 else "derived")
+                    lines.append(f"- {src} → {tgt} ({rel})")
+            else:
+                lines.append(f"未找到与 {dataset_id} 相关的谱系关系。")
+            return [TextContent(type="text", text="\n".join(lines))]
+
+        stats = lineage.get("stats", {})
+        lines.append(f"- 派生边: {stats.get('total_edges', len(edges))} 条")
+        lines.append(f"- 版本链: {stats.get('version_chains', len(version_chains))} 条")
+        lines.append(f"- Fork 树: {stats.get('fork_trees', len(fork_trees))} 棵")
+        lines.append(f"- 根数据集: {len(root_datasets)} 个")
+
+        if version_chains:
+            lines.append("\n### 版本链")
+            for base, versions in list(version_chains.items())[:10]:
+                lines.append(f"- **{base}**: {' → '.join(versions)}")
+
+        if fork_trees:
+            lines.append("\n### Fork 树")
+            for name, forks in list(fork_trees.items())[:10]:
+                lines.append(f"- **{name}**: {', '.join(forks[:5])}")
+
+        if root_datasets:
+            lines.append("\n### 根数据集 (被引用最多)")
+            for ds in root_datasets[:10]:
+                if isinstance(ds, dict):
+                    lines.append(f"- {ds.get('id', ds.get('name', '?'))} ({ds.get('count', 0)} 次引用)")
+                else:
+                    lines.append(f"- {ds}")
+
+        return [TextContent(type="text", text="\n".join(lines))]
+
+    elif name == "radar_org_graph":
+        report = get_latest_report()
+        if not report:
+            return [TextContent(type="text", text="没有找到报告，请先运行 `radar_scan`。")]
+
+        graph = report.get("org_graph", {})
+        if not graph:
+            return [TextContent(type="text", text="报告中没有组织关系图谱数据。")]
+
+        org_filter = arguments.get("org", "")
+        nodes = graph.get("nodes", [])
+        edges = graph.get("edges", [])
+        clusters = graph.get("clusters", [])
+        centrality = graph.get("centrality", {})
+
+        lines = ["**组织关系图谱**\n"]
+
+        if org_filter:
+            org_lower = org_filter.lower()
+            related = [
+                e for e in edges
+                if org_lower in str(e.get("source", "")).lower() or org_lower in str(e.get("target", "")).lower()
+            ]
+            if related:
+                lines.append(f"### 与 {org_filter} 相关的关系")
+                for e in related:
+                    src = e.get("source", "")
+                    tgt = e.get("target", "")
+                    rel = e.get("type", "")
+                    weight = e.get("weight", 1)
+                    lines.append(f"- {src} ↔ {tgt} ({rel}, 权重: {weight})")
+            else:
+                lines.append(f"未找到与 {org_filter} 相关的关系。")
+            return [TextContent(type="text", text="\n".join(lines))]
+
+        lines.append(f"- 节点: {len(nodes)} 个组织")
+        lines.append(f"- 关系边: {len(edges)} 条")
+        lines.append(f"- 聚类: {len(clusters)} 个")
+
+        if centrality:
+            lines.append("\n### 中心性排名 (Top 10)")
+            sorted_cent = sorted(centrality.items(), key=lambda x: x[1], reverse=True)[:10]
+            for i, (org, score) in enumerate(sorted_cent, 1):
+                lines.append(f"{i}. **{org}** — {score:.3f}")
+
+        if clusters:
+            lines.append("\n### 聚类")
+            for i, cluster in enumerate(clusters[:5], 1):
+                members = cluster if isinstance(cluster, list) else cluster.get("members", [])
+                lines.append(f"- 聚类 {i}: {', '.join(members[:8])}")
+
+        if edges:
+            lines.append("\n### 主要关系边 (Top 10)")
+            sorted_edges = sorted(edges, key=lambda e: e.get("weight", 1), reverse=True)[:10]
+            for e in sorted_edges:
+                src = e.get("source", "")
+                tgt = e.get("target", "")
+                rel = e.get("type", "")
+                lines.append(f"- {src} ↔ {tgt} ({rel})")
 
         return [TextContent(type="text", text="\n".join(lines))]
 
