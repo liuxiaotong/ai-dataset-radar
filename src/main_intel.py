@@ -1209,6 +1209,18 @@ async def async_main(args):
             logger.info("Report saved to: %s", md_path)
             logger.info("JSON data saved to: %s", json_path)
 
+        # 8.5 Daily change summary
+        try:
+            from analyzers.change_tracker import generate_change_summary
+
+            changes_path = generate_change_summary(output_dir / "reports", date_str)
+            if changes_path:
+                logger.info("Change summary saved to: %s", changes_path)
+            else:
+                logger.info("Change summary: no previous report (first run)")
+        except Exception as e:
+            logger.warning("Change summary skipped: %s", e)
+
         # 9. Record daily stats and calculate trends
         try:
             db_path = output_dir / "radar.db"
@@ -1577,6 +1589,16 @@ async def run_intel_scan(days: int = 7) -> dict:
         }
 
         formatter.save_reports(markdown_content=report, data=all_data, filename_prefix="intel_report")
+
+        # Daily change summary
+        try:
+            from analyzers.change_tracker import generate_change_summary
+
+            changes_path = generate_change_summary(output_dir / "reports", date_str)
+            if changes_path:
+                logger.info("Change summary saved to: %s", changes_path)
+        except Exception as e:
+            logger.warning("Change summary skipped: %s", e)
 
         # LLM insights analysis (same as CLI path)
         insights_text = None
