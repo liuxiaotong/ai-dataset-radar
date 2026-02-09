@@ -112,7 +112,9 @@ def compare_reports(
     changes["new_papers"] = _compare_papers(prev.get("papers", []), curr.get("papers", []))
 
     # 5. Blog & X counts
-    changes["new_blog_count"] = _count_blog_articles(curr.get("blog_posts", [])) - _count_blog_articles(prev.get("blog_posts", []))
+    curr_blogs = _count_blog_articles(curr.get("blog_posts", []))
+    prev_blogs = _count_blog_articles(prev.get("blog_posts", []))
+    changes["new_blog_count"] = curr_blogs - prev_blogs
     changes["new_tweet_count"] = _count_tweets(curr.get("x_activity", {})) - _count_tweets(prev.get("x_activity", {}))
 
     return changes

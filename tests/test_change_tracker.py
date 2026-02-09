@@ -230,7 +230,10 @@ class TestFormatChangesMarkdown:
     def test_basic_structure(self):
         changes = compare_reports(
             _make_report(datasets=[{"id": "a", "downloads": 100}]),
-            _make_report(datasets=[{"id": "a", "downloads": 200}, {"id": "b", "downloads": 50, "category": "code", "likes": 3}]),
+            _make_report(datasets=[
+                {"id": "a", "downloads": 200},
+                {"id": "b", "downloads": 50, "category": "code", "likes": 3},
+            ]),
             "2026-02-08", "2026-02-09",
         )
         md = format_changes_markdown(changes)
