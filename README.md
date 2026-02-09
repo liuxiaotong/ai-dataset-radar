@@ -8,9 +8,9 @@
 [![CI](https://github.com/liuxiaotong/ai-dataset-radar/actions/workflows/ci.yml/badge.svg)](https://github.com/liuxiaotong/ai-dataset-radar/actions/workflows/ci.yml)
 [![License: MIT](https://img.shields.io/badge/License-MIT-green.svg)](LICENSE)
 [![Python 3.10+](https://img.shields.io/badge/python-3.10+-blue.svg)](https://www.python.org/downloads/)
-[![Tests](https://img.shields.io/badge/tests-855_passed-brightgreen.svg)](#开发路线)
+[![Tests](https://img.shields.io/badge/tests-895_passed-brightgreen.svg)](#开发路线)
 [![Agent Ready](https://img.shields.io/badge/Agent-Ready-orange.svg)](docs/agent-integration.md)
-[![MCP](https://img.shields.io/badge/MCP-16_Tools-purple.svg)](docs/mcp.md)
+[![MCP](https://img.shields.io/badge/MCP-17_Tools-purple.svg)](docs/mcp.md)
 
 [快速开始](#快速开始) · [使用方式](#使用方式) · [数据源](#数据源) · [生态](#生态) · [文档](docs/)
 
@@ -21,7 +21,8 @@
 ## 亮点
 
 - **全源覆盖** — 86 HF orgs、50 GitHub orgs、71 博客、125 X 账户、5 Reddit 社区、arXiv 5 领域
-- **智能体原生** — MCP 16 工具 + REST API + Function Calling + Claude Code 7 Skills
+- **智能体原生** — MCP 17 工具 + REST API + Function Calling + Claude Code 7 Skills
+- **异常告警** — 7 条规则自动检测（零数据/阈值/趋势突破/变化），Email + Webhook 推送
 - **高性能异步** — aiohttp + asyncio.gather 全链路并发，500+ 请求同时执行
 - **竞品分析** — 竞品矩阵、数据集谱系、组织关系图谱三维交叉分析
 - **可视化仪表盘** — 11 Tab 面板 + Chart.js 趋势图 + 全局搜索
@@ -52,7 +53,7 @@ flowchart TD
 
     subgraph I[" Agent 接口"]
         direction LR
-        I1["REST API 18 端点"] ~~~ I2["MCP 16 工具"] ~~~ I3["Skills 7 命令"] ~~~ I4["Dashboard 11 Tab"]
+        I1["REST API 19 端点"] ~~~ I2["MCP 17 工具"] ~~~ I3["Skills 7 命令"] ~~~ I4["Dashboard 11 Tab"]
     end
 
     O --> I
@@ -133,7 +134,7 @@ python agent/api.py
 | 类别 | 端点 |
 |------|------|
 | 数据查询 | `/datasets` · `/github` · `/papers` · `/blogs` · `/reddit` |
-| 分析 | `/matrix` · `/lineage` · `/org-graph` · `/trends` · `/search` |
+| 分析 | `/matrix` · `/lineage` · `/org-graph` · `/trends` · `/search` · `/alerts` |
 | 操作 | `/scan` · `/summary` · `/config` · `/schema` · `/tools` |
 
 > 完整端点列表、代码示例（OpenAI / Anthropic / LangChain）见 [Agent 集成文档](docs/agent-integration.md)。
@@ -151,7 +152,7 @@ python agent/api.py
 }
 ```
 
-> 16 个工具（scan/search/diff/trend/history/reddit/matrix/lineage/org-graph 等）及配置详情见 [MCP 文档](docs/mcp.md)。
+> 17 个工具（scan/search/diff/trend/history/reddit/matrix/lineage/org-graph/alerts 等）及配置详情见 [MCP 文档](docs/mcp.md)。
 
 ### Claude Code Skills
 
@@ -237,7 +238,7 @@ graph LR
 
 | 能力 | 说明 | 解锁场景 |
 |------|------|----------|
-| **异常检测与告警** | 阈值规则 + 统计异常检测，触发 Webhook/邮件/飞书推送 | 从"手动查看"变为"主动通知"，情报系统的本质闭环 |
+| ~~**异常检测与告警**~~ | ✅ 7 条规则 × 4 类别，指纹去重，Email/Webhook 分发 | 从"手动查看"变为"主动通知"，情报系统的本质闭环 |
 | **增量扫描** | 记录上次扫描水位线，仅抓取增量数据 | 扫描频率从日级提升至小时级，API 调用量降一个量级 |
 | **时序持久化** | 每日快照写入 SQLite，支持跨月趋势查询 | 长周期趋势分析、季度报告、组织活跃度变化曲线 |
 | **推送分发** | 周报/日报自动推送到 Slack、飞书、邮件、Webhook | 团队被动消费情报，无需主动登录查看 |

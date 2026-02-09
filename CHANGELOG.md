@@ -20,7 +20,7 @@ AI Dataset Radar 已完成的里程碑。
 ### Agent & MCP
 
 - Agent 集成层 (HTTP API, Function Calling, Schema)
-- MCP Server (16 工具: scan/summary/datasets/github/papers/blogs/reddit/config/search/diff/trend/trends/history/matrix/lineage/org-graph)
+- MCP Server (17 工具: scan/summary/datasets/github/papers/blogs/reddit/config/search/diff/trend/trends/history/matrix/lineage/org-graph/alerts)
 - Claude Code Skills (7 个: scan/brief/search/diff/deep-dive/recipe/radar)
 - radar_search 全文搜索 (跨 6 类数据源, 支持正则, 按来源过滤)
 - radar_reddit Reddit 社区动态 (5 子版块, 信号关键词过滤)
@@ -57,6 +57,8 @@ AI Dataset Radar 已完成的里程碑。
 - Recipe 评分公式优化 (新增 likes 维度, 渐进式新鲜度衰减)
 - Insights API 集成 (run_intel_scan API 路径复用 LLM insights 生成)
 - 多 LLM 提供商 (Kimi/DeepSeek/Qwen/Zhipu/OpenAI 通过 OpenAI 兼容协议接入)
+- 异常检测与告警 (AlertManager: 7 条规则 × 4 类别, 指纹去重, Email/Webhook 分发)
+- radar_alerts MCP 工具 + /alerts REST 端点
 
 ### 质量 & 健壮性
 
@@ -75,7 +77,7 @@ AI Dataset Radar 已完成的里程碑。
 
 - CI 流水线 (GitHub Actions: ruff lint + pytest, push/PR 触发)
 - Docker 容器化 (Dockerfile + docker-compose: scan 扫描 + api 服务)
-- 测试覆盖 (855 用例)
+- 测试覆盖 (895 用例)
 - API 安全加固 v1+v2 (Bearer Token 认证 + 速率限制 + XSS 防护 + 非 root Docker)
 - 启动配置校验 (validate_config: 必需配置段 + 类型检查)
 - 缓存大小限制 (FileCache LRU 驱逐, max_entries=1000)

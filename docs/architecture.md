@@ -22,6 +22,7 @@ ai-dataset-radar/
 │   │   ├── dataset_lineage.py  # DatasetLineageTracker（派生/版本/Fork）
 │   │   ├── org_graph.py        # OrgRelationshipGraph（聚类/中心性）
 │   │   └── change_tracker.py   # 日报变化追踪
+│   ├── alerting.py             # AlertManager（异常检测 + 告警分发）
 │   └── utils/                  # 工具库
 │       ├── async_http.py       # AsyncHTTPClient（连接池 + 重试 + 限速）
 │       ├── llm_client.py       # LLM 调用（Anthropic API insights 生成）

@@ -36,6 +36,7 @@ uvicorn agent.api:app --port 8080
 | `/scan` | POST | 执行新扫描（含 insights 生成） |
 | `/config` | GET | 监控配置（敏感信息自动脱敏） |
 | `/schema` | GET | 输出规范 |
+| `/alerts` | GET | 告警记录 (支持 severity/limit 筛选) |
 | `/tools` | GET | 工具定义 |
 
 ## OpenAI Function Calling
