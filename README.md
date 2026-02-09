@@ -615,7 +615,8 @@ graph LR
     Recipe --> Label["🏷️ Label<br/>数据标注"]
     Synth --> Check["✅ Check<br/>数据质检"]
     Label --> Check
-    Check --> Hub["🎯 Hub<br/>编排层"]
+    Check --> Audit["🔬 Audit<br/>模型审计"]
+    Audit --> Hub["🎯 Hub<br/>编排层"]
     Hub --> Sandbox["📦 Sandbox<br/>执行沙箱"]
     Sandbox --> Recorder["📹 Recorder<br/>轨迹录制"]
     Recorder --> Reward["⭐ Reward<br/>过程打分"]
@@ -675,6 +676,7 @@ Claude Desktop 中同时配置两个 MCP Server，可自然语言驱动端到端
 | 生产 | **DataSynth** | LLM 批量合成、种子数据扩充 | [GitHub](https://github.com/liuxiaotong/data-synth) |
 | 生产 | **DataLabel** | 轻量标注工具、多标注员合并 | [GitHub](https://github.com/liuxiaotong/data-label) |
 | 质检 | **DataCheck** | 规则验证、重复检测、分布分析 | [GitHub](https://github.com/liuxiaotong/data-check) |
+| 质检 | **ModelAudit** | 蒸馏检测、模型指纹、身份验证 | [GitHub](https://github.com/liuxiaotong/model-audit) |
 | Agent | **AgentSandbox** | Docker 执行沙箱、轨迹重放 | [GitHub](https://github.com/liuxiaotong/agent-sandbox) |
 | Agent | **AgentRecorder** | 标准化轨迹录制、多框架适配 | [GitHub](https://github.com/liuxiaotong/agent-recorder) |
 | Agent | **AgentReward** | 过程级 Reward、Rubric 多维评估 | [GitHub](https://github.com/liuxiaotong/agent-reward) |
@@ -742,7 +744,7 @@ Claude Desktop 中同时配置两个 MCP Server，可自然语言驱动端到端
 
 ## AI Data Pipeline 生态
 
-> 9 个工具覆盖 AI 数据工程全流程，均支持 CLI + MCP，可独立使用也可组合成流水线。
+> 10 个工具覆盖 AI 数据工程全流程，均支持 CLI + MCP，可独立使用也可组合成流水线。
 
 | Tool | Description | Link |
 |------|-------------|------|
@@ -751,6 +753,7 @@ Claude Desktop 中同时配置两个 MCP Server，可自然语言驱动端到端
 | **DataSynth** | Seed-to-scale synthetic data generation | [GitHub](https://github.com/liuxiaotong/data-synth) |
 | **DataLabel** | Lightweight, serverless HTML labeling tool | [GitHub](https://github.com/liuxiaotong/data-label) |
 | **DataCheck** | Automated quality checks & anomaly detection | [GitHub](https://github.com/liuxiaotong/data-check) |
+| **ModelAudit** | LLM distillation detection & model fingerprinting | [GitHub](https://github.com/liuxiaotong/model-audit) |
 | **AgentSandbox** | Reproducible Docker sandbox for Code Agent execution | [GitHub](https://github.com/liuxiaotong/agent-sandbox) |
 | **AgentRecorder** | Standardized trajectory recording for Code Agents | [GitHub](https://github.com/liuxiaotong/agent-recorder) |
 | **AgentReward** | Process-level rubric-based reward engine | [GitHub](https://github.com/liuxiaotong/agent-reward) |
@@ -758,9 +761,9 @@ Claude Desktop 中同时配置两个 MCP Server，可自然语言驱动端到端
 
 ```mermaid
 graph LR
-    A[Radar] --> B[Recipe] --> C[Synth] --> E[Check] --> F[Hub]
+    A[Radar] --> B[Recipe] --> C[Synth] --> E[Check] --> F[Audit] --> G[Hub]
     B --> D[Label] --> E
-    F --> G[Sandbox] --> H[Recorder] --> I[Reward]
+    G --> H[Sandbox] --> I[Recorder] --> J[Reward]
 ```
 
 ---
