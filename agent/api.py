@@ -715,11 +715,12 @@ async def get_org_graph():
 
 
 @app.get("/alerts", dependencies=[Security(verify_api_key)])
-async def get_alerts(limit: int = 50):
+async def get_alerts(limit: int = 50, severity: Optional[str] = None):
     """
     Get recent alert history.
 
     Returns alerts from the most recent alert logs, sorted by timestamp descending.
+    Optionally filter by severity (critical, warning, info).
     """
     reports_dir = get_reports_dir()
     if not reports_dir.exists():
@@ -738,8 +739,11 @@ async def get_alerts(limit: int = 50):
                 all_alerts.extend(alerts)
             except (json.JSONDecodeError, ValueError):
                 continue
-        if len(all_alerts) >= limit:
+        if len(all_alerts) >= limit * 2:
             break
+
+    if severity:
+        all_alerts = [a for a in all_alerts if a.get("severity") == severity]
 
     # Sort by timestamp descending, limit
     all_alerts.sort(key=lambda a: a.get("timestamp", ""), reverse=True)

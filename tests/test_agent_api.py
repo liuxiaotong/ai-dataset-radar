@@ -1153,6 +1153,25 @@ class TestAlertsEndpoint:
             resp = client.get("/alerts?limit=1")
         assert resp.json()["total"] == 1
 
+    def test_alerts_severity_filter(self, client, tmp_path):
+        """GET /alerts?severity=critical filters by severity."""
+        reports_dir = tmp_path / "reports"
+        d = reports_dir / "2026-02-09"
+        d.mkdir(parents=True)
+        alerts = [
+            {"rule": "r1", "severity": "critical", "title": "Crit",
+             "detail": "", "timestamp": "2026-02-09T01:00:00", "fingerprint": "a"},
+            {"rule": "r2", "severity": "info", "title": "Info",
+             "detail": "", "timestamp": "2026-02-09T02:00:00", "fingerprint": "b"},
+        ]
+        (d / "alerts.json").write_text(json.dumps(alerts))
+
+        with patch("agent.api.get_reports_dir", return_value=reports_dir):
+            resp = client.get("/alerts?severity=critical")
+        body = resp.json()
+        assert body["total"] == 1
+        assert body["alerts"][0]["severity"] == "critical"
+
     def test_alerts_corrupt_json(self, client, tmp_path):
         """GET /alerts gracefully handles corrupt JSON."""
         reports_dir = tmp_path / "reports"

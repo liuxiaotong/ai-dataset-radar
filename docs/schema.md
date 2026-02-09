@@ -80,6 +80,16 @@
     "edges": [{"source": "openai", "target": "meta", "type": "shared_topic", "weight": 3}],
     "clusters": [["openai", "meta", "google"]],
     "centrality": {"openai": 0.667, "meta": 0.333}
-  }
+  },
+  "alerts": [
+    {
+      "rule": "zero_data_github",
+      "severity": "critical",
+      "title": "GitHub: 0 active orgs",
+      "detail": "Data source 'github' returned 0 results. Check connectivity and API keys.",
+      "timestamp": "2026-02-09T08:00:00",
+      "fingerprint": "a1b2c3d4e5f67890"
+    }
+  ]
 }
 ```
