@@ -39,7 +39,7 @@ jobs:
           EMAIL_FROM: ${{ secrets.EMAIL_FROM }}
           EMAIL_TO: ${{ secrets.EMAIL_TO }}
           WEBHOOK_URL: ${{ secrets.WEBHOOK_URL }}
-        run: python src/main_intel.py --days 7
+        run: python src/main_intel.py --days 7 --api-insights
         continue-on-error: false
 
       - name: Commit and push changes

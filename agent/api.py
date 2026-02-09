@@ -128,6 +128,7 @@ if not API_KEY:
 
 class ScanRequest(BaseModel):
     days: int = Field(7, ge=1, le=90, description="Look-back period in days (1-90)")
+    api_insights: bool = Field(False, description="Use LLM API to generate insights (default: off)")
 
 
 class ScanResponse(BaseModel):
@@ -246,7 +247,7 @@ async def run_scan(request: ScanRequest):
         # Import and run the scanner
         from main_intel import run_intel_scan
 
-        scan_result = await run_intel_scan(days=request.days)
+        scan_result = await run_intel_scan(days=request.days, api_insights=request.api_insights)
 
         report = get_latest_report()
         summary = report.get("summary", {}) if report else scan_result

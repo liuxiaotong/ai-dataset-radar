@@ -981,17 +981,18 @@ async def async_main(args):
             "Fix: add GITHUB_TOKEN to .env"
         )
 
-    has_llm = (
-        os.environ.get("LLM_PROVIDER")
-        or os.environ.get("LLM_API_KEY")
-        or os.environ.get("ANTHROPIC_API_KEY")
-    )
-    if not has_llm:
-        _preflight_warnings.append(
-            "No LLM API key — insights report will not auto-generate. "
-            "Set ANTHROPIC_API_KEY or LLM_PROVIDER+LLM_API_KEY. "
-            "The prompt file will be saved for manual analysis"
+    # Only warn if user explicitly requested API insights but has no key
+    if getattr(args, "api_insights", False):
+        has_llm = (
+            os.environ.get("LLM_PROVIDER")
+            or os.environ.get("LLM_API_KEY")
+            or os.environ.get("ANTHROPIC_API_KEY")
         )
+        if not has_llm:
+            _preflight_warnings.append(
+                "--api-insights requested but no LLM API key found. "
+                "Set ANTHROPIC_API_KEY or LLM_PROVIDER+LLM_API_KEY"
+            )
 
     if _preflight_warnings:
         logger.warning("— Environment checks —")
@@ -1347,27 +1348,34 @@ async def async_main(args):
                 x_activity=x_activity,
             )
 
-            # Save insights prompt to file for reference
+            # Save insights prompt to file (always — for Claude Code environment)
             insights_prompt_path = reports_dir / f"intel_report_{date_str}_insights_prompt.md"
             with open(insights_prompt_path, "w", encoding="utf-8") as f:
                 f.write(insights_content)
             logger.info("Insights prompt saved to: %s", insights_prompt_path)
 
-            # Try auto-generating insights via LLM API
-            from utils.llm_client import generate_insights
-
-            insights_result = await asyncio.to_thread(generate_insights, insights_content)
-
             insights_path = reports_dir / f"intel_report_{date_str}_insights.md"
-            if insights_result:
-                # API succeeded — save the report
-                with open(insights_path, "w", encoding="utf-8") as f:
-                    f.write(insights_result)
-                logger.info("Insights report saved to: %s", insights_path)
+
+            if args.api_insights:
+                # Explicitly requested: generate insights via LLM API
+                from utils.llm_client import generate_insights
+
+                insights_result = await asyncio.to_thread(generate_insights, insights_content)
+
+                if insights_result:
+                    with open(insights_path, "w", encoding="utf-8") as f:
+                        f.write(insights_result)
+                    logger.info("Insights report saved to: %s", insights_path)
+                else:
+                    logger.warning(
+                        "--api-insights requested but no LLM API key configured. "
+                        "Set ANTHROPIC_API_KEY or LLM_PROVIDER+LLM_API_KEY"
+                    )
+                    logger.info("INSIGHTS_OUTPUT_PATH=%s", insights_path)
             else:
-                # No API key — prompt already saved to file; environment LLM reads it
+                # Default: let Claude Code / environment LLM handle analysis
                 logger.info(
-                    "No LLM API key — insights prompt saved for environment LLM: %s",
+                    "Insights prompt ready for environment LLM: %s",
                     insights_prompt_path,
                 )
                 logger.info("INSIGHTS_OUTPUT_PATH=%s", insights_path)
@@ -1494,7 +1502,13 @@ def main():
     parser.add_argument(
         "--no-insights",
         action="store_true",
-        help="Skip LLM analysis prompt output (enabled by default)",
+        help="Skip insights prompt generation entirely",
+    )
+    parser.add_argument(
+        "--api-insights",
+        action="store_true",
+        help="Use LLM API (Anthropic/Kimi/DeepSeek) to auto-generate insights. "
+        "Default: save prompt for Claude Code environment to analyze",
     )
     parser.add_argument(
         "--recipe",
@@ -1512,11 +1526,12 @@ def main():
     asyncio.run(async_main(args))
 
 
-async def run_intel_scan(days: int = 7) -> dict:
+async def run_intel_scan(days: int = 7, api_insights: bool = False) -> dict:
     """Run an intelligence scan programmatically (used by the API).
 
     Args:
         days: Look back period in days.
+        api_insights: If True, use LLM API to generate insights. Default: False.
 
     Returns:
         Summary dict with scan results.
@@ -1704,7 +1719,7 @@ async def run_intel_scan(days: int = 7) -> dict:
         except Exception as e:
             logger.warning("Change summary skipped: %s", e)
 
-        # LLM insights analysis (same as CLI path)
+        # Insights prompt (always saved for environment LLM)
         insights_text = None
         insights_content = None
         insights_prompt_path = None
@@ -1725,16 +1740,19 @@ async def run_intel_scan(days: int = 7) -> dict:
                 f.write(insights_content)
             logger.info("Insights prompt saved to: %s", insights_prompt_path)
 
-            from utils.llm_client import generate_insights
+            if api_insights:
+                from utils.llm_client import generate_insights
 
-            insights_text = await asyncio.to_thread(generate_insights, insights_content)
-            insights_path = reports_dir / f"intel_report_{date_str}_insights.md"
-            if insights_text:
-                with open(insights_path, "w", encoding="utf-8") as f:
-                    f.write(insights_text)
-                logger.info("Insights report saved to: %s", insights_path)
+                insights_text = await asyncio.to_thread(generate_insights, insights_content)
+                insights_path = reports_dir / f"intel_report_{date_str}_insights.md"
+                if insights_text:
+                    with open(insights_path, "w", encoding="utf-8") as f:
+                        f.write(insights_text)
+                    logger.info("Insights report saved to: %s", insights_path)
+                else:
+                    logger.info("--api-insights but no LLM key configured")
             else:
-                logger.info("No LLM API key — insights prompt saved for environment LLM")
+                logger.info("Insights prompt ready for environment LLM")
         except Exception as e:
             logger.warning("Insights generation error: %s", e)
 

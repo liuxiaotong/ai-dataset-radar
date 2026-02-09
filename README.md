@@ -181,8 +181,8 @@ python src/main_intel.py --days 7 --no-insights
 
 | 环境 | 行为 |
 |------|------|
-| 有 `ANTHROPIC_API_KEY` 或 `LLM_API_KEY` | 自动调用 LLM 生成 `_insights.md`（CLI 与 API 路径均支持） |
-| 无 API key（CLI） | 保存 prompt 文件，日志提示路径，供 Claude Code 等 AI CLI 读取分析 |
+| 默认 | 保存 prompt 文件，由 Claude Code 环境 LLM 分析（`/scan` skill 自动衔接） |
+| `--api-insights` | 显式调用 LLM API（Anthropic/Kimi/DeepSeek 等）生成 `_insights.md` |
 | `--no-insights` | 跳过 insights 逻辑 |
 
 **国产模型配置**（Kimi / DeepSeek / Qwen / Zhipu 均使用 OpenAI 兼容协议）：
