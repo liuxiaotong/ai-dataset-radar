@@ -77,7 +77,8 @@ AI Dataset Radar 已完成的里程碑。
 
 - CI 流水线 (GitHub Actions: ruff lint + pytest, push/PR 触发)
 - Docker 容器化 (Dockerfile + docker-compose: scan 扫描 + api 服务)
-- 测试覆盖 (902 用例)
+- 增量扫描 (WatermarkStore 水位线持久化, 首次全量→后续增量, --full-scan 强制全量)
+- 测试覆盖 (919 用例)
 - API 安全加固 v1+v2 (Bearer Token 认证 + 速率限制 + XSS 防护 + 非 root Docker)
 - 启动配置校验 (validate_config: 必需配置段 + 类型检查)
 - 缓存大小限制 (FileCache LRU 驱逐, max_entries=1000)

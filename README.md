@@ -8,7 +8,7 @@
 [![CI](https://github.com/liuxiaotong/ai-dataset-radar/actions/workflows/ci.yml/badge.svg)](https://github.com/liuxiaotong/ai-dataset-radar/actions/workflows/ci.yml)
 [![License: MIT](https://img.shields.io/badge/License-MIT-green.svg)](LICENSE)
 [![Python 3.10+](https://img.shields.io/badge/python-3.10+-blue.svg)](https://www.python.org/downloads/)
-[![Tests](https://img.shields.io/badge/tests-902_passed-brightgreen.svg)](#开发路线)
+[![Tests](https://img.shields.io/badge/tests-919_passed-brightgreen.svg)](#开发路线)
 [![Agent Ready](https://img.shields.io/badge/Agent-Ready-orange.svg)](docs/agent-integration.md)
 [![MCP](https://img.shields.io/badge/MCP-17_Tools-purple.svg)](docs/mcp.md)
 
@@ -23,6 +23,7 @@
 - **全源覆盖** — 86 HF orgs、50 GitHub orgs、71 博客、125 X 账户、5 Reddit 社区、arXiv 5 领域
 - **智能体原生** — MCP 17 工具 + REST API + Function Calling + Claude Code 7 Skills
 - **异常告警** — 7 条规则自动检测（零数据/阈值/趋势突破/变化），Email + Webhook 推送
+- **增量扫描** — 水位线驱动智能窗口，后续扫描仅处理新增数据，`--full-scan` 可强制全量
 - **高性能异步** — aiohttp + asyncio.gather 全链路并发，500+ 请求同时执行
 - **竞品分析** — 竞品矩阵、数据集谱系、组织关系图谱三维交叉分析
 - **可视化仪表盘** — 12 Tab 面板 + Chart.js 趋势图 + 全局搜索
@@ -100,9 +101,9 @@ data/reports/2026-02-08/
 ### CLI
 
 ```bash
-python src/main_intel.py --days 7                  # 基础扫描
+python src/main_intel.py --days 7                  # 基础扫描（首次全量，后续增量）
 python src/main_intel.py --days 7 --recipe          # + DataRecipe
-python src/main_intel.py --days 7 --no-insights     # 跳过 AI 分析
+python src/main_intel.py --full-scan --days 7       # 强制全量扫描
 python src/main_intel.py --days 7 --api-insights    # 显式调用 LLM API
 ```
 
@@ -239,7 +240,7 @@ graph LR
 | 能力 | 说明 | 解锁场景 |
 |------|------|----------|
 | ~~**异常检测与告警**~~ | ✅ 7 条规则 × 4 类别，指纹去重，Email/Webhook 分发 | 从"手动查看"变为"主动通知"，情报系统的本质闭环 |
-| **增量扫描** | 记录上次扫描水位线，仅抓取增量数据 | 扫描频率从日级提升至小时级，API 调用量降一个量级 |
+| ~~**增量扫描**~~ | ✅ 水位线驱动智能窗口，后续扫描仅处理新增数据 | 扫描频率从日级提升至小时级，API 调用量降一个量级 |
 | **时序持久化** | 每日快照写入 SQLite，支持跨月趋势查询 | 长周期趋势分析、季度报告、组织活跃度变化曲线 |
 | **推送分发** | 周报/日报自动推送到 Slack、飞书、邮件、Webhook | 团队被动消费情报，无需主动登录查看 |
 | **交互式图谱** | D3.js force-directed 组织关系图 + Sankey 谱系图 | 可视化发现隐藏的组织协作模式和数据集派生链 |
