@@ -769,31 +769,6 @@ Claude Desktop 中同时配置两个 MCP Server，可自然语言驱动端到端
 - [x] 监控源大扩展 (HF 86 orgs, GitHub 50 orgs, arXiv +cs.CV/cs.RO, X 125 账户, 博客 71 源, 新增 OpenBMB/cleanlab/IDEA-Research)
 - [x] 多 LLM 提供商 (Kimi/DeepSeek/Qwen/Zhipu/OpenAI 通过 OpenAI 兼容协议接入，环境变量切换，向后兼容 Anthropic)
 
----
-
-## AI Data Pipeline 生态
-
-> 7 个项目覆盖 AI 数据工程全流程，均支持 CLI + MCP，可独立使用也可组合成流水线。
-
-| Tool | Description | Link |
-|------|-------------|------|
-| **AI Dataset Radar** | Competitive intelligence for AI training datasets | You are here |
-| **DataRecipe** | Reverse-engineer datasets into annotation specs & cost models | [GitHub](https://github.com/liuxiaotong/data-recipe) |
-| **DataSynth** | Seed-to-scale synthetic data generation | [GitHub](https://github.com/liuxiaotong/data-synth) |
-| **DataLabel** | Lightweight, serverless HTML labeling tool | [GitHub](https://github.com/liuxiaotong/data-label) |
-| **DataCheck** | Automated quality checks & anomaly detection | [GitHub](https://github.com/liuxiaotong/data-check) |
-| **ModelAudit** | LLM distillation detection & model fingerprinting | [GitHub](https://github.com/liuxiaotong/model-audit) |
-| **knowlyr-agent** | Sandbox + Recorder + Reward + Hub (monorepo) | [GitHub](https://github.com/liuxiaotong/knowlyr-agent) |
-
-```mermaid
-graph LR
-    A[Radar] --> B[Recipe] --> C[Synth] --> E[Check] --> F[Audit] --> G[Hub]
-    B --> D[Label] --> E
-    G --> H[Sandbox] --> I[Recorder] --> J[Reward]
-```
-
----
-
 ## 许可证
 
 [MIT](LICENSE)
