@@ -18,7 +18,7 @@
 
 ---
 
-**GitHub Topics**: `ai-agent`, `competitive-intelligence`, `dataset-monitoring`, `mcp`, `function-calling`
+**GitHub Topics**: `competitive-intelligence`, `dataset-monitoring`, `ai-agent`, `mcp`, `ai-data-pipeline`
 
 监控 67 家 AI Labs、27 家数据供应商、71 个博客源、50 个 GitHub 组织、125 个 X/Twitter 账户的训练数据动态，提供结构化输出供智能体消费。支持 Function Calling、MCP、REST API 多种接入方式。
 
