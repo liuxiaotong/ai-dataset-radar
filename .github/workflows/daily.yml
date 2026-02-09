@@ -27,7 +27,11 @@ jobs:
       - name: Install dependencies
         run: |
           pip install -r requirements.txt
+          pip install pytest pytest-asyncio aioresponses mcp
           playwright install chromium --with-deps
+
+      - name: Smoke test
+        run: python -m pytest tests/ -q --tb=short -x --ignore=tests/test_blog_tracker.py
 
       - name: Run AI Dataset Radar
         env:
