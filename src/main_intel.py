@@ -981,9 +981,15 @@ async def async_main(args):
             "Fix: add GITHUB_TOKEN to .env"
         )
 
-    if not os.environ.get("ANTHROPIC_API_KEY"):
+    has_llm = (
+        os.environ.get("LLM_PROVIDER")
+        or os.environ.get("LLM_API_KEY")
+        or os.environ.get("ANTHROPIC_API_KEY")
+    )
+    if not has_llm:
         _preflight_warnings.append(
-            "No ANTHROPIC_API_KEY — insights report will not auto-generate. "
+            "No LLM API key — insights report will not auto-generate. "
+            "Set ANTHROPIC_API_KEY or LLM_PROVIDER+LLM_API_KEY. "
             "The prompt file will be saved for manual analysis"
         )
 
@@ -1361,7 +1367,7 @@ async def async_main(args):
             else:
                 # No API key — prompt already saved to file; environment LLM reads it
                 logger.info(
-                    "No ANTHROPIC_API_KEY — insights prompt saved for environment LLM: %s",
+                    "No LLM API key — insights prompt saved for environment LLM: %s",
                     insights_prompt_path,
                 )
                 logger.info("INSIGHTS_OUTPUT_PATH=%s", insights_path)
@@ -1728,7 +1734,7 @@ async def run_intel_scan(days: int = 7) -> dict:
                     f.write(insights_text)
                 logger.info("Insights report saved to: %s", insights_path)
             else:
-                logger.info("No ANTHROPIC_API_KEY — insights prompt saved for environment LLM")
+                logger.info("No LLM API key — insights prompt saved for environment LLM")
         except Exception as e:
             logger.warning("Insights generation error: %s", e)
 

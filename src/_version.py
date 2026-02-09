@@ -1,3 +1,3 @@
 """Single source of truth for the project version."""
 
-__version__ = "6.0.6"
+__version__ = "6.0.7"

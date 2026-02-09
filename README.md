@@ -114,7 +114,11 @@ docker compose up api -d
 | 变量 | 必需 | 作用 |
 |------|------|------|
 | `GITHUB_TOKEN` | 推荐 | GitHub API 速率 60→5000 req/hr |
-| `ANTHROPIC_API_KEY` | 可选 | 自动生成 AI 分析报告 |
+| `ANTHROPIC_API_KEY` | 可选 | 自动生成 AI 分析报告（默认 Claude） |
+| `LLM_PROVIDER` | 可选 | LLM 提供商: 留空=Anthropic, `openai_compatible`=国产模型 |
+| `LLM_API_KEY` | 可选 | LLM API Key（覆盖 ANTHROPIC_API_KEY） |
+| `LLM_BASE_URL` | 可选 | OpenAI 兼容 API 地址（Kimi/DeepSeek/Qwen/Zhipu） |
+| `LLM_MODEL` | 可选 | 模型 ID（如 moonshot-v1-128k） |
 | `RADAR_API_KEY` | 可选 | REST API 认证密钥 |
 
 ### X/Twitter 数据源设置（RSSHub）
@@ -177,9 +181,31 @@ python src/main_intel.py --days 7 --no-insights
 
 | 环境 | 行为 |
 |------|------|
-| 有 `ANTHROPIC_API_KEY` | 自动调用 API 生成 `_insights.md`（CLI 与 API 路径均支持） |
+| 有 `ANTHROPIC_API_KEY` 或 `LLM_API_KEY` | 自动调用 LLM 生成 `_insights.md`（CLI 与 API 路径均支持） |
 | 无 API key（CLI） | 保存 prompt 文件，日志提示路径，供 Claude Code 等 AI CLI 读取分析 |
 | `--no-insights` | 跳过 insights 逻辑 |
+
+**国产模型配置**（Kimi / DeepSeek / Qwen / Zhipu 均使用 OpenAI 兼容协议）：
+
+```bash
+# Kimi (Moonshot)
+LLM_PROVIDER=openai_compatible
+LLM_API_KEY=sk-xxx
+LLM_BASE_URL=https://api.moonshot.cn/v1
+LLM_MODEL=moonshot-v1-128k
+
+# DeepSeek
+LLM_PROVIDER=openai_compatible
+LLM_API_KEY=sk-xxx
+LLM_BASE_URL=https://api.deepseek.com
+LLM_MODEL=deepseek-chat
+
+# Qwen (通义千问)
+LLM_PROVIDER=openai_compatible
+LLM_API_KEY=sk-xxx
+LLM_BASE_URL=https://dashscope.aliyuncs.com/compatible-mode/v1
+LLM_MODEL=qwen-plus
+```
 
 **产出文件（按日期子目录组织）：**
 ```
@@ -744,6 +770,7 @@ Claude Desktop 中同时配置两个 MCP Server，可自然语言驱动端到端
 - [x] 版本号统一管理 (`src/_version.py` 单一来源 + git pre-commit hook 自动 patch +1)
 - [x] 安全加固 v2 (SQLite 事务安全, AsyncRateLimiter 竞态修复, Dashboard XSS 防护, API 全端点认证, 非 root Docker)
 - [x] 监控源大扩展 (HF 86 orgs, GitHub 50 orgs, arXiv +cs.CV/cs.RO, X 125 账户, 博客 71 源, 新增 OpenBMB/cleanlab/IDEA-Research)
+- [x] 多 LLM 提供商 (Kimi/DeepSeek/Qwen/Zhipu/OpenAI 通过 OpenAI 兼容协议接入，环境变量切换，向后兼容 Anthropic)
 
 ---
 
