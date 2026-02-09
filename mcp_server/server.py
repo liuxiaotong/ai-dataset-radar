@@ -704,10 +704,11 @@ async def call_tool(name: str, arguments: dict):
 ({summary.get("total_github_repos_high_relevance", 0)} 个高相关)
 - 论文: {summary.get("total_papers", 0)} 篇
 - 博客文章: {summary.get("total_blog_posts", 0)} 篇
+- Reddit: {summary.get("total_reddit_posts", 0)} 条
 
 报告已保存到: {get_latest_report_path()}
 
-使用 `radar_datasets`、`radar_github`、`radar_papers` 查看详细内容。""",
+使用 `radar_datasets`、`radar_github`、`radar_papers`、`radar_reddit` 查看详细内容。""",
                     )
                 ]
             else:
@@ -749,6 +750,7 @@ async def call_tool(name: str, arguments: dict):
 | 高相关仓库 | {summary.get("total_github_repos_high_relevance", 0)} |
 | 论文 | {summary.get("total_papers", 0)} |
 | 博客文章 | {summary.get("total_blog_posts", 0)} |
+| Reddit | {summary.get("total_reddit_posts", 0)} |
 
 **数据集类型分布:**
 {json.dumps(report.get("datasets_by_type", {}), indent=2, ensure_ascii=False)}

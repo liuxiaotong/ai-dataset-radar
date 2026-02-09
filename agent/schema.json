@@ -73,6 +73,72 @@
     "datasets_by_type": {
       "type": "object",
       "description": "Dataset IDs grouped by classification type"
+    },
+    "competitor_matrix": {
+      "type": "object",
+      "description": "Cross-reference matrix of organizations vs data types",
+      "properties": {
+        "matrix": {
+          "type": "object",
+          "description": "Org → {category: count} mapping"
+        },
+        "rankings": { "type": "object" },
+        "top_orgs": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "org": { "type": "string" },
+              "total": { "type": "integer" }
+            }
+          }
+        }
+      }
+    },
+    "dataset_lineage": {
+      "type": "object",
+      "description": "Dataset derivation graph with version chains and fork trees",
+      "properties": {
+        "edges": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "source": { "type": "string" },
+              "target": { "type": "string" },
+              "type": { "type": "string" }
+            }
+          }
+        },
+        "root_datasets": { "type": "array" },
+        "version_chains": { "type": "object" },
+        "fork_trees": { "type": "object" },
+        "stats": { "type": "object" }
+      }
+    },
+    "org_graph": {
+      "type": "object",
+      "description": "Inter-organization relationship graph with clusters and centrality",
+      "properties": {
+        "nodes": {
+          "type": "array",
+          "items": { "type": "string" }
+        },
+        "edges": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "source": { "type": "string" },
+              "target": { "type": "string" },
+              "type": { "type": "string" },
+              "weight": { "type": "integer" }
+            }
+          }
+        },
+        "clusters": { "type": "array" },
+        "centrality": { "type": "object" }
+      }
     }
   },
   "definitions": {
