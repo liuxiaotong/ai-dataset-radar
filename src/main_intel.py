@@ -967,6 +967,110 @@ async def run_recipe_analysis(selected_datasets, reports_dir, config):
     }
 
 
+def _effective_days(watermarks, source: str, default_days: int) -> int:
+    """Convert watermark timestamp to equivalent days for a source.
+
+    If no watermark exists, returns default_days.
+    Adds +1 day safety margin to avoid missing data at boundaries.
+    """
+    wm = watermarks.get(source)
+    if not wm:
+        return default_days
+    try:
+        wm_dt = datetime.fromisoformat(wm)
+        delta = datetime.now() - wm_dt
+        return max(1, int(delta.total_seconds() / 86400) + 1)
+    except (ValueError, TypeError):
+        return default_days
+
+
+def _update_watermarks(watermarks, all_data: dict) -> None:
+    """Extract latest timestamps from scan results and update watermarks."""
+
+    def _max_ts(timestamps: list[str]) -> str | None:
+        valid = []
+        for ts in timestamps:
+            if ts:
+                try:
+                    datetime.fromisoformat(str(ts).replace("Z", "+00:00"))
+                    valid.append(str(ts))
+                except (ValueError, TypeError):
+                    pass
+        return max(valid) if valid else None
+
+    # Labs / Vendors: max(dataset["last_modified"])
+    for source_key in ("labs", "vendors"):
+        activity_key = f"{source_key}_activity"
+        activity = all_data.get(activity_key, {})
+        timestamps = []
+        data_dict = activity.get(source_key, {})
+        if isinstance(data_dict, dict):
+            for category in data_dict.values():
+                if isinstance(category, dict):
+                    for org_data in category.values():
+                        if isinstance(org_data, dict):
+                            for ds in org_data.get("datasets", []):
+                                ts = ds.get("last_modified") or ds.get("created_at")
+                                if ts:
+                                    timestamps.append(str(ts))
+        ts = _max_ts(timestamps)
+        if ts:
+            watermarks.set(source_key, ts)
+
+    # GitHub: max(repo["updated_at"])
+    gh_timestamps = []
+    for org_entry in all_data.get("github_activity", []):
+        for repo in org_entry.get("repos_updated", []):
+            ts = repo.get("updated_at") or repo.get("pushed_at")
+            if ts:
+                gh_timestamps.append(str(ts))
+    ts = _max_ts(gh_timestamps)
+    if ts:
+        watermarks.set("github", ts)
+
+    # Blogs: max(article["date"])
+    blog_timestamps = []
+    for blog in all_data.get("blog_posts", []):
+        for article in blog.get("articles", []):
+            ts = article.get("date")
+            if ts:
+                blog_timestamps.append(str(ts))
+    ts = _max_ts(blog_timestamps)
+    if ts:
+        watermarks.set("blogs", ts)
+
+    # Papers: max(paper["created_at"])
+    paper_timestamps = []
+    for paper in all_data.get("papers", []):
+        ts = paper.get("created_at") or paper.get("published")
+        if ts:
+            paper_timestamps.append(str(ts))
+    ts = _max_ts(paper_timestamps)
+    if ts:
+        watermarks.set("papers", ts)
+
+    # X/Twitter: max(tweet["date"])
+    x_timestamps = []
+    for account in all_data.get("x_activity", {}).get("accounts", []):
+        for tweet in account.get("relevant_tweets", []):
+            ts = tweet.get("date")
+            if ts:
+                x_timestamps.append(str(ts))
+    ts = _max_ts(x_timestamps)
+    if ts:
+        watermarks.set("x", ts)
+
+    # Reddit: max(post["date"])
+    reddit_timestamps = []
+    for post in all_data.get("reddit_activity", {}).get("posts", []):
+        ts = post.get("date") or post.get("created_utc")
+        if ts:
+            reddit_timestamps.append(str(ts))
+    ts = _max_ts(reddit_timestamps)
+    if ts:
+        watermarks.set("reddit", ts)
+
+
 async def async_main(args):
     """Async main logic for the intelligence scan.
 
@@ -1084,6 +1188,27 @@ async def async_main(args):
                     http_client=http_client,
                 )
 
+        # Incremental scan: watermark-based days calculation
+        from utils.watermark import WatermarkStore
+
+        output_dir = Path(config.get("report", {}).get("output_dir", "data"))
+        watermarks = WatermarkStore(output_dir / "watermarks.json")
+        full_scan = getattr(args, "full_scan", False)
+        incremental = (
+            not full_scan
+            and watermarks.get("labs") is not None
+        )
+
+        if incremental:
+            logger.info("增量扫描模式（基于上次水位线）")
+        else:
+            logger.info("全量扫描模式（%d 天窗口）", args.days)
+
+        def _days(source: str) -> int:
+            if not incremental:
+                return args.days
+            return _effective_days(watermarks, source, args.days)
+
         # Calculate total progress steps
         _n = 0
         if not args.no_labs:
@@ -1106,27 +1231,27 @@ async def async_main(args):
         tasks = {}
         if not args.no_labs:
             logger.info(_progress("HuggingFace Labs 追踪..."))
-            tasks["labs"] = org_tracker.fetch_lab_activity(days=args.days)
+            tasks["labs"] = org_tracker.fetch_lab_activity(days=_days("labs"))
 
         if not args.no_vendors:
             logger.info(_progress("HuggingFace Vendors 追踪..."))
-            tasks["vendors"] = org_tracker.fetch_vendor_activity(days=args.days)
+            tasks["vendors"] = org_tracker.fetch_vendor_activity(days=_days("vendors"))
 
         if not args.no_github:
             logger.info(_progress("GitHub 组织扫描..."))
-            tasks["github"] = github_tracker.fetch_all_orgs(days=args.days)
+            tasks["github"] = github_tracker.fetch_all_orgs(days=_days("github"))
 
         if not args.no_blogs:
             logger.info(_progress("博客源抓取..."))
-            tasks["blogs"] = blog_tracker.fetch_all_blogs(days=args.days)
+            tasks["blogs"] = blog_tracker.fetch_all_blogs(days=_days("blogs"))
 
         if x_tracker:
             logger.info(_progress("X/Twitter 账号抓取..."))
-            tasks["x"] = x_tracker.fetch_all(days=args.days)
+            tasks["x"] = x_tracker.fetch_all(days=_days("x"))
 
         if reddit_tracker:
             logger.info(_progress("Reddit 社区追踪..."))
-            tasks["reddit"] = reddit_tracker.fetch_all(days=args.days)
+            tasks["reddit"] = reddit_tracker.fetch_all(days=_days("reddit"))
 
         if arxiv_scraper:
             if not hf_papers_scraper:
@@ -1272,7 +1397,6 @@ async def async_main(args):
             logger.warning("=" * 60)
 
         # 8. Trend analysis (before report so trends appear in output)
-        output_dir = Path(config.get("report", {}).get("output_dir", "data"))
         trend_data = {}
         try:
             db_path = output_dir / "radar.db"
@@ -1329,6 +1453,7 @@ async def async_main(args):
 
         all_data = {
             "data_quality_warnings": anomalies,
+            "scan_mode": "incremental" if incremental else "full",
             "period": {
                 "days": args.days,
                 "start": None,
@@ -1412,6 +1537,14 @@ async def async_main(args):
                     logger.info("  ✓ Triggered %d alert(s)", len(alerts))
             except Exception as e:
                 logger.warning("Alert evaluation skipped: %s", e)
+
+        # Update watermarks for next incremental scan
+        if not full_scan:
+            try:
+                _update_watermarks(watermarks, all_data)
+                logger.info("  ✓ 水位线已更新")
+            except Exception as e:
+                logger.warning("Watermark update skipped: %s", e)
 
         # Print console summary
         logger.info(
@@ -1614,17 +1747,25 @@ def main():
         default=5,
         help="Max datasets to analyze with DataRecipe (default: 5)",
     )
+    parser.add_argument(
+        "--full-scan",
+        action="store_true",
+        help="Force full scan ignoring watermarks",
+    )
 
     args = parser.parse_args()
     asyncio.run(async_main(args))
 
 
-async def run_intel_scan(days: int = 7, api_insights: bool = False) -> dict:
+async def run_intel_scan(
+    days: int = 7, api_insights: bool = False, full_scan: bool = False,
+) -> dict:
     """Run an intelligence scan programmatically (used by the API).
 
     Args:
         days: Look back period in days.
         api_insights: If True, use LLM API to generate insights. Default: False.
+        full_scan: If True, ignore watermarks and do a full scan.
 
     Returns:
         Summary dict with scan results.
@@ -1632,6 +1773,25 @@ async def run_intel_scan(days: int = 7, api_insights: bool = False) -> dict:
     setup_logging(level="INFO")
     config = load_config()
     validate_config(config)
+
+    from utils.watermark import WatermarkStore
+
+    output_dir = Path(config.get("report", {}).get("output_dir", "data"))
+    watermarks = WatermarkStore(output_dir / "watermarks.json")
+    incremental = (
+        not full_scan
+        and watermarks.get("labs") is not None
+    )
+
+    if incremental:
+        logger.info("增量扫描模式（基于上次水位线）")
+    else:
+        logger.info("全量扫描模式（%d 天窗口）", days)
+
+    def _days(source: str) -> int:
+        if not incremental:
+            return days
+        return _effective_days(watermarks, source, days)
 
     http_client = AsyncHTTPClient()
     try:
@@ -1655,15 +1815,15 @@ async def run_intel_scan(days: int = 7, api_insights: bool = False) -> dict:
 
         # Build async tasks
         tasks = {
-            "labs": org_tracker.fetch_lab_activity(days=days),
-            "vendors": org_tracker.fetch_vendor_activity(days=days),
-            "github": github_tracker.fetch_all_orgs(days=days),
-            "blogs": blog_tracker.fetch_all_blogs(days=days),
+            "labs": org_tracker.fetch_lab_activity(days=_days("labs")),
+            "vendors": org_tracker.fetch_vendor_activity(days=_days("vendors")),
+            "github": github_tracker.fetch_all_orgs(days=_days("github")),
+            "blogs": blog_tracker.fetch_all_blogs(days=_days("blogs")),
         }
         if x_tracker:
-            tasks["x"] = x_tracker.fetch_all(days=days)
+            tasks["x"] = x_tracker.fetch_all(days=_days("x"))
         if reddit_tracker:
-            tasks["reddit"] = reddit_tracker.fetch_all(days=days)
+            tasks["reddit"] = reddit_tracker.fetch_all(days=_days("reddit"))
 
         arxiv_config = config.get("sources", {}).get("arxiv", {})
         if arxiv_config.get("enabled", True):
@@ -1763,7 +1923,6 @@ async def run_intel_scan(days: int = 7, api_insights: bool = False) -> dict:
             logger.warning("Data quality warnings: %s", "; ".join(anomalies))
 
         # Trend analysis (before report so trends appear in output)
-        output_dir = Path(config.get("report", {}).get("output_dir", "data"))
         trend_data = {}
         try:
             db_path = output_dir / "radar.db"
@@ -1817,6 +1976,7 @@ async def run_intel_scan(days: int = 7, api_insights: bool = False) -> dict:
 
         all_data = {
             "data_quality_warnings": anomalies,
+            "scan_mode": "incremental" if incremental else "full",
             "period": {"days": days, "end": datetime.now().isoformat()},
             "labs_activity": lab_activity,
             "vendor_activity": vendor_activity,
@@ -1863,6 +2023,14 @@ async def run_intel_scan(days: int = 7, api_insights: bool = False) -> dict:
                     logger.info("Triggered %d alert(s)", len(alerts))
             except Exception as e:
                 logger.warning("Alert evaluation skipped: %s", e)
+
+        # Update watermarks for next incremental scan
+        if not full_scan:
+            try:
+                _update_watermarks(watermarks, all_data)
+                logger.info("水位线已更新")
+            except Exception as e:
+                logger.warning("Watermark update skipped: %s", e)
 
         # Insights prompt (always saved for environment LLM)
         insights_text = None

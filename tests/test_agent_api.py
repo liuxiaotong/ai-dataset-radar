@@ -306,7 +306,7 @@ class TestScanEndpoint:
              patch("agent.api.get_latest_report_path", return_value=Path("/tmp/report.json")):
             resp = client.post("/scan", json={})
         assert resp.status_code == 200
-        fake_mod.run_intel_scan.assert_called_once_with(days=7, api_insights=False)
+        fake_mod.run_intel_scan.assert_called_once_with(days=7, api_insights=False, full_scan=False)
 
     def test_scan_invalid_days_too_low(self, client):
         """POST /scan with days=0 returns 422 (must be >= 1)."""
