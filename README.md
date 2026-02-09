@@ -698,18 +698,15 @@ Claude Desktop 中同时配置两个 MCP Server，可自然语言驱动端到端
 }
 ```
 
-| 层 | 项目 | 说明 | 仓库 |
-|---|---|---|---|
-| 情报 | **AI Dataset Radar** | 数据集竞争情报、趋势分析 | You are here |
-| 分析 | **DataRecipe** | 逆向分析、Schema 提取、成本估算 | [GitHub](https://github.com/liuxiaotong/data-recipe) |
-| 生产 | **DataSynth** | LLM 批量合成、种子数据扩充 | [GitHub](https://github.com/liuxiaotong/data-synth) |
-| 生产 | **DataLabel** | 轻量标注工具、多标注员合并 | [GitHub](https://github.com/liuxiaotong/data-label) |
-| 质检 | **DataCheck** | 规则验证、重复检测、分布分析 | [GitHub](https://github.com/liuxiaotong/data-check) |
-| 质检 | **ModelAudit** | 蒸馏检测、模型指纹、身份验证 | [GitHub](https://github.com/liuxiaotong/model-audit) |
-| Agent | **AgentSandbox** | Docker 执行沙箱、轨迹重放 | [GitHub](https://github.com/liuxiaotong/agent-sandbox) |
-| Agent | **AgentRecorder** | 标准化轨迹录制、多框架适配 | [GitHub](https://github.com/liuxiaotong/agent-recorder) |
-| Agent | **AgentReward** | 过程级 Reward、Rubric 多维评估 | [GitHub](https://github.com/liuxiaotong/agent-reward) |
-| 编排 | **TrajectoryHub** | Pipeline 编排、数据集导出 | [GitHub](https://github.com/liuxiaotong/agent-trajectory-hub) |
+| 层 | 项目 | PyPI 包 | 说明 | 仓库 |
+|---|---|---|---|---|
+| 情报 | **AI Dataset Radar** | knowlyr-radar | 数据集竞争情报、趋势分析 | You are here |
+| 分析 | **DataRecipe** | knowlyr-datarecipe | 逆向分析、Schema 提取、成本估算 | [GitHub](https://github.com/liuxiaotong/data-recipe) |
+| 生产 | **DataSynth** | knowlyr-datasynth | LLM 批量合成、种子数据扩充 | [GitHub](https://github.com/liuxiaotong/data-synth) |
+| 生产 | **DataLabel** | knowlyr-datalabel | 轻量标注工具、多标注员合并 | [GitHub](https://github.com/liuxiaotong/data-label) |
+| 质检 | **DataCheck** | knowlyr-datacheck | 规则验证、重复检测、分布分析 | [GitHub](https://github.com/liuxiaotong/data-check) |
+| 质检 | **ModelAudit** | knowlyr-modelaudit | 蒸馏检测、模型指纹、身份验证 | [GitHub](https://github.com/liuxiaotong/model-audit) |
+| Agent | **knowlyr-agent** | knowlyr-sandbox / recorder / reward / hub | 沙箱 + 轨迹录制 + Reward + 编排 | [GitHub](https://github.com/liuxiaotong/knowlyr-agent) |
 
 ---
 
@@ -776,7 +773,7 @@ Claude Desktop 中同时配置两个 MCP Server，可自然语言驱动端到端
 
 ## AI Data Pipeline 生态
 
-> 10 个工具覆盖 AI 数据工程全流程，均支持 CLI + MCP，可独立使用也可组合成流水线。
+> 7 个项目覆盖 AI 数据工程全流程，均支持 CLI + MCP，可独立使用也可组合成流水线。
 
 | Tool | Description | Link |
 |------|-------------|------|
@@ -786,10 +783,7 @@ Claude Desktop 中同时配置两个 MCP Server，可自然语言驱动端到端
 | **DataLabel** | Lightweight, serverless HTML labeling tool | [GitHub](https://github.com/liuxiaotong/data-label) |
 | **DataCheck** | Automated quality checks & anomaly detection | [GitHub](https://github.com/liuxiaotong/data-check) |
 | **ModelAudit** | LLM distillation detection & model fingerprinting | [GitHub](https://github.com/liuxiaotong/model-audit) |
-| **AgentSandbox** | Reproducible Docker sandbox for Code Agent execution | [GitHub](https://github.com/liuxiaotong/agent-sandbox) |
-| **AgentRecorder** | Standardized trajectory recording for Code Agents | [GitHub](https://github.com/liuxiaotong/agent-recorder) |
-| **AgentReward** | Process-level rubric-based reward engine | [GitHub](https://github.com/liuxiaotong/agent-reward) |
-| **TrajectoryHub** | Pipeline orchestrator for Agent trajectory data | [GitHub](https://github.com/liuxiaotong/agent-trajectory-hub) |
+| **knowlyr-agent** | Sandbox + Recorder + Reward + Hub (monorepo) | [GitHub](https://github.com/liuxiaotong/knowlyr-agent) |
 
 ```mermaid
 graph LR
