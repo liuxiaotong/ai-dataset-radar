@@ -776,7 +776,5 @@ Claude Desktop 中同时配置两个 MCP Server，可自然语言驱动端到端
 ---
 
 <div align="center">
-
-**面向 AI Agent 的训练数据竞争情报系统**
-
+<sub><a href="https://github.com/liuxiaotong">knowlyr</a> 数据工程生态 · 训练数据竞争情报</sub>
 </div>
