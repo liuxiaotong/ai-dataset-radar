@@ -18,7 +18,8 @@ class DataType(Enum):
     SFT_INSTRUCTION = "sft_instruction"  # Instruction fine-tuning data
     CODE = "code"  # Code generation/execution
     AGENT_TOOL = "agent_tool"  # Agent/tool use
-    RL_ENVIRONMENT = "rl_environment"  # RL environment/trajectory
+    ROBOTICS = "robotics"  # Robotics/embodied AI
+    RL_ENVIRONMENT = "rl_environment"  # RL environment/trajectory (generic)
     SYNTHETIC = "synthetic"  # Synthetic/distilled data
     MULTIMODAL = "multimodal"  # Multimodal
     MULTILINGUAL = "multilingual"  # Multilingual
@@ -136,23 +137,14 @@ CLASSIFICATION_RULES = {
         "name_patterns": [r"agent", r"tool", r"action", r"web", r"browser", r"function[-_]?call"],
         "tags": ["agent", "tool-use", "function-calling"],
     },
-    DataType.RL_ENVIRONMENT: {
+    DataType.ROBOTICS: {
         "keywords": [
-            "environment",
-            "trajectory",
-            "episode",
-            "state",
-            "observation",
-            "simulation",
-            "gym",
-            "rl environment",
-            "reinforcement learning environment",
-            "game",
             "robot",
             "robotic",
             "robotics",
             "manipulation",
             "embodied",
+            "embodied ai",
             "teleoperation",
             "demonstration data",
             "grasping",
@@ -160,20 +152,37 @@ CLASSIFICATION_RULES = {
             "dexterous",
             "haptic",
             "tactile",
+            "pick and place",
+            "end effector",
+            "gripper",
+        ],
+        "field_patterns": ["observation", "action", "episode", "done"],
+        "name_patterns": [
+            r"robo", r"libero", r"touch", r"mani",
+            r"embod", r"aloha", r"lerobot", r"grasp",
+        ],
+        "tags": ["robotics", "embodied-ai", "robot-learning", "robot"],
+    },
+    DataType.RL_ENVIRONMENT: {
+        "keywords": [
+            "rl environment",
+            "reinforcement learning environment",
+            "reinforcement learning",
+            "gym",
+            "game",
+            "simulation",
+            "trajectory",
+            "episode",
             "policy learning",
-            "aerodynamic",
-            "aerospace",
-            "airfoil",
-            "fluid dynamics",
-            "cfd",
+            "policy gradient",
+            "reward shaping",
         ],
         "field_patterns": ["state", "observation", "action", "reward", "done", "episode"],
         "name_patterns": [
             r"env", r"traj", r"episode", r"sim", r"gym",
-            r"robo", r"libero", r"touch", r"mani",
-            r"embod", r"policy", r"aero",
+            r"policy", r"atari", r"mujoco",
         ],
-        "tags": ["reinforcement-learning", "simulation", "environment", "robotics"],
+        "tags": ["reinforcement-learning", "simulation", "environment"],
     },
     DataType.SYNTHETIC: {
         "keywords": [
@@ -287,11 +296,12 @@ TYPE_DISPLAY = {
     DataType.SFT_INSTRUCTION: ("📝 SFT/指令数据", 3),
     DataType.CODE: ("💻 代码生成/执行", 4),
     DataType.AGENT_TOOL: ("🤖 Agent/工具使用", 5),
-    DataType.RL_ENVIRONMENT: ("🎮 RL/机器人/具身智能", 6),
-    DataType.SYNTHETIC: ("🧪 合成/蒸馏数据", 7),
-    DataType.MULTIMODAL: ("🖼️ 多模态", 8),
-    DataType.MULTILINGUAL: ("🌍 多语言", 9),
-    DataType.EVALUATION: ("📊 评估/Benchmark", 10),
+    DataType.ROBOTICS: ("🦾 机器人/具身智能", 6),
+    DataType.RL_ENVIRONMENT: ("🎮 RL 环境/仿真", 7),
+    DataType.SYNTHETIC: ("🧪 合成/蒸馏数据", 8),
+    DataType.MULTIMODAL: ("🖼️ 多模态", 9),
+    DataType.MULTILINGUAL: ("🌍 多语言", 10),
+    DataType.EVALUATION: ("📊 评估/Benchmark", 11),
     DataType.OTHER: ("📦 其他", 99),
 }
 

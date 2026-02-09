@@ -38,6 +38,7 @@ class TestDataTypeEnum:
             "SFT_INSTRUCTION",
             "CODE",
             "AGENT_TOOL",
+            "ROBOTICS",
             "RL_ENVIRONMENT",
             "SYNTHETIC",
             "MULTIMODAL",
@@ -56,7 +57,7 @@ class TestDataTypeEnum:
 
     def test_enum_member_count(self):
         """Ensure no unexpected members were added silently."""
-        assert len(DataType) == 11
+        assert len(DataType) == 12
 
     @pytest.mark.parametrize(
         "member,value",
@@ -66,6 +67,7 @@ class TestDataTypeEnum:
             (DataType.SFT_INSTRUCTION, "sft_instruction"),
             (DataType.CODE, "code"),
             (DataType.AGENT_TOOL, "agent_tool"),
+            (DataType.ROBOTICS, "robotics"),
             (DataType.RL_ENVIRONMENT, "rl_environment"),
             (DataType.SYNTHETIC, "synthetic"),
             (DataType.MULTIMODAL, "multimodal"),
@@ -248,6 +250,10 @@ class TestClassify:
                 "RL environment trajectory episodes with observations",
                 DataType.RL_ENVIRONMENT,
             ),
+            (
+                "Robotic manipulation teleoperation data for embodied AI grasping tasks",
+                DataType.ROBOTICS,
+            ),
         ],
     )
     def test_classify_by_description(self, clf, description, expected_type):
@@ -272,6 +278,7 @@ class TestClassify:
             (["benchmark", "evaluation"], DataType.EVALUATION),
             (["reward-model", "ppo"], DataType.REWARD_MODEL),
             (["multilingual", "translation"], DataType.MULTILINGUAL),
+            (["robotics", "embodied-ai"], DataType.ROBOTICS),
             (["reinforcement-learning", "environment"], DataType.RL_ENVIRONMENT),
         ],
     )

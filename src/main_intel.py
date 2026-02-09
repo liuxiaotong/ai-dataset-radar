@@ -736,6 +736,7 @@ RECIPE_CATEGORY_PRIORITY = {
     "sft_instruction": 8,
     "code": 7,
     "agent_tool": 7,
+    "robotics": 6,
     "synthetic": 6,
     "rl_environment": 5,
     "multimodal": 4,
