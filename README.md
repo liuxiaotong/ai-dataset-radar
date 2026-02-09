@@ -20,7 +20,7 @@
 
 **GitHub Topics**: `ai-agent`, `competitive-intelligence`, `dataset-monitoring`, `mcp`, `function-calling`
 
-监控 50 家 AI Labs、27 家数据供应商、62 个博客源、15 个 GitHub 组织、101 个 X/Twitter 账户的训练数据动态，提供结构化输出供智能体消费。支持 Function Calling、MCP、REST API 多种接入方式。
+监控 67 家 AI Labs、27 家数据供应商、71 个博客源、50 个 GitHub 组织、125 个 X/Twitter 账户的训练数据动态，提供结构化输出供智能体消费。支持 Function Calling、MCP、REST API 多种接入方式。
 
 ## 系统概述 / System Overview
 
@@ -32,7 +32,7 @@
 
 ```mermaid
 graph LR
-    A["数据源监控<br/>77 orgs, 101 X accounts, 62 blogs"] --> B["语义分类<br/>LLM+规则"]
+    A["数据源监控<br/>86 HF orgs, 125 X accounts, 71 blogs"] --> B["语义分类<br/>LLM+规则"]
     B --> C["报告生成<br/>JSON+MD"]
     C --> D["Agent / 人类<br/>消费/决策"]
 ```
@@ -45,7 +45,7 @@ graph LR
 | **多框架兼容** | HTTP API (LangChain)、MCP (Claude)、原生 SDK |
 | **开箱即用** | 预置 System Prompt、完整类型定义 |
 | **人机兼顾** | 同时输出 Markdown (人类) 与 JSON (智能体) |
-| **高性能异步** | 全链路 aiohttp + asyncio.gather，400+ 请求并发执行 (CLI 与 API 一致) |
+| **高性能异步** | 全链路 aiohttp + asyncio.gather，500+ 请求并发执行 (CLI 与 API 一致) |
 | **时间感知** | 数据集/模型/论文全链路采集并展示发布日期 |
 | **生产就绪** | Docker 部署、CI 流水线、723 测试用例、配置校验 |
 | **环境原生 LLM** | `--insights` 模式利用 Claude Code/App 原生能力分析 |
@@ -410,11 +410,11 @@ tools = [
 
 | 来源 | 数量 | 覆盖 |
 |------|-----:|------|
-| **HuggingFace** | 77 orgs | 50 Labs + 27 供应商 |
-| **博客** | 62 源 | 实验室 + 研究者 + 独立博客 |
-| **GitHub** | 15 orgs | openai, deepseek-ai, NVIDIA 等 |
-| **论文** | 2 源 | arXiv (cs.CL/AI/LG) + HF Papers |
-| **X/Twitter** | 101 账户 | 9 类别，RSSHub 自托管 + fallback |
+| **HuggingFace** | 86 orgs | 67 Labs + 27 供应商（含机器人、欧洲、亚太） |
+| **博客** | 71 源 | 实验室 + 研究者 + 独立博客 + 数据供应商 |
+| **GitHub** | 50 orgs | AI Labs + 中国开源 + 机器人 + 数据供应商 |
+| **论文** | 2 源 | arXiv (cs.CL/AI/LG/CV/RO) + HF Papers |
+| **X/Twitter** | 125 账户 | 13 类别，CEO/Leaders + 研究者 + 机器人 |
 
 ### 数据供应商分类
 
@@ -428,15 +428,18 @@ tools = [
 
 ### X/Twitter 监控账户
 
-通过自托管 RSSHub（推荐）或 X API v2 监控 98 个账户。多 RSSHub 实例自动 fallback + 连续失败阈值保护。
+通过自托管 RSSHub（推荐）或 X API v2 监控 125 个账户。多 RSSHub 实例自动 fallback + 连续失败阈值保护。
 
 | 类别 | 数量 | 代表账户 |
 |------|-----:|----------|
+| CEO/Leaders | 4 | sama, DarioAmodei, demaborishassabis |
 | 前沿实验室 | 8 | OpenAI, AnthropicAI, GoogleDeepMind, MetaAI, NVIDIAAI |
 | 新兴/开源 | 12 | MistralAI, CohereForAI, StabilityAI, NousResearch |
 | 研究/开源 | 5 | AiEleuther, huggingface, allen_ai, lmsysorg |
 | 中国实验室 | 14 | Alibaba_Qwen, deepseek_ai, BaichuanAI, Kimi_Moonshot |
 | 亚太/欧洲 | 11 | SakanaAILabs, NAVER_AI_Lab, laion_ai, StanfordHAI |
+| 机器人公司 | 10 | Figure_robot, physical_int, UnitreeRobotics, AgiBot_zhiyuan |
+| 机器人研究者 | 10 | pabbeel, svlevine, chelseabfinn, LerrelPinto |
 | 数据供应商 | 9 | scale_AI, HelloSurgeAI, argilla_io, LabelBox |
 | 基准/MLOps | 7 | lmarena_ai, ArtificialAnlys, kaggle, modal_labs |
 | 安全/对齐 | 4 | ai_risks, JaredKaplan |
@@ -552,7 +555,7 @@ watched_vendors:
     - name: "海天瑞声 SpeechOcean"
       url: "https://www.haitianruisheng.com/aboutus/news/catid-23.htm"
       category: china
-    # ... 62 sources (categories: us_frontier, us_emerging, china, research, data_vendor)
+    # ... 71 sources (categories: us_frontier, us_emerging, china, research, data_vendor, robotics)
 
 priority_data_types:
   preference: { keywords: ["rlhf", "dpo"] }
@@ -697,7 +700,7 @@ Claude Desktop 中同时配置两个 MCP Server，可自然语言驱动端到端
 - [x] 测试覆盖 (723 用例: API 65 + async_http 49 + blog_tracker 48 + intel_report 22 + MCP 86 + GitHub 44 + X 45 + Org 30 + change_tracker 15 + 其余 319)
 - [x] 博客抓取多策略降级 (RSS → HTML → Playwright, networkidle → domcontentloaded)
 - [x] 中国数据供应商监控 (海天瑞声、整数智能、数据堂、智源 BAAI)
-- [x] X/Twitter 监控 (101 账户，9 类别，自托管 RSSHub + 多实例 fallback + 连续失败阈值保护)
+- [x] X/Twitter 监控 (125 账户，13 类别，自托管 RSSHub + 多实例 fallback + 连续失败阈值保护)
 - [x] Insights 分析提示生成 (`--insights` 模式)
 - [x] 异常报告独立输出 (`_anomalies.md` 与 `_insights.md` 分离，工程信息不进管理层报告)
 - [x] 分类器增强 (覆盖率 37%→84%：新增机器人/具身、文档理解、语音、形式化验证、安全评估等关键词)
@@ -739,6 +742,8 @@ Claude Desktop 中同时配置两个 MCP Server，可自然语言驱动端到端
 - [x] 趋势数据写入报告 (每个 dataset 注入 growth_7d/growth_30d, Markdown 增加「📈 数据集增长趋势」节, JSON 增加 featured_trends)
 - [x] stdout 清理 (insights prompt 不再 dump 到终端，改为保存文件 + 日志提示路径)
 - [x] 版本号统一管理 (`src/_version.py` 单一来源 + git pre-commit hook 自动 patch +1)
+- [x] 安全加固 v2 (SQLite 事务安全, AsyncRateLimiter 竞态修复, Dashboard XSS 防护, API 全端点认证, 非 root Docker)
+- [x] 监控源大扩展 (HF 86 orgs, GitHub 50 orgs, arXiv +cs.CV/cs.RO, X 125 账户, 博客 71 源, 新增 OpenBMB/cleanlab/IDEA-Research)
 
 ---
 

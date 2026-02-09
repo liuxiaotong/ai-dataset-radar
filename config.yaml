@@ -91,6 +91,18 @@ watched_orgs:
       hf_ids: ["nvidia", "NVIDIA"]
       keywords: ["nvidia", "nemotron", "helpsteer"]
       priority: medium
+    openbmb:
+      hf_ids: ["OpenBMB"]
+      keywords: ["openbmb", "minicpm", "chatdev", "ultrafeedback"]
+      priority: medium
+    cleanlab:
+      hf_ids: ["cleanlab"]
+      keywords: ["cleanlab", "data quality", "label errors"]
+      priority: low
+    idea_research:
+      hf_ids: ["IDEA-Research"]
+      keywords: ["idea research", "grounding dino", "dino"]
+      priority: medium
 
   # China Open Source Labs - 中国开源大模型
   china_opensource:
@@ -526,17 +538,17 @@ watched_vendors:
       selector: "article, [class*='release'], [class*='changelog'], [class*='card']"
     - name: "Tencent Hunyuan Research"
       url: "https://hy.tencent.com/research"
-      category: "data_vendor"
+      category: "china"
       type: "browser"
       selector: ".blog-item"
     - name: "DeepSeek"
       url: "https://api-docs.deepseek.com/news"
-      category: "data_vendor"
+      category: "china"
       type: "browser"
       selector: "a[href*='/news'], article, [class*='post']"
     - name: "Baidu AI Research"
       url: "https://research.baidu.com/Blog"
-      category: "data_vendor"
+      category: "china"
       type: "scrape"
       selector: "article, [class*='blog'], [class*='post'], [class*='news']"
     # --- US Frontier Labs ---
@@ -664,6 +676,30 @@ watched_vendors:
       url: "https://blogs.nvidia.com/blog/category/robotics/"
       category: "robotics"
       type: "auto"
+      selector: "article, [class*='post'], [class*='blog'], [class*='card']"
+    # --- New: xAI ---
+    - name: "xAI Blog"
+      url: "https://x.ai/blog"
+      category: "us_frontier"
+      type: "auto"
+      selector: "article, [class*='post'], [class*='blog'], [class*='card']"
+    # --- New: NVIDIA AI (general) ---
+    - name: "NVIDIA AI Blog"
+      url: "https://blogs.nvidia.com/blog/category/deep-learning/"
+      category: "us_frontier"
+      type: "auto"
+      selector: "article, [class*='post'], [class*='blog'], [class*='card']"
+    # --- New: Databricks ---
+    - name: "Databricks Blog"
+      url: "https://www.databricks.com/blog"
+      category: "us_emerging"
+      type: "auto"
+      selector: "article, [class*='post'], [class*='blog'], [class*='card']"
+    # --- New: InternLM ---
+    - name: "InternLM Blog"
+      url: "https://internlm.intern-ai.org.cn/blog"
+      category: "china"
+      type: "browser"
       selector: "article, [class*='post'], [class*='blog'], [class*='card']"
     # --- New: Global Tech Giants ---
     - name: "Apple Machine Learning Research"
@@ -922,16 +958,49 @@ sources:
     include_models: true  # 也抓取模型，分析其训练数据
     # Organizations to watch for new datasets
     watch_orgs:
-      - allenai
+      # ── Frontier Labs ──
+      - openai
+      - anthropic
+      - Anthropic
       - google
+      - deepmind
+      - Google
+      - meta-llama
       - facebook
+      - meta
+      - xai-org
+      # ── Emerging Labs ──
+      - mistralai
+      - CohereForAI
+      - cohere
+      - AI21Labs
+      - togethercomputer
+      - databricks
+      - cerebras
+      - arcee-ai
+      - NousResearch
+      - upstage
+      # ── Research Labs ──
+      - EleutherAI
+      - HuggingFaceH4
+      - bigscience
+      - bigcode
+      - allenai
+      - lmsys
       - nvidia
+      - NVIDIA
+      # ── China Open Source ──
       - Qwen
+      - qwen
+      - deepseek-ai
+      - THUDM
+      - baichuan-inc
+      - 01-ai
+      - internlm
+      - Shanghai_AI_Laboratory
       - MiniMaxAI
-      - BAAI
-      - SpeechOcean
-      - Datatang
-      # New: global tech
+      - stepfun-ai
+      # ── Global Emerging ──
       - apple
       - microsoft
       - Microsoft
@@ -939,17 +1008,54 @@ sources:
       - Amazon
       - stabilityai
       - tiiuae
-      # New: Asia-Pacific
-      - kakaobrain
-      - SakanaAI
-      - cyberagent
-      - naver-clova-ix
-      # New: European
-      - laion
-      # New: Vendors
-      - toloka
-      - Snowflake
       - RekaAI
+      - Snowflake
+      - huawei-noah
+      - gretelai
+      - sambanova
+      # ── Asia-Pacific ──
+      - samsung
+      - Samsung
+      - naver-clova-ix
+      - NAVER-AI
+      - kakaobrain
+      - cyberagent
+      - SakanaAI
+      # ── European ──
+      - laion
+      - Aleph-Alpha
+      # ── Robotics & Embodied AI ──
+      - physical-intelligence
+      - lerobot
+      - openvla
+      - figure-ai
+      - 1x-technologies
+      - tri-robotics
+      - OpenDriveLab
+      # ── China Robotics ──
+      - unitree
+      - agibot
+      - agibotworld
+      # ── Data Vendors ──
+      - scaleai
+      - scale-ai
+      - surge-ai
+      - surgeai
+      - argilla
+      - snorkel-ai
+      - labelbox
+      - humanloop
+      - toloka
+      - appen
+      - sama
+      # ── China Data & Research ──
+      - BAAI
+      - SpeechOcean
+      - Datatang
+      # ── New: Additional Research ──
+      - OpenBMB
+      - cleanlab
+      - IDEA-Research
 
   arxiv:
     enabled: true
@@ -957,6 +1063,8 @@ sources:
       - cs.CL
       - cs.AI
       - cs.LG
+      - cs.CV    # 计算机视觉（多模态数据集）
+      - cs.RO    # 机器人学（具身智能数据集）
     # 只关注包含关键词的论文
     require_keywords: true
     keywords:
@@ -970,26 +1078,79 @@ sources:
       - data collection
       - annotation
       - benchmark
+      - synthetic data
+      - data curation
+      - data quality
+      - multimodal
+      - vision language
+      - robot learning
+      - embodied
+      - manipulation dataset
 
   github:
     enabled: true
     # 监控特定组织的仓库
     mode: targeted
     token: ${GITHUB_TOKEN}
-    # GitHub organizations to watch
+    # GitHub organizations to watch (synced with github.orgs.*)
     watch_orgs:
+      # ai_labs
       - openai
       - anthropics
-      - deepseek-ai
-      - argilla-io
-      - scaleapi
+      - meta-llama
+      - google-deepmind
+      - mistralai
       - EleutherAI
+      - allenai
+      - NousResearch
+      - NVIDIA
+      # china_labs
+      - QwenLM
+      - deepseek-ai
+      - THUDM
+      - baichuan-inc
+      - 01-ai
+      - InternLM
+      - stepfun-ai
+      - MiniMaxAI
+      # global_tech
       - apple
       - microsoft
       - amazon-science
       - Stability-AI
       - tiiuae
+      - SakanaAI
       - LAION-AI
+      - databricks
+      - LiquidAI
+      # robotics
+      - Physical-Intelligence
+      - openvla
+      - 1x-technologies
+      - rail-berkeley
+      - Stanford-ILIAD
+      - StanfordVL
+      - facebookresearch
+      - NVIDIA-Omniverse
+      - FFTAI
+      - unitreerobotics
+      # data_vendors
+      - scaleapi
+      - snorkel-ai
+      - labelbox
+      - argilla-io
+      - humanloop
+      - LightTag
+      # data_vendors_extended
+      - Toloka
+      - superannotateai
+      - kakaobrain
+      - surge-ai
+      - EvidentlyAI
+      # new: additional research
+      - OpenBMB
+      - cleanlab
+      - IDEA-Research
     # Keywords for relevance scoring
     relevance_keywords:
       - dataset
@@ -1006,13 +1167,13 @@ sources:
     feeds:
       - name: Argilla
         url: https://argilla.io/blog/feed
-        category: "china"
+        category: "data_vendor"
       - name: Qwen
         url: https://qwenlm.github.io/feed.xml
         category: "china"
       - name: Hugging Face
         url: https://huggingface.co/blog/feed.xml
-        category: "china"
+        category: "research"
 
   # ModelScope - 魔搭社区（中国 HuggingFace 等价平台）
   modelscope:
@@ -1105,6 +1266,11 @@ github:
       - NVIDIA-Omniverse
       - FFTAI
       - unitreerobotics
+    # Research Extended - 补充研究机构
+    research_extended:
+      - OpenBMB
+      - cleanlab
+      - IDEA-Research
     # Additional data vendors - 更多数据供应商
     data_vendors_extended:
       - Toloka
@@ -1286,6 +1452,11 @@ x_tracker:
     - ArtificialAnlys
     - livebench_ai
     - arcprize
+    # ── CEO / Leaders (4) ──
+    - sama
+    - sataboryanadella
+    - DarioAmodei
+    - demaborishassabis
     # ── AI Safety / Alignment / Policy (4) ──
     - ai_risks
     - ShayneRedford
