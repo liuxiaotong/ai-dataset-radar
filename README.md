@@ -30,6 +30,42 @@
 
 ---
 
+## 架构
+
+```mermaid
+flowchart LR
+    subgraph Sources["数据源"]
+        HF["🤗 HuggingFace<br/>86 orgs"]
+        GH["🐙 GitHub<br/>50 orgs"]
+        BL["📰 博客<br/>71 源"]
+        PA["📄 论文<br/>arXiv + HF"]
+        XR["🐦 X/Twitter<br/>125 账户"]
+        RD["💬 Reddit<br/>5 社区"]
+    end
+
+    subgraph Process["异步处理"]
+        TR["⚡ Trackers<br/>aiohttp 并发采集"]
+        AN["🧠 Analyzers<br/>分类 · 趋势 · 竞品矩阵<br/>谱系 · 组织图谱"]
+    end
+
+    subgraph Output["输出"]
+        JS["📊 JSON<br/>结构化数据"]
+        MD["📝 Markdown<br/>可读报告"]
+        AI["🤖 AI Insights<br/>LLM 分析"]
+    end
+
+    subgraph Agent["Agent 接口"]
+        API["🌐 REST API<br/>18 端点"]
+        MCP["🔌 MCP Server<br/>16 工具"]
+        SK["⚡ Skills<br/>7 命令"]
+        DB["📈 Dashboard<br/>11 Tab"]
+    end
+
+    Sources --> TR --> AN --> Output --> Agent
+```
+
+---
+
 ## 快速开始
 
 ```bash
@@ -81,7 +117,7 @@ python src/main_intel.py --days 7 --api-insights    # 显式调用 LLM API
 | `--api-insights` | 调用 LLM API（Anthropic/Kimi/DeepSeek 等）生成 `_insights.md` |
 | `--no-insights` | 跳过 insights |
 
-### REST API
+### REST API + Dashboard
 
 ```bash
 python agent/api.py
@@ -89,7 +125,22 @@ python agent/api.py
 # → http://localhost:8080/docs（API 文档）
 ```
 
-核心端点：`/datasets`、`/github`、`/papers`、`/blogs`、`/reddit`、`/scan`、`/summary`、`/search`、`/trends`、`/matrix`、`/lineage`、`/org-graph`
+<details>
+<summary><b>Dashboard 预览（11 Tab 面板）</b></summary>
+
+![Dashboard Overview](docs/images/dashboard-overview.png)
+
+> 启动 `python agent/api.py` 后访问 `http://localhost:8080/dashboard`。包含概览、数据集、GitHub、论文、博客、Reddit、竞品矩阵、谱系、组织图谱、搜索、趋势 11 个面板。
+
+</details>
+
+核心端点：
+
+| 类别 | 端点 |
+|------|------|
+| 数据查询 | `/datasets` · `/github` · `/papers` · `/blogs` · `/reddit` |
+| 分析 | `/matrix` · `/lineage` · `/org-graph` · `/trends` · `/search` |
+| 操作 | `/scan` · `/summary` · `/config` · `/schema` · `/tools` |
 
 > 完整端点列表、代码示例（OpenAI / Anthropic / LangChain）见 [Agent 集成文档](docs/agent-integration.md)。
 
