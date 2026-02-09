@@ -8,7 +8,7 @@
 [![CI](https://github.com/liuxiaotong/ai-dataset-radar/actions/workflows/ci.yml/badge.svg)](https://github.com/liuxiaotong/ai-dataset-radar/actions/workflows/ci.yml)
 [![License: MIT](https://img.shields.io/badge/License-MIT-green.svg)](LICENSE)
 [![Python 3.10+](https://img.shields.io/badge/python-3.10+-blue.svg)](https://www.python.org/downloads/)
-[![Tests](https://img.shields.io/badge/tests-708_passed-brightgreen.svg)](#开发路线)
+[![Tests](https://img.shields.io/badge/tests-723_passed-brightgreen.svg)](#开发路线)
 [![Agent Ready](https://img.shields.io/badge/Agent-Ready-orange.svg)](#agent-集成)
 [![MCP](https://img.shields.io/badge/MCP-11_Tools-purple.svg)](#mcp-server)
 
@@ -70,6 +70,7 @@ graph LR
 | AI 分析报告 | `data/reports/YYYY-MM-DD/intel_report_*_insights.md` | 决策层（含时间线） |
 | 分析提示词 | `data/reports/YYYY-MM-DD/intel_report_*_insights_prompt.md` | LLM 输入 |
 | 异常排查报告 | `data/reports/YYYY-MM-DD/intel_report_*_anomalies.md` | 运维 |
+| 日报变化追踪 | `data/reports/YYYY-MM-DD/intel_report_*_changes.md` | 纵向对比 |
 | Recipe 分析 | `data/reports/YYYY-MM-DD/recipe/` | 复刻评估 |
 | 工具定义 | `agent/tools.json` | Function Calling |
 | 输出规范 | `agent/schema.json` | 数据验证 |
@@ -182,6 +183,7 @@ data/reports/2026-02-08/
 ├── intel_report_2026-02-08_insights_prompt.md  # 分析提示 (LLM 输入)
 ├── intel_report_2026-02-08_insights.md         # AI 分析报告 (决策层)
 ├── intel_report_2026-02-08_anomalies.md        # 异常排查报告 (运维)
+├── intel_report_2026-02-08_changes.md          # 日报变化追踪 (纵向对比)
 └── recipe/                                     # DataRecipe 深度分析 (--recipe)
     ├── recipe_analysis_summary.md
     ├── aggregate_summary.json
@@ -563,7 +565,7 @@ ai-dataset-radar/
 │   │   ├── x_tracker.py        # X/Twitter 账户监控（RSSHub / API）
 │   │   └── paper_tracker.py    # arXiv + HF Papers
 │   ├── scrapers/               # 数据采集器
-│   ├── analyzers/              # 分类器与质量评分
+│   ├── analyzers/              # 分类器与质量评分（含 change_tracker 日报变化追踪）
 │   └── utils/                  # 工具库
 │       ├── async_http.py       # AsyncHTTPClient（连接池 + 重试 + 限速）
 │       ├── llm_client.py       # LLM 调用（Anthropic API insights 生成）
@@ -680,7 +682,7 @@ Claude Desktop 中同时配置两个 MCP Server，可自然语言驱动端到端
 - [x] 全链路异步 I/O (aiohttp + asyncio.gather 替代 requests + ThreadPoolExecutor，~2x 提速)
 - [x] CI 流水线 (GitHub Actions: ruff lint + pytest, push/PR 触发)
 - [x] Docker 容器化 (Dockerfile + docker-compose: scan 扫描 + api 服务)
-- [x] 测试覆盖 (708 用例: API 65 + async_http 49 + blog_tracker 48 + intel_report 22 + MCP 86 + GitHub 44 + X 45 + Org 30 + 其余 319)
+- [x] 测试覆盖 (723 用例: API 65 + async_http 49 + blog_tracker 48 + intel_report 22 + MCP 86 + GitHub 44 + X 45 + Org 30 + change_tracker 15 + 其余 319)
 - [x] 博客抓取多策略降级 (RSS → HTML → Playwright, networkidle → domcontentloaded)
 - [x] 中国数据供应商监控 (海天瑞声、整数智能、数据堂、智源 BAAI)
 - [x] X/Twitter 监控 (101 账户，9 类别，自托管 RSSHub + 多实例 fallback + 连续失败阈值保护)
@@ -720,6 +722,7 @@ Claude Desktop 中同时配置两个 MCP Server，可自然语言驱动端到端
 - [x] DataRecipe 自动衔接 (`--recipe` 智能评分选 Top N 数据集, 自动调用 DeepAnalyzerCore 深度分析, 输出聚合报告)
 - [x] Recipe 评分公式优化 (新增 likes 社区认可维度, 降低类别权重占比, 渐进式新鲜度衰减, <50 下载半分门槛)
 - [x] Claude Code Skills 深化 (7 个: scan/brief/search/diff/deep-dive/recipe/radar，覆盖采集→查询→分析→深潜完整工作流)
+- [x] 自动日报变化追踪 (每次扫描后对比前日报告生成 `_changes.md`：总量变化 + 新增/消失数据集 + 下载/Star 变动 Top 5 + 分类分布 + 新论文)
 
 ---
 
