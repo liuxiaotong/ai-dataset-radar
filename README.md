@@ -242,14 +242,14 @@ graph LR
 
 | 层 | 项目 | PyPI 包 | 说明 | 仓库 |
 |---|---|---|---|---|
-| 情报 | **AI Dataset Radar** | knowlyr-radar | 竞争情报、趋势分析 | You are here |
+| 情报 | **Radar** | knowlyr-radar | 竞争情报、趋势分析 | You are here |
 | 分析 | **DataRecipe** | knowlyr-datarecipe | 逆向分析、Schema 提取 | [GitHub](https://github.com/liuxiaotong/data-recipe) |
 | 生产 | **DataSynth** | knowlyr-datasynth | LLM 批量合成 | [GitHub](https://github.com/liuxiaotong/data-synth) |
 | 生产 | **DataLabel** | knowlyr-datalabel | 轻量标注 | [GitHub](https://github.com/liuxiaotong/data-label) |
 | 质检 | **DataCheck** | knowlyr-datacheck | 规则验证、重复检测 | [GitHub](https://github.com/liuxiaotong/data-check) |
 | 审计 | **ModelAudit** | knowlyr-modelaudit | 蒸馏检测、模型指纹 | [GitHub](https://github.com/liuxiaotong/model-audit) |
 | 协作 | **Crew** | knowlyr-crew | 数字员工管理 | [GitHub](https://github.com/liuxiaotong/knowlyr-crew) |
-| Agent | **knowlyr-agent** | knowlyr-sandbox / recorder / reward / hub | 沙箱 + 录制 + Reward + 编排 | [GitHub](https://github.com/liuxiaotong/knowlyr-agent) |
+| Agent | **knowlyr-agent** | sandbox/recorder/reward/hub | Agent 工具链 | [GitHub](https://github.com/liuxiaotong/knowlyr-agent) |
 
 > DataRecipe 联动详情（评分公式、输出结构、MCP 双服务配置）见 [DataRecipe 文档](docs/datarecipe.md)。
 
