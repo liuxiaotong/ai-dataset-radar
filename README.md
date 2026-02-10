@@ -217,16 +217,24 @@ python agent/api.py
 
 ```mermaid
 graph LR
-    Radar["🔍 Radar<br/>情报发现"] --> Recipe["📋 Recipe<br/>逆向分析"]
-    Recipe --> Synth["🔄 Synth<br/>数据合成"]
-    Recipe --> Label["🏷️ Label<br/>数据标注"]
-    Synth --> Check["✅ Check<br/>数据质检"]
-    Label --> Check
-    Check --> Audit["🔬 Audit<br/>模型审计"]
-    Audit --> Hub["🎯 Hub<br/>编排层"]
-    Hub --> Sandbox["📦 Sandbox<br/>执行沙箱"]
-    Sandbox --> Recorder["📹 Recorder<br/>轨迹录制"]
-    Recorder --> Reward["⭐ Reward<br/>过程打分"]
+    subgraph 数据管线
+        Radar["🔍 Radar<br/>情报发现"] --> Recipe["📋 Recipe<br/>逆向分析"]
+        Recipe --> Synth["🔄 Synth<br/>数据合成"]
+        Recipe --> Label["🏷️ Label<br/>数据标注"]
+        Synth --> Check["✅ Check<br/>数据质检"]
+        Label --> Check
+    end
+    Audit["🔬 Audit<br/>模型审计"]
+    subgraph Agent 工具链
+        Hub["🎯 Hub<br/>编排层"] --> Sandbox["📦 Sandbox<br/>执行沙箱"]
+        Sandbox --> Recorder["📹 Recorder<br/>轨迹录制"]
+        Recorder --> Reward["⭐ Reward<br/>过程打分"]
+    end
+    Crew["👥 Crew<br/>数字员工"]
+    Crew -.-> Radar
+    Crew -.-> Check
+    Crew -.-> Audit
+    Crew -.-> Hub
     style Radar fill:#0969da,color:#fff,stroke:#0969da
 ```
 
@@ -235,11 +243,12 @@ graph LR
 | 层 | 项目 | PyPI 包 | 说明 | 仓库 |
 |---|---|---|---|---|
 | 情报 | **AI Dataset Radar** | knowlyr-radar | 竞争情报、趋势分析 | You are here |
-| 分析 | **DataRecipe** | knowlyr-datarecipe | 逆向分析、Schema 提取、成本估算 | [GitHub](https://github.com/liuxiaotong/data-recipe) |
-| 生产 | **DataSynth** | knowlyr-datasynth | LLM 批量合成、种子数据扩充 | [GitHub](https://github.com/liuxiaotong/data-synth) |
-| 生产 | **DataLabel** | knowlyr-datalabel | 轻量标注、多标注员合并 | [GitHub](https://github.com/liuxiaotong/data-label) |
-| 质检 | **DataCheck** | knowlyr-datacheck | 规则验证、重复检测、分布分析 | [GitHub](https://github.com/liuxiaotong/data-check) |
-| 质检 | **ModelAudit** | knowlyr-modelaudit | 蒸馏检测、模型指纹、身份验证 | [GitHub](https://github.com/liuxiaotong/model-audit) |
+| 分析 | **DataRecipe** | knowlyr-datarecipe | 逆向分析、Schema 提取 | [GitHub](https://github.com/liuxiaotong/data-recipe) |
+| 生产 | **DataSynth** | knowlyr-datasynth | LLM 批量合成 | [GitHub](https://github.com/liuxiaotong/data-synth) |
+| 生产 | **DataLabel** | knowlyr-datalabel | 轻量标注 | [GitHub](https://github.com/liuxiaotong/data-label) |
+| 质检 | **DataCheck** | knowlyr-datacheck | 规则验证、重复检测 | [GitHub](https://github.com/liuxiaotong/data-check) |
+| 审计 | **ModelAudit** | knowlyr-modelaudit | 蒸馏检测、模型指纹 | [GitHub](https://github.com/liuxiaotong/model-audit) |
+| 协作 | **Crew** | knowlyr-crew | 数字员工管理 | [GitHub](https://github.com/liuxiaotong/knowlyr-crew) |
 | Agent | **knowlyr-agent** | knowlyr-sandbox / recorder / reward / hub | 沙箱 + 录制 + Reward + 编排 | [GitHub](https://github.com/liuxiaotong/knowlyr-agent) |
 
 > DataRecipe 联动详情（评分公式、输出结构、MCP 双服务配置）见 [DataRecipe 文档](docs/datarecipe.md)。
