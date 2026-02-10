@@ -5,6 +5,8 @@
 <p><strong>面向 AI Agent 的训练数据竞争情报系统</strong><br/>
 <em>Competitive intelligence system for AI training datasets</em></p>
 
+[![PyPI](https://img.shields.io/pypi/v/ai-dataset-radar?color=blue)](https://pypi.org/project/ai-dataset-radar/)
+[![Downloads](https://img.shields.io/pypi/dm/ai-dataset-radar)](https://pypi.org/project/ai-dataset-radar/)
 [![CI](https://github.com/liuxiaotong/ai-dataset-radar/actions/workflows/ci.yml/badge.svg)](https://github.com/liuxiaotong/ai-dataset-radar/actions/workflows/ci.yml)
 [![Python 3.10+](https://img.shields.io/badge/python-3.10+-blue.svg)](https://www.python.org/downloads/)
 [![License: MIT](https://img.shields.io/badge/License-MIT-green.svg)](LICENSE)
