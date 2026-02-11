@@ -134,7 +134,7 @@ watched_orgs:
     internlm:
       hf_ids: ["internlm", "Shanghai_AI_Laboratory"]
       github: ["InternLM"]
-      keywords: ["internlm", "书生", "shusheng"，"上海人工智能实验室"]
+      keywords: ["internlm", "书生", "shusheng", "上海人工智能实验室"]
       priority: medium
     minimax:
       hf_ids: ["MiniMaxAI"]
