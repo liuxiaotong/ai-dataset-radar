@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 """Organization tracker for monitoring specific orgs on HuggingFace.
 
 Tracks AI Labs and data vendors by fetching their datasets and models
@@ -91,6 +93,14 @@ class OrgTracker:
         """Apply cooperative async rate limiting between requests."""
         await self._rate_limiter.acquire()
 
+    def _parse_timestamp(self, value: str | None) -> datetime | None:
+        if not value:
+            return None
+        try:
+            return datetime.fromisoformat(value.replace("Z", "+00:00")).replace(tzinfo=None)
+        except ValueError:
+            return None
+
     async def _request_with_retry(
         self, url: str, params: dict, cache_key: str, description: str, max_retries: int = 3
     ) -> list[dict]:
@@ -134,7 +144,13 @@ class OrgTracker:
         """
         return await self._request_with_retry(
             url=f"{self.HF_API_URL}/datasets",
-            params={"author": org_id, "limit": limit, "sort": "lastModified", "direction": -1},
+            params={
+                "author": org_id,
+                "limit": limit,
+                "sort": "lastModified",
+                "direction": -1,
+                "full": "true",
+            },
             cache_key=f"hf:datasets:{org_id}:{limit}",
             description=f"datasets/{org_id}",
         )
@@ -151,12 +167,24 @@ class OrgTracker:
         """
         return await self._request_with_retry(
             url=f"{self.HF_API_URL}/models",
-            params={"author": org_id, "limit": limit, "sort": "lastModified", "direction": -1},
+            params={
+                "author": org_id,
+                "limit": limit,
+                "sort": "lastModified",
+                "direction": -1,
+                "full": "true",
+            },
             cache_key=f"hf:models:{org_id}:{limit}",
             description=f"models/{org_id}",
         )
 
-    async def _fetch_single_org(self, org_name: str, org_info: dict, cutoff: datetime) -> Optional[tuple]:
+    async def _fetch_single_org(
+        self,
+        org_name: str,
+        org_info: dict,
+        cutoff: datetime,
+        min_timestamp: str | None = None,
+    ) -> Optional[tuple]:
         """Fetch datasets and models for a single org.
 
         Args:
@@ -183,6 +211,7 @@ class OrgTracker:
             hf_id_list.append(hf_id)
 
         fetch_results = await asyncio.gather(*fetch_tasks, return_exceptions=True)
+        min_dt = self._parse_timestamp(min_timestamp)
 
         for i, hf_id in enumerate(hf_id_list):
             ds_result = fetch_results[i * 2]
@@ -198,8 +227,13 @@ class OrgTracker:
                 if modified:
                     try:
                         mod_date = datetime.fromisoformat(modified.replace("Z", "+00:00"))
-                        if mod_date.replace(tzinfo=None) >= cutoff:
+                        mod_naive = mod_date.replace(tzinfo=None)
+                        if min_dt and mod_naive <= min_dt:
+                            break
+                        if mod_naive >= cutoff:
                             org_data["datasets"].append(ds)
+                        else:
+                            break
                     except (ValueError, TypeError):
                         org_data["datasets"].append(ds)
                 else:
@@ -215,8 +249,13 @@ class OrgTracker:
                 if modified:
                     try:
                         mod_date = datetime.fromisoformat(modified.replace("Z", "+00:00"))
-                        if mod_date.replace(tzinfo=None) >= cutoff:
+                        mod_naive = mod_date.replace(tzinfo=None)
+                        if min_dt and mod_naive <= min_dt:
+                            break
+                        if mod_naive >= cutoff:
                             org_data["models"].append(model)
+                        else:
+                            break
                     except (ValueError, TypeError):
                         org_data["models"].append(model)
 
@@ -224,7 +263,11 @@ class OrgTracker:
             return (category, org_name, org_data)
         return None
 
-    async def fetch_lab_activity(self, days: int = 7) -> dict:
+    async def fetch_lab_activity(
+        self,
+        days: int = 7,
+        org_watermarks: dict[str, str] | None = None,
+    ) -> dict:
         """Fetch recent activity from all watched AI labs (concurrent with semaphore).
 
         Args:
@@ -247,7 +290,10 @@ class OrgTracker:
 
         async def _bounded(name, info):
             async with sem:
-                return await self._fetch_single_org(name, info, cutoff)
+                min_ts = org_watermarks.get(name) if org_watermarks else None
+                return await self._fetch_single_org(
+                    name, info, cutoff, min_timestamp=min_ts
+                )
 
         tasks = [_bounded(name, info) for name, info in self.watched_orgs.items()]
         results_raw = await asyncio.gather(*tasks, return_exceptions=True)
@@ -268,7 +314,11 @@ class OrgTracker:
 
         return results
 
-    async def fetch_vendor_activity(self, days: int = 7) -> dict:
+    async def fetch_vendor_activity(
+        self,
+        days: int = 7,
+        org_watermarks: dict[str, str] | None = None,
+    ) -> dict:
         """Fetch recent activity from watched data vendors (concurrent with semaphore).
 
         Args:
@@ -294,6 +344,8 @@ class OrgTracker:
                     "datasets": [],
                     "blog_url": vendor_info.get("blog_url"),
                 }
+                min_ts = org_watermarks.get(vendor_name) if org_watermarks else None
+                min_dt = self._parse_timestamp(min_ts) if min_ts else None
                 for hf_id in vendor_info["hf_ids"]:
                     datasets = await self._fetch_org_datasets(hf_id)
                     for ds in datasets:
@@ -305,7 +357,10 @@ class OrgTracker:
                         if modified:
                             try:
                                 mod_date = datetime.fromisoformat(modified.replace("Z", "+00:00"))
-                                if mod_date.replace(tzinfo=None) >= cutoff:
+                                mod_naive = mod_date.replace(tzinfo=None)
+                                if min_dt and mod_naive <= min_dt:
+                                    break
+                                if mod_naive >= cutoff:
                                     vendor_data["datasets"].append(ds)
                             except (ValueError, TypeError):
                                 vendor_data["datasets"].append(ds)

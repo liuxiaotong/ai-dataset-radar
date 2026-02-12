@@ -394,6 +394,22 @@ class TestFetchSingleOrg:
         result = await tracker._fetch_single_org("OpenAI", org_info, cutoff)
         assert result is None  # No recent data -> None
 
+    async def test_respects_min_timestamp(self, tracker):
+        """If watermark exists, older entries are skipped."""
+        recent = datetime.now(timezone.utc).replace(tzinfo=None).isoformat() + "Z"
+        tracker._fetch_org_datasets = AsyncMock(
+            return_value=[{"id": "openai/new", "lastModified": recent}]
+        )
+        tracker._fetch_org_models = AsyncMock(return_value=[])
+
+        cutoff = datetime.now() - timedelta(days=7)
+        org_info = {"hf_ids": ["openai"], "category": "frontier_labs", "priority": "high"}
+
+        result = await tracker._fetch_single_org(
+            "OpenAI", org_info, cutoff, min_timestamp=recent
+        )
+        assert result is None
+
 
 class TestFetchLabActivity:
     """Tests for fetch_lab_activity."""
@@ -420,3 +436,16 @@ class TestFetchVendorActivity:
         result = await tracker.fetch_vendor_activity(days=7)
         assert "premium" in result
         assert "specialized" in result
+
+    async def test_vendor_activity_respects_watermark(self, sample_config):
+        """Vendors with watermark earlier than dataset should be skipped."""
+        tracker = OrgTracker(sample_config)
+        recent = datetime.now(timezone.utc).replace(tzinfo=None).isoformat() + "Z"
+        tracker._fetch_org_datasets = AsyncMock(
+            return_value=[{"id": "scale/new", "lastModified": recent}]
+        )
+
+        result = await tracker.fetch_vendor_activity(
+            days=7, org_watermarks={"scale_ai": recent}
+        )
+        assert result["premium"].get("scale_ai") is None

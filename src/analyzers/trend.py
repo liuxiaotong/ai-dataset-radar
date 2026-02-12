@@ -32,6 +32,7 @@ class TrendAnalyzer:
         self.db = db
         self.config = config or {}
         self.analysis_config = self.config.get("analysis", {})
+        self._last_recorded_ids: list[int] = []
 
     def record_daily_stats(self, datasets: list[dict]) -> int:
         """Record daily statistics for a batch of datasets.
@@ -42,43 +43,25 @@ class TrendAnalyzer:
         Returns:
             Number of datasets recorded.
         """
-        today = datetime.now().strftime("%Y-%m-%d")
-        recorded = 0
+        recorded_ids = self.db.bulk_upsert_datasets_with_stats(datasets)
+        self._last_recorded_ids = recorded_ids
+        return len(recorded_ids)
 
-        for ds in datasets:
-            dataset_id = ds.get("id", "")
-            source = ds.get("source", "huggingface")
+    @property
+    def last_recorded_ids(self) -> list[int]:
+        """IDs of datasets that were updated in the last record pass."""
+        return list(self._last_recorded_ids)
 
-            if not dataset_id:
-                continue
-
-            # Ensure dataset exists in database
-            db_id = self.db.upsert_dataset(
-                source=source,
-                dataset_id=dataset_id,
-                name=ds.get("name", dataset_id),
-                author=ds.get("author", ""),
-                url=ds.get("url", ""),
-                created_at=ds.get("created_at"),
-            )
-
-            # Record today's stats
-            self.db.record_daily_stats(
-                dataset_db_id=db_id,
-                downloads=ds.get("downloads", 0),
-                likes=ds.get("likes", 0),
-                stars=ds.get("stars", 0),
-                date=today,
-            )
-            recorded += 1
-
-        return recorded
-
-    def calculate_trends(self, days: Optional[list[int]] = None) -> dict:
+    def calculate_trends(
+        self,
+        days: Optional[list[int]] = None,
+        dataset_ids: Optional[list[int]] = None,
+    ) -> dict:
         """Calculate growth trends for all tracked datasets.
 
         Args:
             days: List of periods to calculate (default: [7, 30]).
+            dataset_ids: Optional subset of dataset DB IDs to recalculate.
 
         Returns:
             Summary of trend calculations.
@@ -86,7 +69,11 @@ class TrendAnalyzer:
         if days is None:
             days = self.analysis_config.get("trend_days", [7, 30])
 
-        datasets = self.db.get_all_datasets(source="huggingface")
+        target_ids = dataset_ids or self._last_recorded_ids
+        if target_ids:
+            datasets = self.db.get_datasets_by_ids(target_ids)
+        else:
+            datasets = self.db.get_all_datasets(source="huggingface")
         today = datetime.now().strftime("%Y-%m-%d")
 
         calculated = 0
@@ -237,7 +224,7 @@ class TrendAnalyzer:
 
         # Step 2: Calculate trends
         print("Calculating growth trends...")
-        trend_summary = self.calculate_trends()
+        trend_summary = self.calculate_trends(dataset_ids=self.last_recorded_ids)
         print(f"  Calculated trends for {trend_summary['trends_calculated']} datasets")
 
         # Step 3: Identify rising datasets

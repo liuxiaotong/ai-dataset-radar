@@ -431,6 +431,22 @@ class TestFetchAccount:
         assert result["relevant_tweets"] == []
         assert result["has_activity"] is False
 
+    @patch.object(XTracker, "_fetch_rsshub_feed", new_callable=AsyncMock)
+    async def test_fetch_account_respects_watermark(self, mock_fetch, tracker):
+        """Tweets older than watermark are skipped."""
+        mock_fetch.return_value = [
+            {"text": "Old", "signals": ["dataset"], "date": "2024-06-01"},
+            {"text": "New", "signals": ["dataset"], "date": "2024-06-10"},
+        ]
+
+        result = await tracker.fetch_account(
+            "OpenAI", min_timestamp="2024-06-05"
+        )
+
+        assert result["total_tweets"] == 1
+        assert len(result["relevant_tweets"]) == 1
+        assert result["relevant_tweets"][0]["text"] == "New"
+
     @patch.object(XTracker, "_fetch_api_user_tweets", new_callable=AsyncMock)
     async def test_fetch_account_api_backend(self, mock_fetch):
         """Test fetching account via API backend."""
@@ -498,6 +514,27 @@ class TestFetchAll:
         assert len(result["accounts"]) == 1  # Only active accounts
         assert result["accounts"][0]["username"] == "OpenAI"
         assert result["search_results"] == []
+
+    @patch.object(XTracker, "fetch_account", new_callable=AsyncMock)
+    async def test_fetch_all_passes_watermarks(self, mock_fetch, tracker):
+        """Watermark map is forwarded to fetch_account calls."""
+        mock_fetch.return_value = {
+            "username": "OpenAI",
+            "total_tweets": 0,
+            "relevant_tweets": [],
+            "has_activity": False,
+        }
+
+        await tracker.fetch_all(
+            days=7, account_watermarks={"OpenAI": "2024-06-10"}
+        )
+
+        # Find the call for OpenAI (order may vary with asyncio.gather)
+        openai_call = [
+            c for c in mock_fetch.call_args_list if c.args[0] == "OpenAI"
+        ]
+        assert len(openai_call) == 1
+        assert openai_call[0].kwargs["min_timestamp"] == "2024-06-10"
 
     @patch.object(XTracker, "fetch_account", new_callable=AsyncMock)
     async def test_fetch_all_empty_accounts(self, mock_fetch):

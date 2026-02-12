@@ -161,7 +161,19 @@ class RedditTracker:
                 signals.append(keyword)
         return list(set(signals))
 
-    async def fetch_all(self, days: int = 7) -> dict:
+    def _parse_date_value(self, date_str: str | None) -> datetime | None:
+        if not date_str:
+            return None
+        try:
+            return datetime.strptime(date_str[:10], "%Y-%m-%d")
+        except ValueError:
+            return None
+
+    async def fetch_all(
+        self,
+        days: int = 7,
+        source_watermarks: dict[str, str] | None = None,
+    ) -> dict:
         """Fetch posts from all configured subreddits concurrently.
 
         Args:
@@ -206,11 +218,21 @@ class RedditTracker:
             elif result:
                 all_posts.extend(result)
 
-        results["metadata"]["total_posts"] = len(all_posts)
+        filtered_posts = []
+        for post in all_posts:
+            sub = post.get("subreddit", "")
+            min_ts = source_watermarks.get(sub) if source_watermarks else None
+            min_dt = self._parse_date_value(min_ts) if min_ts else None
+            post_dt = self._parse_date_value(post.get("date"))
+            if min_dt and post_dt and post_dt <= min_dt:
+                continue
+            filtered_posts.append(post)
+
+        results["metadata"]["total_posts"] = len(filtered_posts)
 
         # Filter to relevant posts (have signals) and meet min score
         relevant = [
-            p for p in all_posts
+            p for p in filtered_posts
             if p.get("signals") and p.get("score", 0) >= self.min_score
         ]
 
@@ -222,7 +244,7 @@ class RedditTracker:
 
         logger.info(
             "Found %d relevant posts from %d total (min_score=%d)",
-            len(relevant), len(all_posts), self.min_score,
+            len(relevant), len(filtered_posts), self.min_score,
         )
 
         return results

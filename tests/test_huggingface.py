@@ -220,3 +220,30 @@ Trained on the imdb dataset for sentiment analysis.
         result = await scraper.fetch_dataset_info("nonexistent")
 
         assert result is None
+
+    @pytest.mark.asyncio
+    async def test_fetch_respects_min_timestamp(self, scraper):
+        """Ensure fetch stops when reaching older datasets."""
+        newer = {
+            "id": "user/new-ds",
+            "author": "user",
+            "downloads": 10,
+            "likes": 1,
+            "lastModified": "2024-06-10T00:00:00.000Z",
+        }
+        older = {
+            "id": "user/old-ds",
+            "author": "user",
+            "downloads": 5,
+            "likes": 0,
+            "lastModified": "2024-06-01T00:00:00.000Z",
+        }
+
+        scraper._http.get_json = AsyncMock(return_value=[newer, older])
+
+        results = await scraper.fetch(
+            min_timestamp="2024-06-05T00:00:00", max_pages=2
+        )
+
+        assert len(results) == 1
+        assert results[0]["id"] == "user/new-ds"

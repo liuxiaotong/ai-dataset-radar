@@ -5,7 +5,7 @@ import sqlite3
 import threading
 from contextlib import contextmanager
 from datetime import datetime, timedelta
-from typing import Optional
+from typing import List, Optional
 
 from utils.logging_config import get_logger
 
@@ -302,6 +302,21 @@ class RadarDatabase:
         rows = cursor.fetchall()
         return [dict(row) for row in rows]
 
+    def get_datasets_by_ids(self, dataset_ids: List[int]) -> list[dict]:
+        """Get dataset rows by database IDs."""
+        if not dataset_ids:
+            return []
+
+        conn = self._get_connection()
+        cursor = conn.cursor()
+        placeholders = ",".join(["?"] * len(dataset_ids))
+        cursor.execute(
+            f"SELECT * FROM datasets WHERE id IN ({placeholders})",
+            dataset_ids,
+        )
+        rows = cursor.fetchall()
+        return [dict(row) for row in rows]
+
     # Daily stats operations
     def record_daily_stats(
         self,
@@ -327,6 +342,88 @@ class RadarDatabase:
                 """,
                 (dataset_db_id, date, downloads, likes, stars),
             )
+
+    def bulk_upsert_datasets_with_stats(
+        self,
+        datasets: list[dict],
+        date: Optional[str] = None,
+    ) -> list[int]:
+        """Upsert datasets and their stats in a single transaction.
+
+        Returns database IDs that were touched.
+        """
+        if not datasets:
+            return []
+
+        if date is None:
+            date = datetime.now().strftime("%Y-%m-%d")
+
+        recorded_ids: list[int] = []
+        seen_keys: set[tuple[str, str]] = set()
+
+        with self._transaction() as conn:
+            cursor = conn.cursor()
+            now = datetime.now().isoformat()
+
+            for ds in datasets:
+                dataset_id = ds.get("id") or ds.get("dataset_id")
+                if not dataset_id:
+                    continue
+
+                source = ds.get("source", "huggingface")
+                key = (source, dataset_id)
+                if key in seen_keys:
+                    continue
+                seen_keys.add(key)
+
+                name = ds.get("name") or dataset_id.split("/")[-1]
+                author = ds.get("author")
+                url = ds.get("url") or ds.get("source_url")
+                created_at = ds.get("created_at")
+
+                cursor.execute(
+                    """
+                    INSERT INTO datasets (source, dataset_id, name, author, url, created_at, first_seen)
+                    VALUES (?, ?, ?, ?, ?, ?, ?)
+                    ON CONFLICT(source, dataset_id) DO UPDATE SET
+                        name = excluded.name,
+                        author = excluded.author,
+                        url = excluded.url,
+                        created_at = COALESCE(excluded.created_at, datasets.created_at)
+                    """,
+                    (source, dataset_id, name, author, url, created_at, now),
+                )
+
+                cursor.execute(
+                    "SELECT id FROM datasets WHERE source = ? AND dataset_id = ?",
+                    (source, dataset_id),
+                )
+                row = cursor.fetchone()
+                if not row:
+                    continue
+
+                db_id = row["id"]
+                recorded_ids.append(db_id)
+
+                cursor.execute(
+                    """
+                    INSERT INTO daily_stats (dataset_id, date, downloads, likes, stars)
+                    VALUES (?, ?, ?, ?, ?)
+                    ON CONFLICT(dataset_id, date) DO UPDATE SET
+                        downloads = excluded.downloads,
+                        likes = excluded.likes,
+                        stars = excluded.stars
+                    """,
+                    (
+                        db_id,
+                        date,
+                        ds.get("downloads", 0) or 0,
+                        ds.get("likes", 0) or 0,
+                        ds.get("stars", 0) or 0,
+                    ),
+                )
+
+        return recorded_ids
 
     def get_stats_history(
         self,

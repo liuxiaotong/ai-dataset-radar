@@ -11,7 +11,7 @@ import json
 import math
 import os
 import sys
-from datetime import datetime, timezone
+from datetime import datetime, timezone, timedelta
 from pathlib import Path
 
 import yaml
@@ -44,6 +44,7 @@ from intel_report import IntelReportGenerator
 from scrapers.arxiv import ArxivScraper
 from scrapers.hf_papers import HFPapersScraper
 from scrapers.huggingface import HuggingFaceScraper
+from scrapers.paperswithcode import PapersWithCodeScraper
 from output_formatter import DualOutputFormatter
 from db import RadarDatabase
 from analyzers.trend import TrendAnalyzer
@@ -125,6 +126,7 @@ def format_insights_prompt(
     vendor_activity: dict = None,
     x_activity: dict = None,
     reddit_activity: dict = None,
+    pwc_datasets: list = None,
 ) -> str:
     """Format data with analysis prompt for LLM consumption.
 
@@ -456,6 +458,34 @@ def format_insights_prompt(
         lines.append("")
     else:
         lines.append("无 Reddit 动态\n")
+
+    # ── Section 5.7: Papers with Code ──
+    lines.append("## 5.7、Papers with Code 数据集/榜单\n")
+    pwc_items = (pwc_datasets or [])[:15]
+    if pwc_items:
+        for ds in pwc_items:
+            name = ds.get("full_name") or ds.get("name", "")
+            url = ds.get("url") or ds.get("homepage", "")
+            paper_count = ds.get("paper_count", 0)
+            desc = (ds.get("description") or "").strip()
+            created_at = ds.get("created_at", "")
+            meta = []
+            if created_at:
+                meta.append(created_at[:10])
+            meta.append(f"论文: {paper_count}")
+            modalities = ds.get("modalities") or ds.get("languages") or []
+            if modalities:
+                meta.append(f"模态: {', '.join(modalities[:3])}")
+            title = name or "未命名"
+            if url:
+                lines.append(f"- **[{title}]({url})** ({'; '.join(meta)})")
+            else:
+                lines.append(f"- **{title}** ({'; '.join(meta)})")
+            if desc:
+                lines.append(f"  {desc[:400]}" + ("…" if len(desc) > 400 else ""))
+        lines.append("")
+    else:
+        lines.append("本周无 Papers with Code 更新\n")
 
     # ── Section 6: Papers (full titles, longer abstracts) ──
     lines.append("## 六、相关论文\n")
@@ -985,6 +1015,46 @@ def _effective_days(watermarks, source: str, default_days: int) -> int:
         return default_days
 
 
+def _filter_pwc_datasets(datasets: list[dict], days: int) -> list[dict]:
+    """Filter Papers with Code datasets by introduced date."""
+    if not datasets or not days:
+        return datasets or []
+
+    cutoff = datetime.now() - timedelta(days=days)
+    filtered = []
+    for ds in datasets:
+        created_at = ds.get("created_at") or ds.get("introduced_date")
+        if created_at:
+            try:
+                dt = datetime.fromisoformat(str(created_at))
+            except ValueError:
+                try:
+                    dt = datetime.strptime(str(created_at)[:10], "%Y-%m-%d")
+                except ValueError:
+                    dt = None
+        else:
+            dt = None
+
+        if dt and dt < cutoff:
+            continue
+        filtered.append(ds)
+    return filtered
+
+
+def _load_org_watermarks(raw_value) -> dict[str, str]:
+    if not raw_value:
+        return {}
+    if isinstance(raw_value, dict):
+        return raw_value
+    if isinstance(raw_value, str):
+        try:
+            data = json.loads(raw_value)
+            return data if isinstance(data, dict) else {}
+        except json.JSONDecodeError:
+            return {}
+    return {}
+
+
 def _update_watermarks(watermarks, all_data: dict) -> None:
     """Extract latest timestamps from scan results and update watermarks."""
 
@@ -999,6 +1069,19 @@ def _update_watermarks(watermarks, all_data: dict) -> None:
                     pass
         return max(valid) if valid else None
 
+    def _normalize_ts(value: str | None) -> str | None:
+        if not value:
+            return None
+        value = str(value)
+        try:
+            dt = datetime.fromisoformat(value.replace("Z", "+00:00"))
+        except ValueError:
+            try:
+                dt = datetime.strptime(value[:10], "%Y-%m-%d")
+            except ValueError:
+                return None
+        return dt.isoformat()
+
     # Labs / Vendors: max(dataset["last_modified"])
     for source_key in ("labs", "vendors"):
         activity_key = f"{source_key}_activity"
@@ -1012,22 +1095,178 @@ def _update_watermarks(watermarks, all_data: dict) -> None:
                         if isinstance(org_data, dict):
                             for ds in org_data.get("datasets", []):
                                 ts = ds.get("last_modified") or ds.get("created_at")
-                                if ts:
-                                    timestamps.append(str(ts))
+                                norm = _normalize_ts(ts)
+                                if norm:
+                                    timestamps.append(norm)
         ts = _max_ts(timestamps)
         if ts:
             watermarks.set(source_key, ts)
+
+    def _merge_org_map(existing_key: str, new_map: dict[str, str]) -> None:
+        if not new_map:
+            return
+        existing = _load_org_watermarks(watermarks.get(existing_key))
+        merged = dict(existing)
+        changed = False
+        for org_name, ts in new_map.items():
+            prev = merged.get(org_name)
+            best = _max_ts([prev, ts]) if prev else ts
+            if best and best != prev:
+                merged[org_name] = best
+                changed = True
+        if changed:
+            watermarks.set(existing_key, merged)
+
+    labs_org_map = {}
+    labs_activity = all_data.get("labs_activity", {}).get("labs", {})
+    if isinstance(labs_activity, dict):
+        for category in labs_activity.values():
+            if not isinstance(category, dict):
+                continue
+            for org_name, org_data in category.items():
+                timestamps = []
+                for ds in org_data.get("datasets", []):
+                    ts = ds.get("last_modified") or ds.get("created_at")
+                    norm = _normalize_ts(ts)
+                    if norm:
+                        timestamps.append(norm)
+                for model in org_data.get("models", []):
+                    ts = model.get("last_modified") or model.get("created_at")
+                    norm = _normalize_ts(ts)
+                    if norm:
+                        timestamps.append(norm)
+                org_ts = _max_ts(timestamps)
+                if org_ts:
+                    labs_org_map[org_name] = org_ts
+
+    _merge_org_map("labs_orgs", labs_org_map)
+
+    vendor_org_map = {}
+    vendor_activity = all_data.get("vendor_activity", {}).get("vendors", {})
+    if isinstance(vendor_activity, dict):
+        for tier in vendor_activity.values():
+            if not isinstance(tier, dict):
+                continue
+            for vendor_name, vendor_data in tier.items():
+                timestamps = []
+                for ds in vendor_data.get("datasets", []):
+                    ts = ds.get("last_modified") or ds.get("created_at")
+                    norm = _normalize_ts(ts)
+                    if norm:
+                        timestamps.append(norm)
+                org_ts = _max_ts(timestamps)
+                if org_ts:
+                    vendor_org_map[vendor_name] = org_ts
+
+    _merge_org_map("vendors_orgs", vendor_org_map)
+
+    blog_map = {}
+    for activity in all_data.get("blog_posts", []) or []:
+        source = activity.get("source")
+        if not source:
+            continue
+        article_dates = []
+        for article in activity.get("articles", []) or []:
+            norm = _normalize_ts(article.get("date"))
+            if norm:
+                article_dates.append(norm)
+        src_ts = _max_ts(article_dates)
+        if src_ts:
+            blog_map[source] = src_ts
+
+    _merge_org_map("blog_sources", blog_map)
+
+    x_map = {}
+    for account in all_data.get("x_activity", {}).get("accounts", []) or []:
+        username = account.get("username")
+        if not username:
+            continue
+        tweet_dates = []
+        for tweet in account.get("relevant_tweets", []) or []:
+            norm = _normalize_ts(tweet.get("date"))
+            if norm:
+                tweet_dates.append(norm)
+        user_ts = _max_ts(tweet_dates)
+        if user_ts:
+            x_map[username] = user_ts
+
+    _merge_org_map("x_accounts", x_map)
+
+    reddit_map = {}
+    for post in all_data.get("reddit_activity", {}).get("posts", []) or []:
+        sub = post.get("subreddit")
+        if not sub:
+-            continue
+-        ts = post.get("date") or post.get("created_utc")
+-        if ts:
+-            reddit_timestamps.append(str(ts))
+-    ts = _max_ts(reddit_timestamps)
+-    if ts:
+-        watermarks.set("reddit", ts)
+            continue
+        norm = _normalize_ts(post.get("date")) or _normalize_ts(post.get("created_utc"))
+        if not norm:
+            continue
+        reddit_map.setdefault(sub, []).append(norm)
+
+    reddit_timestamps = []
+    for timestamps in reddit_map.values():
+        reddit_timestamps.extend(timestamps)
+
+    ts = _max_ts(reddit_timestamps)
+    if ts:
+        watermarks.set("reddit", ts)
+
+    reddit_agg = {sub: _max_ts(ts_list) for sub, ts_list in reddit_map.items()}
+    _merge_org_map("reddit_sources", {k: v for k, v in reddit_agg.items() if v})
+
+    # update cooldown metadata
+    cooldowns = _load_org_watermarks(watermarks.get("_cooldowns"))
+    cooldowns.update(all_data.get("cooldowns", {}))
+    if cooldowns:
+        watermarks.set("_cooldowns", cooldowns)
 
     # GitHub: max(repo["updated_at"])
     gh_timestamps = []
     for org_entry in all_data.get("github_activity", []):
         for repo in org_entry.get("repos_updated", []):
             ts = repo.get("updated_at") or repo.get("pushed_at")
-            if ts:
-                gh_timestamps.append(str(ts))
+            norm = _normalize_ts(ts)
+            if norm:
+                gh_timestamps.append(norm)
     ts = _max_ts(gh_timestamps)
     if ts:
         watermarks.set("github", ts)
+
+    github_org_map = {}
+    for org_entry in all_data.get("github_activity", []) or []:
+        org_name = org_entry.get("org")
+        if not org_name:
+            continue
+        repo_timestamps = []
+        for repo in org_entry.get("repos_updated", []) or []:
+            ts = repo.get("updated_at") or repo.get("pushed_at")
+            if ts:
+                repo_timestamps.append(str(ts))
+        org_ts = _max_ts(repo_timestamps)
+        if org_ts:
+            github_org_map[org_name] = org_ts
+
+    if github_org_map:
+        existing_orgs = _load_org_watermarks(watermarks.get("github_orgs"))
+        merged = dict(existing_orgs)
+        changed = False
+        for org_name, ts in github_org_map.items():
+            prev = merged.get(org_name)
+            if prev:
+                best = _max_ts([prev, ts])
+            else:
+                best = ts
+            if best and best != prev:
+                merged[org_name] = best
+                changed = True
+        if changed:
+            watermarks.set("github_orgs", merged)
 
     # Blogs: max(article["date"])
     blog_timestamps = []
@@ -1070,6 +1309,27 @@ def _update_watermarks(watermarks, all_data: dict) -> None:
     ts = _max_ts(reddit_timestamps)
     if ts:
         watermarks.set("reddit", ts)
+
+    # Papers with Code: max(dataset["created_at"])
+    pwc_timestamps = []
+    for ds in all_data.get("paperswithcode", []) or []:
+        ts = ds.get("created_at") or ds.get("introduced_date")
+        norm = _normalize_ts(ts)
+        if norm:
+            pwc_timestamps.append(norm)
+    ts = _max_ts(pwc_timestamps)
+    if ts:
+        watermarks.set("pwc", ts)
+
+    hf_general_ts = []
+    for ds in all_data.get("huggingface_general", []) or []:
+        ts = ds.get("last_modified") or ds.get("created_at")
+        norm = _normalize_ts(ts)
+        if norm:
+            hf_general_ts.append(norm)
+    ts = _max_ts(hf_general_ts)
+    if ts:
+        watermarks.set("huggingface_general", ts)
 
 
 async def async_main(args):
@@ -1164,6 +1424,27 @@ async def async_main(args):
         paper_filter = PaperFilter(config)
         report_generator = IntelReportGenerator(config)
         hf_scraper = HuggingFaceScraper(config, http_client=http_client)
+        hf_cfg = config.get("sources", {}).get("huggingface", {})
+        hf_mode = str(hf_cfg.get("mode", "targeted")).lower()
+        hf_general_enabled = hf_mode in {"general", "hybrid"}
+        hf_general_datasets = []
+        pwc_config = config.get("sources", {}).get("paperswithcode", {})
+        pwc_scraper = None
+        pwc_days = args.days
+        if (
+            not args.no_pwc
+            and pwc_config.get("enabled", True)
+        ):
+            pwc_scraper = PapersWithCodeScraper(
+                config=config,
+                limit=pwc_config.get("limit", 50),
+            )
+            base_days = _days("pwc") if incremental else args.days
+            config_days = pwc_config.get("days")
+            if config_days is not None:
+                pwc_days = min(config_days, base_days) if incremental else config_days
+            else:
+                pwc_days = base_days
 
         # 1-3. Fetch all data sources concurrently
         lab_activity = {"labs": {}}
@@ -1173,6 +1454,7 @@ async def async_main(args):
         x_activity = {"accounts": [], "search_results": []}
         reddit_activity = {"posts": [], "metadata": {}}
         papers = []
+        pwc_datasets = []
 
         # Pre-build paper scrapers
         arxiv_scraper = None
@@ -1210,6 +1492,13 @@ async def async_main(args):
                 return args.days
             return _effective_days(watermarks, source, args.days)
 
+        github_org_watermarks = _load_org_watermarks(watermarks.get("github_orgs"))
+        labs_org_watermarks = _load_org_watermarks(watermarks.get("labs_orgs"))
+        vendor_org_watermarks = _load_org_watermarks(watermarks.get("vendors_orgs"))
+        blog_source_watermarks = _load_org_watermarks(watermarks.get("blog_sources"))
+        x_account_watermarks = _load_org_watermarks(watermarks.get("x_accounts"))
+        reddit_source_watermarks = _load_org_watermarks(watermarks.get("reddit_sources"))
+
         # Calculate total progress steps
         _n = 0
         if not args.no_labs:
@@ -1226,33 +1515,47 @@ async def async_main(args):
             _n += 1
         if arxiv_scraper or hf_papers_scraper:
             _n += 1
+        if pwc_scraper:
+            _n += 1
         _total = _n + 3  # + classify + report + finalize
 
         # Build async tasks
         tasks = {}
         if not args.no_labs:
             logger.info(_progress("HuggingFace Labs 追踪..."))
-            tasks["labs"] = org_tracker.fetch_lab_activity(days=_days("labs"))
+            tasks["labs"] = org_tracker.fetch_lab_activity(
+                days=_days("labs"), org_watermarks=labs_org_watermarks
+            )
 
         if not args.no_vendors:
             logger.info(_progress("HuggingFace Vendors 追踪..."))
-            tasks["vendors"] = org_tracker.fetch_vendor_activity(days=_days("vendors"))
+            tasks["vendors"] = org_tracker.fetch_vendor_activity(
+                days=_days("vendors"), org_watermarks=vendor_org_watermarks
+            )
 
         if not args.no_github:
             logger.info(_progress("GitHub 组织扫描..."))
-            tasks["github"] = github_tracker.fetch_all_orgs(days=_days("github"))
+            tasks["github"] = github_tracker.fetch_all_orgs(
+                days=_days("github"), org_watermarks=github_org_watermarks
+            )
 
         if not args.no_blogs:
             logger.info(_progress("博客源抓取..."))
-            tasks["blogs"] = blog_tracker.fetch_all_blogs(days=_days("blogs"))
+            tasks["blogs"] = blog_tracker.fetch_all_blogs(
+                days=_days("blogs"), source_watermarks=blog_source_watermarks
+            )
 
         if x_tracker:
             logger.info(_progress("X/Twitter 账号抓取..."))
-            tasks["x"] = x_tracker.fetch_all(days=_days("x"))
+            tasks["x"] = x_tracker.fetch_all(
+                days=_days("x"), account_watermarks=x_account_watermarks
+            )
 
         if reddit_tracker:
             logger.info(_progress("Reddit 社区追踪..."))
-            tasks["reddit"] = reddit_tracker.fetch_all(days=_days("reddit"))
+            tasks["reddit"] = reddit_tracker.fetch_all(
+                days=_days("reddit"), source_watermarks=reddit_source_watermarks
+            )
 
         if arxiv_scraper:
             if not hf_papers_scraper:
@@ -1265,6 +1568,33 @@ async def async_main(args):
             if not arxiv_scraper:
                 logger.info(_progress("论文抓取 (HF Papers)..."))
             tasks["hf_papers"] = hf_papers_scraper.fetch()
+
+        if hf_general_enabled:
+            hf_general_watermark = watermarks.get("huggingface_general")
+            general_limit = hf_cfg.get("general_limit", hf_cfg.get("limit", 100))
+            general_max_pages = hf_cfg.get("general_max_pages", 5)
+
+            async def _fetch_hf_general():
+                scraper = HuggingFaceScraper(
+                    config,
+                    limit=general_limit,
+                    http_client=http_client,
+                )
+                return await scraper.fetch(
+                    min_timestamp=hf_general_watermark,
+                    max_pages=general_max_pages,
+                )
+
+            tasks["hf_general"] = _fetch_hf_general()
+
+        if pwc_scraper:
+            logger.info(_progress("Papers with Code 数据集..."))
+
+            async def _fetch_pwc():
+                result = await asyncio.to_thread(pwc_scraper.fetch)
+                return _filter_pwc_datasets(result, pwc_days)
+
+            tasks["pwc"] = _fetch_pwc()
 
         # Run all tasks concurrently
         if tasks:
@@ -1316,6 +1646,9 @@ async def async_main(args):
                     elif key == "hf_papers":
                         filtered = paper_filter.filter_papers(result)
                         papers.extend(filtered)
+                    elif key == "pwc":
+                        pwc_datasets = result or []
+                        logger.info("  ✓ Papers with Code: %d 数据集", len(pwc_datasets))
                 except Exception as e:
                     logger.warning("  ✗ %s: %s", key, e)
 
@@ -1334,6 +1667,9 @@ async def async_main(args):
         for tier in vendor_activity.get("vendors", {}).values():
             for vendor_data in tier.values():
                 all_datasets.extend(vendor_data.get("datasets", []))
+
+        if hf_general_datasets:
+            all_datasets.extend(hf_general_datasets)
 
         logger.info("  ✓ 数据集: %d 个", len(all_datasets))
 
@@ -1406,7 +1742,9 @@ async def async_main(args):
 
             if all_datasets:
                 trend_analyzer.record_daily_stats(all_datasets)
-                trend_analyzer.calculate_trends()
+                trend_analyzer.calculate_trends(
+                    dataset_ids=trend_analyzer.last_recorded_ids
+                )
 
                 # Inject growth rates into each dataset
                 for ds in all_datasets:
@@ -1442,6 +1780,7 @@ async def async_main(args):
             competitor_matrix=competitor_matrix,
             dataset_lineage=dataset_lineage,
             org_graph=org_graph,
+            pwc_datasets=pwc_datasets,
         )
 
         # Prepare structured data for JSON output
@@ -1466,6 +1805,8 @@ async def async_main(args):
             "blog_posts": blog_activity,
             "x_activity": x_activity,
             "reddit_activity": reddit_activity,
+            "huggingface_general": hf_general_datasets,
+            "paperswithcode": pwc_datasets,
             "datasets": all_datasets,
             "datasets_by_type": datasets_json,
             "papers": papers,
@@ -1550,7 +1891,12 @@ async def async_main(args):
         # Print console summary
         logger.info(
             report_generator.generate_console_summary(
-                lab_activity, vendor_activity, datasets_by_type, github_activity, blog_activity
+                lab_activity,
+                vendor_activity,
+                datasets_by_type,
+                github_activity,
+                blog_activity,
+                pwc_datasets,
             )
         )
 
@@ -1568,6 +1914,7 @@ async def async_main(args):
                 vendor_activity=vendor_activity,
                 x_activity=x_activity,
                 reddit_activity=reddit_activity,
+                pwc_datasets=pwc_datasets,
             )
 
             # Save insights prompt to file (always — for Claude Code environment)
@@ -1717,6 +2064,11 @@ def main():
         help="Skip fetching dataset READMEs",
     )
     parser.add_argument(
+        "--no-pwc",
+        action="store_true",
+        help="Skip Papers with Code dataset scraping",
+    )
+    parser.add_argument(
         "--no-x",
         action="store_true",
         help="Skip X/Twitter tracking",
@@ -1794,6 +2146,16 @@ async def run_intel_scan(
             return days
         return _effective_days(watermarks, source, days)
 
+    github_org_watermarks = _load_org_watermarks(watermarks.get("github_orgs"))
+    labs_org_watermarks = _load_org_watermarks(watermarks.get("labs_orgs"))
+    vendor_org_watermarks = _load_org_watermarks(watermarks.get("vendors_orgs"))
+    blog_source_watermarks = _load_org_watermarks(watermarks.get("blog_sources"))
+    x_account_watermarks = _load_org_watermarks(watermarks.get("x_accounts"))
+    reddit_source_watermarks = _load_org_watermarks(watermarks.get("reddit_sources"))
+    blog_source_watermarks = _load_org_watermarks(watermarks.get("blog_sources"))
+    x_account_watermarks = _load_org_watermarks(watermarks.get("x_accounts"))
+    reddit_source_watermarks = _load_org_watermarks(watermarks.get("reddit_sources"))
+
     http_client = AsyncHTTPClient()
     try:
         org_tracker = OrgTracker(config, http_client=http_client)
@@ -1813,18 +2175,48 @@ async def run_intel_scan(
         paper_filter = PaperFilter(config)
         report_generator = IntelReportGenerator(config)
         hf_scraper = HuggingFaceScraper(config, http_client=http_client)
+        hf_cfg = config.get("sources", {}).get("huggingface", {})
+        hf_mode = str(hf_cfg.get("mode", "targeted")).lower()
+        hf_general_enabled = hf_mode in {"general", "hybrid"}
+        hf_general_datasets = []
+        pwc_config = config.get("sources", {}).get("paperswithcode", {})
+        pwc_scraper = None
+        pwc_days = days
+        if pwc_config.get("enabled", True):
+            pwc_scraper = PapersWithCodeScraper(
+                config=config,
+                limit=pwc_config.get("limit", 50),
+            )
+            base_days = _days("pwc") if incremental else days
+            config_days = pwc_config.get("days")
+            if config_days is not None:
+                pwc_days = min(config_days, base_days) if incremental else config_days
+            else:
+                pwc_days = base_days
 
         # Build async tasks
         tasks = {
-            "labs": org_tracker.fetch_lab_activity(days=_days("labs")),
-            "vendors": org_tracker.fetch_vendor_activity(days=_days("vendors")),
-            "github": github_tracker.fetch_all_orgs(days=_days("github")),
-            "blogs": blog_tracker.fetch_all_blogs(days=_days("blogs")),
+            "labs": org_tracker.fetch_lab_activity(
+                days=_days("labs"), org_watermarks=labs_org_watermarks
+            ),
+            "vendors": org_tracker.fetch_vendor_activity(
+                days=_days("vendors"), org_watermarks=vendor_org_watermarks
+            ),
+            "github": github_tracker.fetch_all_orgs(
+                days=_days("github"), org_watermarks=github_org_watermarks
+            ),
+            "blogs": blog_tracker.fetch_all_blogs(
+                days=_days("blogs"), source_watermarks=blog_source_watermarks
+            ),
         }
         if x_tracker:
-            tasks["x"] = x_tracker.fetch_all(days=_days("x"))
+            tasks["x"] = x_tracker.fetch_all(
+                days=_days("x"), account_watermarks=x_account_watermarks
+            )
         if reddit_tracker:
-            tasks["reddit"] = reddit_tracker.fetch_all(days=_days("reddit"))
+            tasks["reddit"] = reddit_tracker.fetch_all(
+                days=_days("reddit"), source_watermarks=reddit_source_watermarks
+            )
 
         arxiv_config = config.get("sources", {}).get("arxiv", {})
         if arxiv_config.get("enabled", True):
@@ -1838,6 +2230,31 @@ async def run_intel_scan(
             )
             tasks["hf_papers"] = hf_papers_scraper.fetch()
 
+        if hf_general_enabled:
+            hf_general_watermark = watermarks.get("huggingface_general")
+            general_limit = hf_cfg.get("general_limit", hf_cfg.get("limit", 100))
+            general_max_pages = hf_cfg.get("general_max_pages", 5)
+
+            async def _fetch_hf_general():
+                scraper = HuggingFaceScraper(
+                    config,
+                    limit=general_limit,
+                    http_client=http_client,
+                )
+                return await scraper.fetch(
+                    min_timestamp=hf_general_watermark,
+                    max_pages=general_max_pages,
+                )
+
+            tasks["hf_general"] = _fetch_hf_general()
+
+        if pwc_scraper:
+            async def _fetch_pwc():
+                result = await asyncio.to_thread(pwc_scraper.fetch)
+                return _filter_pwc_datasets(result, pwc_days)
+
+            tasks["pwc"] = _fetch_pwc()
+
         # Run all tasks concurrently
         lab_activity = {"labs": {}}
         vendor_activity = {"vendors": {}}
@@ -1846,6 +2263,7 @@ async def run_intel_scan(
         x_activity = {"accounts": [], "search_results": []}
         reddit_activity = {"posts": [], "metadata": {}}
         papers = []
+        pwc_datasets = []
 
         keys = list(tasks.keys())
         results = await asyncio.gather(*tasks.values(), return_exceptions=True)
@@ -1870,6 +2288,15 @@ async def run_intel_scan(
                     papers.extend(paper_filter.filter_papers(result))
                 elif key == "hf_papers":
                     papers.extend(paper_filter.filter_papers(result))
+                elif key == "hf_general":
+                    hf_general_datasets = result or []
+                    logger.info(
+                        "  ✓ HuggingFace 通用: %d 数据集", len(hf_general_datasets)
+                    )
+                elif key == "hf_general":
+                    hf_general_datasets = result or []
+                elif key == "pwc":
+                    pwc_datasets = result or []
             except Exception as e:
                 logger.warning("Error fetching %s: %s", key, e)
 
@@ -1881,6 +2308,9 @@ async def run_intel_scan(
         for tier in vendor_activity.get("vendors", {}).values():
             for vendor_data in tier.values():
                 all_datasets.extend(vendor_data.get("datasets", []))
+
+        if hf_general_datasets:
+            all_datasets.extend(hf_general_datasets)
 
         if all_datasets:
             all_datasets = await fetch_dataset_readmes(all_datasets, hf_scraper)
@@ -1931,7 +2361,9 @@ async def run_intel_scan(
             trend_analyzer = TrendAnalyzer(db, config)
             if all_datasets:
                 trend_analyzer.record_daily_stats(all_datasets)
-                trend_analyzer.calculate_trends()
+                trend_analyzer.calculate_trends(
+                    dataset_ids=trend_analyzer.last_recorded_ids
+                )
                 for ds in all_datasets:
                     ds_id = ds.get("id", "")
                     if ds_id:
@@ -1961,6 +2393,7 @@ async def run_intel_scan(
             competitor_matrix=competitor_matrix,
             dataset_lineage=dataset_lineage,
             org_graph=org_graph,
+            pwc_datasets=pwc_datasets,
         )
 
         date_str = datetime.now().strftime("%Y-%m-%d")
@@ -1985,6 +2418,8 @@ async def run_intel_scan(
             "blog_posts": blog_activity,
             "x_activity": x_activity,
             "reddit_activity": reddit_activity,
+            "huggingface_general": hf_general_datasets,
+            "paperswithcode": pwc_datasets,
             "datasets": all_datasets,
             "datasets_by_type": datasets_json,
             "papers": papers,
@@ -2048,6 +2483,7 @@ async def run_intel_scan(
                 vendor_activity=vendor_activity,
                 x_activity=x_activity,
                 reddit_activity=reddit_activity,
+                pwc_datasets=pwc_datasets,
             )
 
             insights_prompt_path = reports_dir / f"intel_report_{date_str}_insights_prompt.md"

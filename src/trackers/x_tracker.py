@@ -13,6 +13,8 @@ Monitors AI labs, researchers, and data vendors for:
 
 import asyncio
 import re
+import atexit
+from concurrent.futures import ThreadPoolExecutor
 from datetime import datetime, timedelta, timezone
 
 import feedparser
@@ -99,6 +101,10 @@ SIGNAL_KEYWORDS = [
 ]
 
 
+_FEED_PARSER_EXECUTOR = ThreadPoolExecutor(max_workers=4)
+atexit.register(_FEED_PARSER_EXECUTOR.shutdown, wait=False)
+
+
 class XTracker:
     """Track X (Twitter) accounts for AI-related announcements.
 
@@ -147,6 +153,7 @@ class XTracker:
         # Async HTTP client (shared or owned)
         self._http = http_client
         self._owns_http = http_client is None
+        self._feed_executor = _FEED_PARSER_EXECUTOR
 
     async def _ensure_http(self):
         """Lazily create HTTP client if not provided."""
@@ -220,7 +227,7 @@ class XTracker:
                 if text is None:
                     raise RuntimeError(f"Failed to fetch {url}")
                 loop = asyncio.get_running_loop()
-                return await loop.run_in_executor(None, feedparser.parse, text)
+                return await loop.run_in_executor(self._feed_executor, feedparser.parse, text)
 
             result = await self._fetch_with_retry(
                 _do_fetch, f"RSSHub({base_url}) @{username}", max_retries=1
@@ -435,7 +442,20 @@ class XTracker:
                 signals.append(keyword)
         return list(set(signals))
 
-    async def fetch_account(self, username: str, days: int = 7) -> dict:
+    def _parse_date_value(self, date_str: str | None) -> datetime | None:
+        if not date_str:
+            return None
+        try:
+            return datetime.strptime(date_str[:10], "%Y-%m-%d")
+        except ValueError:
+            return None
+
+    async def fetch_account(
+        self,
+        username: str,
+        days: int = 7,
+        min_timestamp: str | None = None,
+    ) -> dict:
         """Fetch tweets from a single account.
 
         Args:
@@ -459,17 +479,29 @@ class XTracker:
             # Default: rsshub only
             tweets = await self._fetch_rsshub_feed(username, days)
 
-        # Filter to relevant tweets only
-        relevant = [t for t in tweets if t.get("signals")]
+        min_dt = self._parse_date_value(min_timestamp) if min_timestamp else None
+
+        filtered = []
+        for tweet in tweets:
+            tweet_dt = self._parse_date_value(tweet.get("date"))
+            if min_dt and tweet_dt and tweet_dt <= min_dt:
+                continue
+            filtered.append(tweet)
+
+        relevant = [t for t in filtered if t.get("signals")]
 
         return {
             "username": username,
-            "total_tweets": len(tweets),
+            "total_tweets": len(filtered),
             "relevant_tweets": relevant,
             "has_activity": len(relevant) > 0,
         }
 
-    async def fetch_all(self, days: int = 7) -> dict:
+    async def fetch_all(
+        self,
+        days: int = 7,
+        account_watermarks: dict[str, str] | None = None,
+    ) -> dict:
         """Fetch tweets from all configured accounts (concurrent with semaphore).
 
         Args:
@@ -491,11 +523,13 @@ class XTracker:
         # Fetch accounts concurrently with bounded parallelism
         failed_accounts = []
         if self.accounts:
-            sem = asyncio.Semaphore(20)
+            max_parallel = min(12, max(1, len(self.accounts)))
+            sem = asyncio.Semaphore(max_parallel)
 
             async def _bounded(acct):
                 async with sem:
-                    return await self.fetch_account(acct, days)
+                    min_ts = account_watermarks.get(acct) if account_watermarks else None
+                    return await self.fetch_account(acct, days, min_timestamp=min_ts)
 
             results_raw = await asyncio.gather(
                 *[_bounded(a) for a in self.accounts], return_exceptions=True

@@ -364,6 +364,37 @@ class TestGenerateWithData:
         assert "Scaling RLHF" in report
         assert "博客动态" in report
 
+    def test_report_contains_paperswithcode_section(
+        self,
+        generator,
+        sample_lab_activity,
+        sample_vendor_activity,
+    ):
+        """Papers with Code datasets render dedicated section."""
+        pwc_entries = [
+            {
+                "name": "RLHF Dataset Benchmark",
+                "description": "Human preference comparisons for chatbot alignment.",
+                "paper_count": 12,
+                "modalities": ["text"],
+                "created_at": "2024-06-01",
+                "url": "https://paperswithcode.com/dataset/rlhf-benchmark",
+            }
+        ]
+
+        report = generator.generate(
+            lab_activity=sample_lab_activity,
+            vendor_activity=sample_vendor_activity,
+            datasets_by_type={},
+            papers=[],
+            github_activity=[],
+            blog_activity=[],
+            pwc_datasets=pwc_entries,
+        )
+
+        assert "Papers with Code" in report
+        assert "RLHF Dataset Benchmark" in report
+
     def test_report_footer(self, generator, sample_lab_activity,
                            sample_vendor_activity, sample_datasets_by_type,
                            sample_papers):
@@ -482,3 +513,21 @@ class TestGenerateConsoleSummary:
         assert "scale-ai" in result
         assert "博客更新" in result
         assert "Scale AI" in result
+
+    def test_console_summary_mentions_pwc(self, generator, sample_lab_activity,
+                                          empty_vendor_activity, sample_datasets_by_type):
+        """Console summary should mention Papers with Code datasets when present."""
+        pwc = [
+            {
+                "name": "RLHF Benchmark",
+                "description": "RLHF dataset",
+                "paper_count": 3,
+            }
+        ]
+        result = generator.generate_console_summary(
+            lab_activity=sample_lab_activity,
+            vendor_activity=empty_vendor_activity,
+            datasets_by_type=sample_datasets_by_type,
+            pwc_datasets=pwc,
+        )
+        assert "Papers with Code" in result

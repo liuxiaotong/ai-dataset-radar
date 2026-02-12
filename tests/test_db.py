@@ -110,6 +110,48 @@ class TestRadarDatabase:
         assert history[0]["downloads"] == 1000
         assert history[0]["likes"] == 50
 
+    def test_get_datasets_by_ids(self, db):
+        """Test selecting datasets by a list of IDs."""
+        ds1 = db.upsert_dataset("huggingface", "hf/ds1", "ds1")
+        ds2 = db.upsert_dataset("huggingface", "hf/ds2", "ds2")
+
+        rows = db.get_datasets_by_ids([ds2])
+        assert len(rows) == 1
+        assert rows[0]["dataset_id"] == "hf/ds2"
+
+        rows = db.get_datasets_by_ids([ds1, ds2])
+        assert {r["dataset_id"] for r in rows} == {"hf/ds1", "hf/ds2"}
+
+    def test_bulk_upsert_datasets_with_stats(self, db):
+        """Test batch upsert of datasets and stats."""
+        datasets = [
+            {
+                "source": "huggingface",
+                "id": "org/ds1",
+                "name": "ds1",
+                "downloads": 100,
+                "likes": 5,
+            },
+            {
+                "source": "huggingface",
+                "id": "org/ds2",
+                "name": "ds2",
+                "downloads": 200,
+                "likes": 15,
+            },
+        ]
+
+        recorded_ids = db.bulk_upsert_datasets_with_stats(datasets)
+        assert len(recorded_ids) == 2
+
+        all_rows = db.get_all_datasets(source="huggingface")
+        assert len(all_rows) == 2
+
+        stats_counts = sum(
+            len(db.get_stats_history(row["id"], days=1)) for row in all_rows
+        )
+        assert stats_counts == 2
+
     def test_upsert_model(self, db):
         """Test inserting and updating a model."""
         db_id = db.upsert_model(

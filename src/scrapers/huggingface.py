@@ -45,7 +45,7 @@ class HuggingFaceScraper(BaseScraper):
         """
         return await self.fetch()
 
-    async def fetch(self) -> list[dict]:
+    async def fetch(self, min_timestamp: str | None = None, max_pages: int = 1) -> list[dict]:
         """Fetch latest datasets from Hugging Face Hub.
 
         Returns:
@@ -53,21 +53,41 @@ class HuggingFaceScraper(BaseScraper):
         """
         params = {
             "limit": self.limit,
-            "sort": "createdAt",
-            "direction": -1,  # Descending (newest first)
+            "sort": "lastModified",
+            "direction": -1,
             "full": "true",
         }
-
-        datasets = await self._http.get_json(self.BASE_URL, params=params)
-        if datasets is None:
-            logger.info("Error fetching Hugging Face datasets (no response)")
-            return []
+        min_dt = None
+        if min_timestamp:
+            try:
+                min_dt = datetime.fromisoformat(min_timestamp.replace("Z", "+00:00"))
+            except ValueError:
+                min_dt = None
 
         results = []
-        for ds in datasets:
-            result = self._parse_dataset(ds)
-            if result:
-                results.append(result)
+        for page in range(max_pages):
+            if page > 0:
+                params["offset"] = page * self.limit
+            datasets = await self._http.get_json(self.BASE_URL, params=params)
+            if not datasets:
+                break
+            stop = False
+            for ds in datasets:
+                parsed = self._parse_dataset(ds)
+                if not parsed:
+                    continue
+                last_modified = parsed.get("last_modified")
+                if min_dt and last_modified:
+                    try:
+                        lm_dt = datetime.fromisoformat(last_modified).replace(tzinfo=None)
+                        if lm_dt <= min_dt.replace(tzinfo=None):
+                            stop = True
+                            break
+                    except ValueError:
+                        pass
+                results.append(parsed)
+            if stop or len(datasets) < self.limit:
+                break
 
         return results
 

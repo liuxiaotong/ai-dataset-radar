@@ -198,6 +198,15 @@ class TestFetchAll:
         assert scores == sorted(scores, reverse=True)
 
     @pytest.mark.asyncio
+    async def test_respects_watermark(self, tracker, mock_http):
+        mock_http.get_json.return_value = SAMPLE_REDDIT_RESPONSE
+        result = await tracker.fetch_all(
+            days=365, source_watermarks={"MachineLearning": "2026-02-09"}
+        )
+        # All MachineLearning posts should be skipped, leaving only LocalLLaMA entries
+        assert all(post["subreddit"] == "LocalLLaMA" for post in result["posts"])
+
+    @pytest.mark.asyncio
     async def test_empty_subreddits(self, mock_http):
         tracker = RedditTracker({"reddit_tracker": {"subreddits": []}}, http_client=mock_http)
         result = await tracker.fetch_all(days=7)

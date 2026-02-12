@@ -273,8 +273,9 @@ class TestFetchRss:
         </rss>"""
         mock_http.get_text.return_value = rss_xml
 
-        articles, error = await tracker.fetch_rss("https://example.com/feed", days=7)
+        articles, error, success = await tracker.fetch_rss("https://example.com/feed", days=7)
         assert error is None
+        assert success is True
         assert len(articles) >= 1
         assert articles[0]["title"] == "New RLHF Dataset"
         assert "rlhf" in articles[0]["signals"]
@@ -288,9 +289,10 @@ class TestFetchRss:
         <rss version="2.0"><channel></channel></rss>"""
         mock_http.get_text.return_value = rss_xml
 
-        articles, error = await tracker.fetch_rss("https://example.com/feed")
+        articles, error, success = await tracker.fetch_rss("https://example.com/feed")
         assert articles == []
-        assert error == "No entries found in feed"
+        assert error is None
+        assert success is True
 
     async def test_rss_fetch_http_failure(self):
         """HTTP failure (None text) returns error."""
@@ -298,9 +300,10 @@ class TestFetchRss:
         tracker = BlogTracker({}, http_client=mock_http)
         mock_http.get_text.return_value = None
 
-        articles, error = await tracker.fetch_rss("https://example.com/feed")
+        articles, error, success = await tracker.fetch_rss("https://example.com/feed")
         assert articles == []
         assert "Failed to fetch" in error
+        assert success is False
 
     async def test_rss_fetch_exception(self):
         """Exception during fetch returns error."""
@@ -308,9 +311,10 @@ class TestFetchRss:
         tracker = BlogTracker({}, http_client=mock_http)
         mock_http.get_text.side_effect = Exception("Connection refused")
 
-        articles, error = await tracker.fetch_rss("https://example.com/feed")
+        articles, error, success = await tracker.fetch_rss("https://example.com/feed")
         assert articles == []
         assert "RSS parse error" in error
+        assert success is False
 
     async def test_rss_old_articles_filtered(self):
         """Articles older than the lookback window are excluded."""
@@ -331,8 +335,10 @@ class TestFetchRss:
         </rss>"""
         mock_http.get_text.return_value = rss_xml
 
-        articles, error = await tracker.fetch_rss("https://example.com/feed", days=7)
+        articles, error, success = await tracker.fetch_rss("https://example.com/feed", days=7)
         assert articles == []
+        assert error is None
+        assert success is True
 
 
 # ===========================================================================
@@ -380,6 +386,7 @@ class TestDiscoverRssFeed:
         """Falls back to parsing HTML <link rel='alternate'> tag."""
         mock_http = _make_http_mock()
         tracker = BlogTracker({}, http_client=mock_http)
+        tracker._cache = MagicMock(get=MagicMock(return_value=None), set=MagicMock())
 
         # All path probes fail
         mock_http.head.return_value = 404
@@ -397,6 +404,7 @@ class TestDiscoverRssFeed:
         """Returns None when no feed can be discovered."""
         mock_http = _make_http_mock()
         tracker = BlogTracker({}, http_client=mock_http)
+        tracker._cache = MagicMock(get=MagicMock(return_value=None), set=MagicMock())
 
         mock_http.head.return_value = 404
         mock_http.get_text.return_value = "<html><body>No feeds here</body></html>"
@@ -482,6 +490,31 @@ class TestFetchAllBlogs:
             all_articles.extend(r.get("articles", []))
         # Only one copy should survive dedup
         assert len(all_articles) == 1
+
+    async def test_fetch_all_respects_watermark(self):
+        """Blog articles older than stored watermark are filtered out."""
+        tracker = BlogTracker(
+            {"blogs": [{"name": "Test", "url": "https://example.com", "type": "rss"}]}
+        )
+        tracker.fetch_blog = AsyncMock(
+            return_value={
+                "source": "Test",
+                "articles": [
+                    {"title": "Old", "url": "https://example.com/old", "date": "2024-06-01"},
+                    {"title": "New", "url": "https://example.com/new", "date": "2024-06-10"},
+                ],
+                "total_articles": 2,
+                "has_activity": True,
+                "status": "success",
+            }
+        )
+
+        results = await tracker.fetch_all_blogs(
+            source_watermarks={"Test": "2024-06-05"}
+        )
+
+        assert len(results[0]["articles"]) == 1
+        assert results[0]["articles"][0]["title"] == "New"
 
     async def test_fetch_all_handles_individual_errors(self):
         """An exception in one blog does not prevent others from returning."""

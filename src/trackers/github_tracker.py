@@ -124,7 +124,20 @@ class GitHubTracker:
         """
         return await self._http.get_json(url, headers=self.headers, params=params)
 
-    async def get_org_repos(self, org_name: str, days: int = 7) -> list[dict]:
+    def _parse_timestamp(self, value: str | None) -> datetime | None:
+        if not value:
+            return None
+        try:
+            return datetime.fromisoformat(value.replace("Z", "+00:00")).replace(tzinfo=None)
+        except ValueError:
+            return None
+
+    async def get_org_repos(
+        self,
+        org_name: str,
+        days: int = 7,
+        min_timestamp: str | None = None,
+    ) -> list[dict]:
         """Get recently updated repos for an organization.
 
         Args:
@@ -142,13 +155,16 @@ class GitHubTracker:
             return []
 
         cutoff = datetime.now(timezone.utc).replace(tzinfo=None) - timedelta(days=days)
+        min_dt = self._parse_timestamp(min_timestamp)
         recent_repos = []
 
         for repo in data:
             updated_at = datetime.strptime(repo["updated_at"], "%Y-%m-%dT%H:%M:%SZ")
 
             if updated_at < cutoff:
-                continue
+                break
+            if min_dt and updated_at <= min_dt:
+                break
 
             repo_info = {
                 "name": repo["name"],
@@ -312,7 +328,12 @@ class GitHubTracker:
             return text[:5000]  # Limit length
         return None
 
-    async def get_org_activity(self, org_name: str, days: int = 7) -> dict:
+    async def get_org_activity(
+        self,
+        org_name: str,
+        days: int = 7,
+        min_timestamp: str | None = None,
+    ) -> dict:
         """Get complete activity summary for an organization.
 
         Args:
@@ -322,7 +343,7 @@ class GitHubTracker:
         Returns:
             Activity summary dict.
         """
-        repos = await self.get_org_repos(org_name, days)
+        repos = await self.get_org_repos(org_name, days, min_timestamp=min_timestamp)
 
         # Filter to repos with signals or high stars
         relevant_repos = [r for r in repos if r["signals"] or r["stars"] >= 100]
@@ -334,7 +355,12 @@ class GitHubTracker:
             "has_activity": len(relevant_repos) > 0,
         }
 
-    async def _fetch_orgs_parallel(self, orgs: list[str], days: int) -> list[dict]:
+    async def _fetch_orgs_parallel(
+        self,
+        orgs: list[str],
+        days: int,
+        org_watermarks: dict[str, str] | None = None,
+    ) -> list[dict]:
         """Fetch activity for a list of orgs concurrently.
 
         Args:
@@ -348,7 +374,10 @@ class GitHubTracker:
 
         async def _bounded(org):
             async with sem:
-                return await self.get_org_activity(org, days)
+                min_ts = None
+                if org_watermarks:
+                    min_ts = org_watermarks.get(org)
+                return await self.get_org_activity(org, days, min_timestamp=min_ts)
 
         results_raw = await asyncio.gather(
             *[_bounded(org) for org in orgs], return_exceptions=True
@@ -362,7 +391,11 @@ class GitHubTracker:
                 results.append(r)
         return results
 
-    async def fetch_vendor_activity(self, days: int = 7) -> list[dict]:
+    async def fetch_vendor_activity(
+        self,
+        days: int = 7,
+        org_watermarks: dict[str, str] | None = None,
+    ) -> list[dict]:
         """Fetch activity for all configured vendor organizations (concurrent).
 
         Args:
@@ -372,9 +405,15 @@ class GitHubTracker:
             List of org activity summaries.
         """
         logger.info("  Tracking %s vendor GitHub orgs...", len(self.vendor_orgs))
-        return await self._fetch_orgs_parallel(self.vendor_orgs, days)
+        return await self._fetch_orgs_parallel(
+            self.vendor_orgs, days, org_watermarks=org_watermarks
+        )
 
-    async def fetch_lab_activity(self, days: int = 7) -> list[dict]:
+    async def fetch_lab_activity(
+        self,
+        days: int = 7,
+        org_watermarks: dict[str, str] | None = None,
+    ) -> list[dict]:
         """Fetch activity for all configured AI lab organizations (concurrent).
 
         Args:
@@ -384,9 +423,15 @@ class GitHubTracker:
             List of org activity summaries.
         """
         logger.info("  Tracking %s lab GitHub orgs...", len(self.lab_orgs))
-        return await self._fetch_orgs_parallel(self.lab_orgs, days)
+        return await self._fetch_orgs_parallel(
+            self.lab_orgs, days, org_watermarks=org_watermarks
+        )
 
-    async def fetch_all_orgs(self, days: int = 7) -> dict:
+    async def fetch_all_orgs(
+        self,
+        days: int = 7,
+        org_watermarks: dict[str, str] | None = None,
+    ) -> dict:
         """Fetch activity for all configured organizations (concurrent).
 
         All org categories are fetched concurrently.
@@ -400,7 +445,9 @@ class GitHubTracker:
         all_orgs = list(set(self.vendor_orgs + self.lab_orgs))
         logger.info("  Tracking %s total GitHub orgs...", len(all_orgs))
 
-        all_results = await self._fetch_orgs_parallel(all_orgs, days)
+        all_results = await self._fetch_orgs_parallel(
+            all_orgs, days, org_watermarks=org_watermarks
+        )
 
         # Split back into vendor vs lab
         vendor_set = set(self.vendor_orgs)

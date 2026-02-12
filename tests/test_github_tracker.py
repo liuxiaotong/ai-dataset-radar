@@ -312,16 +312,6 @@ class TestGetOrgRepos:
         tracker._make_request = AsyncMock(
             return_value=[
                 {
-                    "name": "old-repo",
-                    "full_name": "org/old-repo",
-                    "description": "old",
-                    "html_url": "https://github.com/org/old-repo",
-                    "updated_at": old_date,
-                    "stargazers_count": 10,
-                    "language": "Python",
-                    "topics": [],
-                },
-                {
                     "name": "new-repo",
                     "full_name": "org/new-repo",
                     "description": "dataset tool",
@@ -330,6 +320,16 @@ class TestGetOrgRepos:
                     "stargazers_count": 100,
                     "language": "Python",
                     "topics": ["dataset"],
+                },
+                {
+                    "name": "old-repo",
+                    "full_name": "org/old-repo",
+                    "description": "old",
+                    "html_url": "https://github.com/org/old-repo",
+                    "updated_at": old_date,
+                    "stargazers_count": 10,
+                    "language": "Python",
+                    "topics": [],
                 },
             ]
         )

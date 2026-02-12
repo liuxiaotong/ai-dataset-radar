@@ -7,6 +7,8 @@ Monitors company blogs for:
 
 import asyncio
 import re
+import atexit
+from concurrent.futures import ThreadPoolExecutor
 from datetime import datetime, timedelta, timezone
 from typing import Optional
 from urllib.parse import urljoin, urlparse, urlunparse, parse_qs, urlencode
@@ -15,9 +17,14 @@ import feedparser
 from bs4 import BeautifulSoup
 
 from utils.async_http import AsyncHTTPClient
+from utils.cache import get_cache
 from utils.logging_config import get_logger
 
 logger = get_logger("blog_tracker")
+
+
+_FEED_PARSER_EXECUTOR = ThreadPoolExecutor(max_workers=4)
+atexit.register(_FEED_PARSER_EXECUTOR.shutdown, wait=False)
 
 
 # Signal keywords for detecting relevant articles
@@ -139,6 +146,9 @@ class BlogTracker:
             },
         )
         self._rss_cache = {}  # Cache: base_url -> discovered feed URL (or None)
+        self._cache = get_cache(ttl=86400 * 7)
+        self._feed_executor = _FEED_PARSER_EXECUTOR
+        self._inactivity = {}
 
     async def _discover_rss_feed(self, base_url: str) -> Optional[str]:
         """Try to discover RSS feed URL for a blog (parallelized, cached).
@@ -151,9 +161,17 @@ class BlogTracker:
         Returns:
             RSS feed URL if found, None otherwise.
         """
-        # Return cached result if available
+        cache_key = f"blog:rss:{base_url}"
+
+        # Return cached result if available (memory first, then disk cache)
         if base_url in self._rss_cache:
             return self._rss_cache[base_url]
+
+        cached_value = self._cache.get(cache_key)
+        if cached_value is not None:
+            cached_url = cached_value or None
+            self._rss_cache[base_url] = cached_url
+            return cached_url
 
         parsed = urlparse(base_url)
         base = f"{parsed.scheme}://{parsed.netloc}"
@@ -177,14 +195,28 @@ class BlogTracker:
                 pass
             return None
 
-        # Probe all RSS paths concurrently
-        tasks = [_probe_path(p) for p in RSS_PATHS]
-        results = await asyncio.gather(*tasks, return_exceptions=True)
+        # Probe all RSS paths concurrently (short-circuit on first success)
+        tasks = [asyncio.create_task(_probe_path(p)) for p in RSS_PATHS]
+        feed_url = None
 
-        for result in results:
-            if isinstance(result, str) and result:
-                self._rss_cache[base_url] = result
-                return result
+        try:
+            for coro in asyncio.as_completed(tasks):
+                try:
+                    result = await coro
+                except Exception:
+                    result = None
+                if isinstance(result, str) and result:
+                    feed_url = result
+                    break
+        finally:
+            for task in tasks:
+                if not task.done():
+                    task.cancel()
+
+        if feed_url:
+            self._rss_cache[base_url] = feed_url
+            self._cache.set(cache_key, feed_url)
+            return feed_url
 
         # Try to find feed link in HTML
         try:
@@ -199,14 +231,16 @@ class BlogTracker:
                             if not href.startswith("http"):
                                 href = urljoin(base_url, href)
                             self._rss_cache[base_url] = href
+                            self._cache.set(cache_key, href)
                             return href
         except (OSError, asyncio.TimeoutError) as e:
             logger.debug("Failed to fetch HTML for feed discovery %s: %s", base_url, e)
 
         self._rss_cache[base_url] = None
+        self._cache.set(cache_key, "")
         return None
 
-    async def fetch_rss(self, url: str, days: int = 7) -> tuple[list[dict], Optional[str]]:
+    async def fetch_rss(self, url: str, days: int = 7) -> tuple[list[dict], Optional[str], bool]:
         """Parse RSS feed and extract recent articles.
 
         Args:
@@ -214,24 +248,23 @@ class BlogTracker:
             days: Look back period in days.
 
         Returns:
-            Tuple of (articles list, error message or None).
+            Tuple of (articles list, error message or None, succeeded flag).
         """
+        success = False
         try:
             text = await self._http.get_text(url, max_retries=2)
             if not text:
-                return [], "Failed to fetch RSS feed"
+                return [], "Failed to fetch RSS feed", False
             loop = asyncio.get_running_loop()
-            feed = await loop.run_in_executor(None, feedparser.parse, text)
+            feed = await loop.run_in_executor(self._feed_executor, feedparser.parse, text)
+            success = True
         except Exception as e:
-            return [], f"RSS parse error: {e}"
+            return [], f"RSS parse error: {e}", False
 
         if feed.bozo and feed.bozo_exception:
             # Check if we got any entries despite the error
             if not feed.entries:
-                return [], f"Feed error: {feed.bozo_exception}"
-
-        if not feed.entries:
-            return [], "No entries found in feed"
+                return [], f"Feed error: {feed.bozo_exception}", success
 
         cutoff = datetime.now(timezone.utc).replace(tzinfo=None) - timedelta(days=days)
         articles = []
@@ -280,7 +313,7 @@ class BlogTracker:
             article["signals"] = self._extract_signals(article)
             articles.append(article)
 
-        return articles, None
+        return articles, None, success
 
     def _validate_summary(self, summary: str, title: str) -> str:
         """Validate and clean summary text."""
@@ -754,30 +787,46 @@ class BlogTracker:
 
         articles = []
         error = None
+        rss_no_recent = False
 
         # Strategy 1: Use explicit RSS URL if provided
         if rss_url:
-            articles, error = await self.fetch_rss(rss_url, days)
+            articles, error, rss_ok = await self.fetch_rss(rss_url, days)
             if articles:
                 result["feed_url"] = rss_url
+            elif rss_ok and error is None:
+                rss_no_recent = True
 
         # Strategy 2: Try to discover RSS feed
         if not articles and blog_type in ("auto", "rss"):
             discovered_feed = await self._discover_rss_feed(url)
             if discovered_feed:
-                articles, error = await self.fetch_rss(discovered_feed, days)
+                articles, error, rss_ok = await self.fetch_rss(discovered_feed, days)
                 if articles:
                     result["feed_url"] = discovered_feed
+                elif rss_ok and error is None:
+                    rss_no_recent = True
 
         # Strategy 3: Try direct RSS URL patterns
         if not articles and blog_type in ("auto", "rss"):
             for rss_path in ["/feed", "/feed.xml", "/rss.xml", "/atom.xml"]:
                 parsed = urlparse(url)
                 test_url = f"{parsed.scheme}://{parsed.netloc}{rss_path}"
-                articles, error = await self.fetch_rss(test_url, days)
+                articles, error, rss_ok = await self.fetch_rss(test_url, days)
                 if articles:
                     result["feed_url"] = test_url
                     break
+                if rss_ok and error is None:
+                    rss_no_recent = True
+
+        # If RSS succeeded but no entries are within the time window, stop here to avoid heavy fallbacks
+        if not articles and rss_no_recent:
+            result["total_articles"] = 0
+            result["articles"] = []
+            result["has_activity"] = False
+            result["status"] = "success"
+            result["error"] = None
+            return result
 
         # Strategy 4: Fall back to HTML scraping
         if not articles and blog_type in ("auto", "scrape"):
@@ -799,12 +848,26 @@ class BlogTracker:
             result["status"] = "success"
             result["error"] = None
         else:
-            result["status"] = "scrape_failed"
-            result["error"] = error or "No articles found"
+            if error:
+                result["status"] = "scrape_failed"
+                result["error"] = error
+            else:
+                result["status"] = "success"
+                result["error"] = None
 
         return result
 
-    async def fetch_all_blogs(self, days: int = 7) -> list[dict]:
+    def _parse_date_value(self, date_str: str | None) -> datetime | None:
+        if not date_str:
+            return None
+        try:
+            return datetime.strptime(date_str[:10], "%Y-%m-%d")
+        except ValueError:
+            return None
+
+    async def fetch_all_blogs(
+        self, days: int = 7, source_watermarks: dict[str, str] | None = None
+    ) -> list[dict]:
         """Fetch articles from all configured blogs (parallelized).
 
         Uses asyncio.gather for concurrent fetching.
@@ -832,6 +895,18 @@ class BlogTracker:
             sem = asyncio.Semaphore(25)
 
             async def _bounded(cfg):
+                inactivity = self._inactivity.get(cfg.get("name"), 0)
+                max_inactive = cfg.get("max_inactive", 5)
+                if inactivity >= max_inactive:
+                    logger.info(
+                        "Skipping %s (inactive %d runs)", cfg.get("name"), inactivity
+                    )
+                    return {
+                        "source": cfg.get("name"),
+                        "articles": [],
+                        "status": "skipped",
+                        "has_activity": False,
+                    }
                 async with sem:
                     return await self.fetch_blog(cfg, days)
 
@@ -866,6 +941,21 @@ class BlogTracker:
             if shared_browser:
                 try:
                     for i, cfg in enumerate(browser_blogs):
+                        inactivity = self._inactivity.get(cfg.get("name"), 0)
+                        max_inactive = cfg.get("max_inactive", 5)
+                        if inactivity >= max_inactive:
+                            logger.info(
+                                "Skipping %s (inactive %d runs)", cfg.get("name"), inactivity
+                            )
+                            results.append(
+                                {
+                                    "source": cfg.get("name"),
+                                    "articles": [],
+                                    "status": "skipped",
+                                    "has_activity": False,
+                                }
+                            )
+                            continue
                         try:
                             results.append(
                                 await self.fetch_blog(cfg, days, browser=shared_browser)
@@ -913,9 +1003,26 @@ class BlogTracker:
                     seen_urls.add(normalized_url)
                     unique_articles.append(article)
 
-            activity["articles"] = unique_articles
-            if unique_articles:
+            min_ts = None
+            if source_watermarks:
+                min_ts = self._parse_date_value(source_watermarks.get(activity.get("source")))
+
+            filtered_articles = []
+            for article in unique_articles:
+                article_dt = self._parse_date_value(article.get("date"))
+                if min_ts and article_dt and article_dt <= min_ts:
+                    continue
+                filtered_articles.append(article)
+
+            activity["articles"] = filtered_articles
+            if filtered_articles:
                 activity["has_activity"] = True
+                self._inactivity[activity.get("source")] = 0
+            else:
+                activity["has_activity"] = False
+                src = activity.get("source")
+                if src:
+                    self._inactivity[src] = self._inactivity.get(src, 0) + 1
             results.append(activity)
 
         return results

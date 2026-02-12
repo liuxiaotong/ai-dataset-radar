@@ -49,19 +49,30 @@ class CompetitorMatrix:
         github_activity = github_activity or []
         papers = papers or []
         blog_posts = blog_posts or []
-
         matrix: dict[str, dict[str, int]] = defaultdict(lambda: defaultdict(int))
         org_details: dict[str, dict[str, int]] = defaultdict(
             lambda: {"datasets": 0, "repos": 0, "papers": 0, "blogs": 0}
         )
+        classification_cache: dict[str, str] = {}
+
+        def _primary_type(dataset: dict) -> str:
+            ds_id = dataset.get("id")
+            if ds_id and ds_id in classification_cache:
+                return classification_cache[ds_id]
+
+            types = self._classifier.classify(dataset)
+            primary = types[0].value if types else "other"
+            if ds_id:
+                classification_cache[ds_id] = primary
+                dataset.setdefault("_primary_type", primary)
+            return primary
 
         # --- Datasets ---
         for ds in datasets:
             org = self._detect_org(ds)
             if not org:
                 continue
-            types = self._classifier.classify(ds)
-            primary = types[0].value if types else "other"
+            primary = _primary_type(ds)
             matrix[org][primary] += 1
             org_details[org]["datasets"] += 1
 

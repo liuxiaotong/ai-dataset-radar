@@ -11,7 +11,7 @@
 [![Python 3.10+](https://img.shields.io/badge/python-3.10+-blue.svg)](https://www.python.org/downloads/)
 [![License: MIT](https://img.shields.io/badge/License-MIT-green.svg)](LICENSE)
 <br/>
-[![Tests](https://img.shields.io/badge/tests-919_passed-brightgreen.svg)](#开发路线)
+[![Tests](https://img.shields.io/badge/tests-933_passed-brightgreen.svg)](#开发路线)
 [![Agent Ready](https://img.shields.io/badge/Agent-Ready-orange.svg)](docs/agent-integration.md)
 [![MCP](https://img.shields.io/badge/MCP-17_Tools-purple.svg)](docs/mcp.md)
 
@@ -19,8 +19,8 @@
 
 </div>
 
-> 🎯 **全源覆盖** 86 HF orgs · 50 GitHub orgs · 71 博客 · 125 X 账户 · 5 Reddit 社区
-> ⚡ **高性能异步** aiohttp 全链路并发，500+ 请求同时执行
+> 🎯 **全源覆盖** 86 HF orgs · 50 GitHub orgs · 71 博客 · 125 X 账户 · 5 Reddit · Papers with Code
+> ⚡ **高性能异步** aiohttp 全链路并发，500+ 请求同时执行，组织级水位线增量扫描
 > 🤖 **智能体原生** MCP 17 工具 + REST API 19 端点 + Skills 7 命令
 > 📊 **竞品分析** 竞品矩阵 · 数据集谱系 · 组织关系图谱三维交叉分析
 > 🔔 **异常告警** 7 条规则自动检测，Email + Webhook 推送
@@ -30,10 +30,11 @@
 
 ```mermaid
 flowchart TD
-    subgraph S[" 6 数据源"]
+    subgraph S[" 7 数据源"]
         direction LR
         S1["HuggingFace 86 orgs"] ~~~ S2["GitHub 50 orgs"] ~~~ S3["博客 71 源"]
         S4["论文 arXiv+HF"] ~~~ S5["X 125 账户"] ~~~ S6["Reddit 5 社区"]
+        S7["Papers with Code"]
     end
 
     S --> T["Trackers — aiohttp 异步并发采集"]
@@ -169,7 +170,7 @@ python agent/api.py
 |------|------|------|----------|
 | `/scan` | 运行扫描 + 自动生成 AI 分析报告 | 采集 | 是 |
 | `/brief` | 快速情报简报（5 条发现 + 行动建议） | 阅读 | 否 |
-| `/search 关键词` | 跨 6 源搜索（数据集/GitHub/论文/博客/X/Reddit） | 查询 | 否 |
+| `/search 关键词` | 跨 7 源搜索（数据集/GitHub/论文/博客/X/Reddit/PwC） | 查询 | 否 |
 | `/diff` | 对比两次报告（新增/消失/变化） | 对比 | 否 |
 | `/deep-dive 目标` | 组织/数据集/分类深度分析 | 分析 | 否 |
 | `/recipe 数据集ID` | DataRecipe 逆向分析（成本/Schema/难度） | 深潜 | 是 |
@@ -202,6 +203,7 @@ python agent/api.py
 | **博客** | 71 源 | 实验室 + 研究者 + 独立博客 + 数据供应商 |
 | **GitHub** | 50 orgs | AI Labs + 中国开源 + 机器人 + 数据供应商 |
 | **论文** | 2 源 | arXiv (cs.CL/AI/LG/CV/RO) + HF Papers |
+| **Papers with Code** | API | 数据集/榜单追踪，论文引用关系 |
 | **X/Twitter** | 125 账户 | 13 类别，CEO/Leaders + 研究者 + 机器人 |
 | **Reddit** | 5 社区 | MachineLearning、LocalLLaMA、dataset、deeplearning、LanguageTechnology |
 
@@ -260,8 +262,8 @@ graph LR
 | 能力 | 说明 | 解锁场景 |
 |------|------|----------|
 | ~~**异常检测与告警**~~ | ✅ 7 条规则 × 4 类别，指纹去重，Email/Webhook 分发 | 从"手动查看"变为"主动通知"，情报系统的本质闭环 |
-| ~~**增量扫描**~~ | ✅ 水位线驱动智能窗口，后续扫描仅处理新增数据 | 扫描频率从日级提升至小时级，API 调用量降一个量级 |
-| **时序持久化** | 每日快照写入 SQLite，支持跨月趋势查询 | 长周期趋势分析、季度报告、组织活跃度变化曲线 |
+| ~~**增量扫描**~~ | ✅ 组织级水位线驱动，每源每 org 独立增量窗口 | 扫描频率从日级提升至小时级，API 调用量降一个量级 |
+| ~~**时序持久化**~~ | ✅ 批量 upsert + 作用域趋势计算，SQLite 每日快照 | 长周期趋势分析、季度报告、组织活跃度变化曲线 |
 | **推送分发** | 周报/日报自动推送到 Slack、飞书、邮件、Webhook | 团队被动消费情报，无需主动登录查看 |
 | **交互式图谱** | D3.js force-directed 组织关系图 + Sankey 谱系图 | 可视化发现隐藏的组织协作模式和数据集派生链 |
 | **自定义监控规则** | 用户自建关键词/组织/阈值过滤器，YAML 或 Web UI 配置 | 不同团队关注不同赛道，无需改代码 |
@@ -275,7 +277,7 @@ graph LR
 pip install -r requirements.txt && playwright install chromium
 cp .env.example .env
 
-# 运行测试 (919 个用例)
+# 运行测试 (933 个用例)
 pytest
 
 # 代码格式化 + lint
@@ -283,7 +285,7 @@ ruff check src/
 ruff format src/
 ```
 
-**测试覆盖**: 34 个测试文件，919 个测试用例。
+**测试覆盖**: 34 个测试文件，933 个测试用例。
 
 **CI**: GitHub Actions，Tag push 自动发布。定时任务 (`daily.yml`) 支持每日自动扫描。
 
