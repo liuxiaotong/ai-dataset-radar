@@ -1212,6 +1212,15 @@ sources:
     enabled: true
     limit: 30
 
+  # Semantic Scholar - 高影响力论文追踪
+  semantic_scholar:
+    enabled: true
+    keywords:
+      - "dataset benchmark machine learning"
+      - "training data large language model"
+      - "dataset corpus NLP"
+      - "benchmark evaluation AI"
+
 # GitHub 组织监控
 github:
   token: ${GITHUB_TOKEN}
@@ -1544,6 +1553,35 @@ hn_tracker:
     - "synthetic data"
     - "LLM fine-tuning"
     - "open source model"
+
+# =============================================================================
+# GitHub Trending 追踪 | GitHub Trending Tracker
+# =============================================================================
+
+github_trending:
+  enabled: true
+  languages:
+    - python
+    - jupyter-notebook
+    - ""
+  since: weekly
+  min_stars: 10
+
+# =============================================================================
+# Product Hunt AI 产品追踪 | Product Hunt Tracker
+# =============================================================================
+
+producthunt_tracker:
+  enabled: true
+  search_keywords:
+    - "dataset"
+    - "llm"
+    - "ai"
+    - "machine learning"
+    - "nlp"
+    - "synthetic data"
+    - "rag"
+    - "agent"
 
 # =============================================================================
 # 通知配置 | Notifications

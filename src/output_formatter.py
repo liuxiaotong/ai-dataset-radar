@@ -157,6 +157,9 @@ class DualOutputFormatter:
                     for a in x_activity.get("accounts", [])
                 ),
                 "total_trending_datasets": len(trend_data.get("top_growing_7d", [])),
+                "semantic_scholar_count": len(data.get("semantic_scholar_papers") or []),
+                "gh_trending_count": len((data.get("gh_trending") or {}).get("repos", [])),
+                "producthunt_count": len((data.get("producthunt") or {}).get("products", [])),
             },
             "labs_activity": cleaned_labs,
             "vendor_activity": cleaned_vendor,
@@ -171,6 +174,9 @@ class DualOutputFormatter:
             "huggingface_general": hf_general,
             "hn_activity": data.get("hn_activity"),
             "kaggle_datasets": data.get("kaggle_datasets"),
+            "semantic_scholar_papers": data.get("semantic_scholar_papers"),
+            "gh_trending": data.get("gh_trending"),
+            "producthunt": data.get("producthunt"),
         }
 
     def _count_github_stats(self, github_activity: list) -> dict:

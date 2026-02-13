@@ -319,18 +319,13 @@ class TestSemanticScholarScraper:
     @pytest.fixture
     def scraper(self):
         """Create a SemanticScholarScraper instance."""
-        return SemanticScholarScraper(
-            limit=10,
-            months_back=6,
-            min_citations=10,
-            min_monthly_growth=5,
-        )
+        return SemanticScholarScraper(limit=10)
 
     def test_init(self, scraper):
         """Test initialization."""
         assert scraper.limit == 10
-        assert scraper.months_back == 6
-        assert scraper.min_citations == 10
+        assert scraper.name == "semantic_scholar"
+        assert scraper.source_type == "paper"
 
     def test_parse_paper(self, scraper):
         """Test paper parsing."""
@@ -345,7 +340,6 @@ class TestSemanticScholarScraper:
             "externalIds": {"ArXiv": "2401.12345"},
             "url": "https://example.com",
             "venue": "NeurIPS",
-            "fieldsOfStudy": ["Computer Science"],
         }
 
         paper = scraper._parse_paper(item)
@@ -356,45 +350,26 @@ class TestSemanticScholarScraper:
         assert paper["arxiv_id"] == "2401.12345"
         assert len(paper["authors"]) == 2
 
-    def test_filter_by_impact(self, scraper):
-        """Test filtering by impact."""
-        papers = [
-            {"citation_count": 100, "citation_monthly_growth": 3},  # Pass by citations
-            {"citation_count": 5, "citation_monthly_growth": 10},  # Pass by growth
-            {"citation_count": 3, "citation_monthly_growth": 2},  # Fail both
-        ]
+    def test_parse_paper_empty(self, scraper):
+        """Test parsing empty paper returns None."""
+        assert scraper._parse_paper({}) is None
 
-        filtered = scraper._filter_by_impact(papers)
-        assert len(filtered) == 2
-
-    def test_extract_dataset_info(self, scraper):
-        """Test dataset info extraction from paper."""
-        paper = {
-            "id": "abc123",
-            "title": "MMLU: A Benchmark for Multitask Learning",
-            "abstract": "We introduce MMLU, a new dataset for evaluating...",
-            "citation_count": 500,
-            "citation_monthly_growth": 25.0,
-            "authors": ["Author 1"],
-            "year": 2023,
+    def test_parse_paper_no_url(self, scraper):
+        """Test paper without URL gets semantic scholar URL."""
+        item = {
+            "paperId": "abc123",
+            "title": "Test",
+            "url": None,
         }
+        paper = scraper._parse_paper(item)
+        assert "semanticscholar.org" in paper["url"]
 
-        dataset_info = scraper.extract_dataset_info(paper)
-
-        assert dataset_info is not None
-        assert dataset_info["dataset_name"] == "MMLU"
-        assert dataset_info["citation_count"] == 500
-
-    def test_extract_dataset_info_no_match(self, scraper):
-        """Test dataset extraction when paper isn't about datasets."""
-        paper = {
-            "id": "abc123",
-            "title": "A New Method for Image Classification",
-            "abstract": "We propose a novel neural network architecture...",
-        }
-
-        dataset_info = scraper.extract_dataset_info(paper)
-        assert dataset_info is None
+    def test_enabled_from_config(self):
+        """Test enabled flag from config."""
+        s = SemanticScholarScraper(
+            config={"sources": {"semantic_scholar": {"enabled": False}}},
+        )
+        assert s.enabled is False
 
 
 class TestPwCSOTAScraper:

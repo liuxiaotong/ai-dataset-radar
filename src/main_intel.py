@@ -36,6 +36,8 @@ from trackers.blog_tracker import BlogTracker
 from trackers.x_tracker import XTracker
 from trackers.reddit_tracker import RedditTracker
 from trackers.hn_tracker import HNTracker
+from trackers.github_trending_tracker import GitHubTrendingTracker
+from trackers.producthunt_tracker import ProductHuntTracker
 from analyzers.data_type_classifier import DataTypeClassifier, DataType
 from analyzers.paper_filter import PaperFilter
 from analyzers.competitor_matrix import CompetitorMatrix
@@ -130,6 +132,9 @@ def format_insights_prompt(
     pwc_datasets: list = None,
     hn_activity: dict = None,
     kaggle_datasets: list = None,
+    semantic_scholar_papers: list = None,
+    gh_trending: dict = None,
+    producthunt: dict = None,
 ) -> str:
     """Format data with analysis prompt for LLM consumption.
 
@@ -538,6 +543,74 @@ def format_insights_prompt(
         lines.append("")
     else:
         lines.append("无 Kaggle 数据集动态\n")
+
+    # ── Section 5.10: Semantic Scholar ──
+    lines.append("## 5.10、Semantic Scholar 高影响力论文\n")
+    ss_items = (semantic_scholar_papers or [])[:20]
+    if ss_items:
+        for p in ss_items:
+            title = p.get("title", "")[:150]
+            url = p.get("url", "")
+            citations = p.get("citation_count", 0)
+            venue = p.get("venue", "")
+            year = p.get("year", "")
+            authors = ", ".join(p.get("authors", [])[:3])
+            meta = []
+            if citations:
+                meta.append(f"引用 {citations}")
+            if venue:
+                meta.append(venue)
+            if year:
+                meta.append(str(year))
+            title_str = f"[{title}]({url})" if url else title
+            lines.append(f"- **{title_str}** ({'; '.join(meta)})")
+            if authors:
+                lines.append(f"  作者: {authors}")
+        lines.append("")
+    else:
+        lines.append("无 Semantic Scholar 数据\n")
+
+    # ── Section 5.11: GitHub Trending ──
+    lines.append("## 5.11、GitHub Trending\n")
+    gh_repos = (gh_trending or {}).get("repos", [])
+    if gh_repos:
+        for repo in gh_repos[:20]:
+            name = repo.get("name", "")
+            author = repo.get("author", "")
+            url = repo.get("url", "")
+            stars = repo.get("stars", 0)
+            period_stars = repo.get("currentPeriodStars", 0)
+            desc = (repo.get("description") or "")[:200]
+            signals = repo.get("signals", [])
+            title_str = f"[{author}/{name}]({url})" if url else f"{author}/{name}"
+            lines.append(f"- **{title_str}** (★{stars}, +{period_stars}/周)")
+            if desc:
+                lines.append(f"  {desc}")
+            if signals:
+                lines.append(f"  信号: {', '.join(signals[:5])}")
+        lines.append("")
+    else:
+        lines.append("无 GitHub Trending 数据\n")
+
+    # ── Section 5.12: Product Hunt ──
+    lines.append("## 5.12、Product Hunt AI 产品\n")
+    ph_products = (producthunt or {}).get("products", [])
+    if ph_products:
+        for prod in ph_products[:15]:
+            title = prod.get("title", "")
+            url = prod.get("url", "")
+            date = prod.get("date", "")
+            tagline = prod.get("tagline", "")[:200]
+            signals = prod.get("signals", [])
+            title_str = f"[{title}]({url})" if url else title
+            lines.append(f"- [{date}] **{title_str}**")
+            if tagline:
+                lines.append(f"  {tagline}")
+            if signals:
+                lines.append(f"  信号: {', '.join(signals[:5])}")
+        lines.append("")
+    else:
+        lines.append("无 Product Hunt 数据\n")
 
     # ── Section 6: Papers (full titles, longer abstracts) ──
     lines.append("## 六、相关论文\n")
@@ -1285,6 +1358,36 @@ def _update_watermarks(watermarks, all_data: dict) -> None:
     if ts:
         watermarks.set("kaggle", ts)
 
+    # Semantic Scholar: max(paper["publication_date"])
+    ss_timestamps = []
+    for p in all_data.get("semantic_scholar_papers", []) or []:
+        norm = _normalize_ts(p.get("publication_date"))
+        if norm:
+            ss_timestamps.append(norm)
+    ts = _max_ts(ss_timestamps)
+    if ts:
+        watermarks.set("semantic_scholar", ts)
+
+    # GitHub Trending: max(repo["date"])
+    ght_timestamps = []
+    for repo in (all_data.get("gh_trending") or {}).get("repos", []) or []:
+        norm = _normalize_ts(repo.get("date"))
+        if norm:
+            ght_timestamps.append(norm)
+    ts = _max_ts(ght_timestamps)
+    if ts:
+        watermarks.set("gh_trending", ts)
+
+    # Product Hunt: max(product["date"])
+    ph_timestamps = []
+    for prod in (all_data.get("producthunt") or {}).get("products", []) or []:
+        norm = _normalize_ts(prod.get("date"))
+        if norm:
+            ph_timestamps.append(norm)
+    ts = _max_ts(ph_timestamps)
+    if ts:
+        watermarks.set("producthunt", ts)
+
     # update cooldown metadata
     cooldowns = _load_org_watermarks(watermarks.get("_cooldowns"))
     cooldowns.update(all_data.get("cooldowns", {}))
@@ -1500,6 +1603,22 @@ async def async_main(args):
             if not args.no_kaggle and config.get("sources", {}).get("kaggle", {}).get("enabled", False)
             else None
         )
+        from scrapers.semantic_scholar import SemanticScholarScraper
+        ss_scraper = (
+            SemanticScholarScraper(config=config, http_client=http_client)
+            if not args.no_semantic_scholar and config.get("sources", {}).get("semantic_scholar", {}).get("enabled", False)
+            else None
+        )
+        gh_trending_tracker = (
+            GitHubTrendingTracker(config, http_client=http_client)
+            if not args.no_gh_trending and config.get("github_trending", {}).get("enabled", False)
+            else None
+        )
+        ph_tracker = (
+            ProductHuntTracker(config, http_client=http_client)
+            if not args.no_producthunt and config.get("producthunt_tracker", {}).get("enabled", False)
+            else None
+        )
         data_classifier = DataTypeClassifier(config)
         paper_filter = PaperFilter(config)
         report_generator = IntelReportGenerator(config)
@@ -1557,6 +1676,9 @@ async def async_main(args):
         reddit_activity = {"posts": [], "metadata": {}}
         hn_activity = {"stories": [], "metadata": {}}
         kaggle_datasets = []
+        semantic_scholar_papers = []
+        gh_trending = {"repos": [], "metadata": {}}
+        producthunt = {"products": [], "metadata": {}}
         papers = []
         pwc_datasets = []
 
@@ -1582,6 +1704,8 @@ async def async_main(args):
         x_account_watermarks = _load_org_watermarks(watermarks.get("x_accounts"))
         reddit_source_watermarks = _load_org_watermarks(watermarks.get("reddit_sources"))
         hn_source_watermarks = _load_org_watermarks(watermarks.get("hn_sources"))
+        gh_trending_watermarks = _load_org_watermarks(watermarks.get("gh_trending_sources"))
+        ph_source_watermarks = _load_org_watermarks(watermarks.get("producthunt_sources"))
 
         # Calculate total progress steps
         _n = 0
@@ -1600,6 +1724,12 @@ async def async_main(args):
         if hn_tracker:
             _n += 1
         if kaggle_scraper:
+            _n += 1
+        if ss_scraper:
+            _n += 1
+        if gh_trending_tracker:
+            _n += 1
+        if ph_tracker:
             _n += 1
         if arxiv_scraper or hf_papers_scraper:
             _n += 1
@@ -1654,6 +1784,22 @@ async def async_main(args):
         if kaggle_scraper:
             logger.info(_progress("Kaggle 数据集..."))
             tasks["kaggle"] = kaggle_scraper.fetch(days=_days("kaggle"))
+
+        if ss_scraper:
+            logger.info(_progress("Semantic Scholar 论文..."))
+            tasks["semantic_scholar"] = ss_scraper.fetch(days=_days("semantic_scholar"))
+
+        if gh_trending_tracker:
+            logger.info(_progress("GitHub Trending..."))
+            tasks["gh_trending"] = gh_trending_tracker.fetch_all(
+                days=_days("gh_trending"), source_watermarks=gh_trending_watermarks
+            )
+
+        if ph_tracker:
+            logger.info(_progress("Product Hunt..."))
+            tasks["producthunt"] = ph_tracker.fetch_all(
+                days=_days("producthunt"), source_watermarks=ph_source_watermarks
+            )
 
         if arxiv_scraper:
             if not hf_papers_scraper:
@@ -1746,6 +1892,15 @@ async def async_main(args):
                     elif key == "kaggle":
                         kaggle_datasets = result or []
                         logger.info("  ✓ Kaggle: %d 数据集", len(kaggle_datasets))
+                    elif key == "semantic_scholar":
+                        semantic_scholar_papers = result or []
+                        logger.info("  ✓ Semantic Scholar: %d 论文", len(semantic_scholar_papers))
+                    elif key == "gh_trending":
+                        gh_trending = result
+                        logger.info("  ✓ GitHub Trending: %d 仓库", len(result.get("repos", [])))
+                    elif key == "producthunt":
+                        producthunt = result
+                        logger.info("  ✓ Product Hunt: %d 产品", len(result.get("products", [])))
                     elif key == "arxiv":
                         papers.extend(paper_filter.filter_papers(result))
                     elif key == "hf_papers":
@@ -1917,6 +2072,9 @@ async def async_main(args):
             "reddit_activity": reddit_activity,
             "hn_activity": hn_activity,
             "kaggle_datasets": kaggle_datasets,
+            "semantic_scholar_papers": semantic_scholar_papers,
+            "gh_trending": gh_trending,
+            "producthunt": producthunt,
             "huggingface_general": hf_general_datasets,
             "paperswithcode": pwc_datasets,
             "datasets": all_datasets,
@@ -2027,8 +2185,11 @@ async def async_main(args):
                 vendor_activity=vendor_activity,
                 x_activity=x_activity,
                 reddit_activity=reddit_activity,
-            hn_activity=hn_activity,
-            kaggle_datasets=kaggle_datasets,
+                hn_activity=hn_activity,
+                kaggle_datasets=kaggle_datasets,
+                semantic_scholar_papers=semantic_scholar_papers,
+                gh_trending=gh_trending,
+                producthunt=producthunt,
                 pwc_datasets=pwc_datasets,
             )
 
@@ -2204,6 +2365,21 @@ def main():
         help="Skip Kaggle dataset scraping",
     )
     parser.add_argument(
+        "--no-semantic-scholar",
+        action="store_true",
+        help="Skip Semantic Scholar paper scraping",
+    )
+    parser.add_argument(
+        "--no-gh-trending",
+        action="store_true",
+        help="Skip GitHub Trending tracking",
+    )
+    parser.add_argument(
+        "--no-producthunt",
+        action="store_true",
+        help="Skip Product Hunt tracking",
+    )
+    parser.add_argument(
         "--no-insights",
         action="store_true",
         help="Skip insights prompt generation entirely",
@@ -2285,6 +2461,8 @@ async def run_intel_scan(
     x_account_watermarks = _load_org_watermarks(watermarks.get("x_accounts"))
     reddit_source_watermarks = _load_org_watermarks(watermarks.get("reddit_sources"))
     hn_source_watermarks = _load_org_watermarks(watermarks.get("hn_sources"))
+    gh_trending_watermarks = _load_org_watermarks(watermarks.get("gh_trending_sources"))
+    ph_source_watermarks = _load_org_watermarks(watermarks.get("producthunt_sources"))
 
     http_client = AsyncHTTPClient()
     try:
@@ -2310,6 +2488,22 @@ async def run_intel_scan(
         kaggle_scraper = (
             KaggleScraper(config=config, http_client=http_client)
             if config.get("sources", {}).get("kaggle", {}).get("enabled", False)
+            else None
+        )
+        from scrapers.semantic_scholar import SemanticScholarScraper
+        ss_scraper = (
+            SemanticScholarScraper(config=config, http_client=http_client)
+            if config.get("sources", {}).get("semantic_scholar", {}).get("enabled", False)
+            else None
+        )
+        gh_trending_tracker = (
+            GitHubTrendingTracker(config, http_client=http_client)
+            if config.get("github_trending", {}).get("enabled", False)
+            else None
+        )
+        ph_tracker = (
+            ProductHuntTracker(config, http_client=http_client)
+            if config.get("producthunt_tracker", {}).get("enabled", False)
             else None
         )
         data_classifier = DataTypeClassifier(config)
@@ -2364,6 +2558,16 @@ async def run_intel_scan(
             )
         if kaggle_scraper:
             tasks["kaggle"] = kaggle_scraper.fetch(days=_days("kaggle"))
+        if ss_scraper:
+            tasks["semantic_scholar"] = ss_scraper.fetch(days=_days("semantic_scholar"))
+        if gh_trending_tracker:
+            tasks["gh_trending"] = gh_trending_tracker.fetch_all(
+                days=_days("gh_trending"), source_watermarks=gh_trending_watermarks
+            )
+        if ph_tracker:
+            tasks["producthunt"] = ph_tracker.fetch_all(
+                days=_days("producthunt"), source_watermarks=ph_source_watermarks
+            )
 
         arxiv_config = config.get("sources", {}).get("arxiv", {})
         if arxiv_config.get("enabled", True):
@@ -2411,6 +2615,9 @@ async def run_intel_scan(
         reddit_activity = {"posts": [], "metadata": {}}
         hn_activity = {"stories": [], "metadata": {}}
         kaggle_datasets = []
+        semantic_scholar_papers = []
+        gh_trending = {"repos": [], "metadata": {}}
+        producthunt = {"products": [], "metadata": {}}
         papers = []
         pwc_datasets = []
 
@@ -2437,6 +2644,12 @@ async def run_intel_scan(
                     hn_activity = result
                 elif key == "kaggle":
                     kaggle_datasets = result or []
+                elif key == "semantic_scholar":
+                    semantic_scholar_papers = result or []
+                elif key == "gh_trending":
+                    gh_trending = result
+                elif key == "producthunt":
+                    producthunt = result
                 elif key == "arxiv":
                     papers.extend(paper_filter.filter_papers(result))
                 elif key == "hf_papers":
@@ -2446,8 +2659,6 @@ async def run_intel_scan(
                     logger.info(
                         "  ✓ HuggingFace 通用: %d 数据集", len(hf_general_datasets)
                     )
-                elif key == "hf_general":
-                    hf_general_datasets = result or []
                 elif key == "pwc":
                     pwc_datasets = result or []
             except Exception as e:
@@ -2578,6 +2789,9 @@ async def run_intel_scan(
             "reddit_activity": reddit_activity,
             "hn_activity": hn_activity,
             "kaggle_datasets": kaggle_datasets,
+            "semantic_scholar_papers": semantic_scholar_papers,
+            "gh_trending": gh_trending,
+            "producthunt": producthunt,
             "huggingface_general": hf_general_datasets,
             "paperswithcode": pwc_datasets,
             "datasets": all_datasets,
@@ -2643,8 +2857,11 @@ async def run_intel_scan(
                 vendor_activity=vendor_activity,
                 x_activity=x_activity,
                 reddit_activity=reddit_activity,
-            hn_activity=hn_activity,
-            kaggle_datasets=kaggle_datasets,
+                hn_activity=hn_activity,
+                kaggle_datasets=kaggle_datasets,
+                semantic_scholar_papers=semantic_scholar_papers,
+                gh_trending=gh_trending,
+                producthunt=producthunt,
                 pwc_datasets=pwc_datasets,
             )
 
