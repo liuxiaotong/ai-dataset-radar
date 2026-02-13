@@ -1433,8 +1433,15 @@ async def async_main(args):
             and watermarks.get("labs") is not None
         )
 
+        def _days(source: str) -> int:
+            if not incremental:
+                return args.days
+            return _effective_days(watermarks, source, args.days)
+
         if incremental:
             logger.info("增量扫描模式（基于上次水位线）")
+        else:
+            logger.info("全量扫描模式（%d 天窗口）", args.days)
 
         pwc_config = config.get("sources", {}).get("paperswithcode", {})
         pwc_scraper = None
@@ -1478,14 +1485,6 @@ async def async_main(args):
                     days=hf_config.get("days", 7),
                     http_client=http_client,
                 )
-
-        if not incremental:
-            logger.info("全量扫描模式（%d 天窗口）", args.days)
-
-        def _days(source: str) -> int:
-            if not incremental:
-                return args.days
-            return _effective_days(watermarks, source, args.days)
 
         github_org_watermarks = _load_org_watermarks(watermarks.get("github_orgs"))
         labs_org_watermarks = _load_org_watermarks(watermarks.get("labs_orgs"))
