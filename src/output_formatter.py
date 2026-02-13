@@ -169,6 +169,8 @@ class DualOutputFormatter:
             "featured_trends": trend_data if trend_data else None,
             "paperswithcode": pwc_datasets,
             "huggingface_general": hf_general,
+            "hn_activity": data.get("hn_activity"),
+            "kaggle_datasets": data.get("kaggle_datasets"),
         }
 
     def _count_github_stats(self, github_activity: list) -> dict:

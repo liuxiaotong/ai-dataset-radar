@@ -35,6 +35,7 @@ from trackers.github_tracker import GitHubTracker
 from trackers.blog_tracker import BlogTracker
 from trackers.x_tracker import XTracker
 from trackers.reddit_tracker import RedditTracker
+from trackers.hn_tracker import HNTracker
 from analyzers.data_type_classifier import DataTypeClassifier, DataType
 from analyzers.paper_filter import PaperFilter
 from analyzers.competitor_matrix import CompetitorMatrix
@@ -127,6 +128,8 @@ def format_insights_prompt(
     x_activity: dict = None,
     reddit_activity: dict = None,
     pwc_datasets: list = None,
+    hn_activity: dict = None,
+    kaggle_datasets: list = None,
 ) -> str:
     """Format data with analysis prompt for LLM consumption.
 
@@ -486,6 +489,55 @@ def format_insights_prompt(
         lines.append("")
     else:
         lines.append("本周无 Papers with Code 更新\n")
+
+    # ── Section 5.8: Hacker News ──
+    lines.append("## 5.8、Hacker News 社区动态\n")
+    hn_data = hn_activity or {}
+    hn_stories = hn_data.get("stories", [])
+    if hn_stories:
+        for story in hn_stories[:20]:
+            title = story.get("title", "")[:150]
+            url = story.get("url") or story.get("hn_url", "")
+            date = story.get("date", "")
+            points = story.get("points", 0)
+            comments = story.get("num_comments", 0)
+            signals = story.get("signals", [])
+            lines.append(f"- [{date}] (↑{points}, {comments}评) {title}")
+            if url:
+                lines.append(f"  链接: {url}")
+            if signals:
+                lines.append(f"  信号: {', '.join(signals)}")
+        lines.append("")
+    else:
+        lines.append("无 Hacker News 动态\n")
+
+    # ── Section 5.9: Kaggle ──
+    lines.append("## 5.9、Kaggle 数据集动态\n")
+    kaggle_items = (kaggle_datasets or [])[:15]
+    if kaggle_items:
+        for ds in kaggle_items:
+            name = ds.get("name", "")
+            url = ds.get("url", "")
+            author = ds.get("author", "")
+            downloads = ds.get("downloads", 0)
+            votes = ds.get("votes", 0)
+            desc = (ds.get("description") or "").strip()[:200]
+            tags = ds.get("tags", [])
+            meta = []
+            if author:
+                meta.append(author)
+            meta.append(f"↓{downloads}")
+            if votes:
+                meta.append(f"♥{votes}")
+            if tags:
+                meta.append(", ".join(tags[:3]))
+            title_str = f"[{name}]({url})" if url else name
+            lines.append(f"- **{title_str}** ({'; '.join(meta)})")
+            if desc:
+                lines.append(f"  {desc}")
+        lines.append("")
+    else:
+        lines.append("无 Kaggle 数据集动态\n")
 
     # ── Section 6: Papers (full titles, longer abstracts) ──
     lines.append("## 六、相关论文\n")
@@ -1213,6 +1265,26 @@ def _update_watermarks(watermarks, all_data: dict) -> None:
     reddit_agg = {sub: _max_ts(ts_list) for sub, ts_list in reddit_map.items()}
     _merge_org_map("reddit_sources", {k: v for k, v in reddit_agg.items() if v})
 
+    # HN: max(story["date"])
+    hn_timestamps = []
+    for story in all_data.get("hn_activity", {}).get("stories", []) or []:
+        norm = _normalize_ts(story.get("date"))
+        if norm:
+            hn_timestamps.append(norm)
+    ts = _max_ts(hn_timestamps)
+    if ts:
+        watermarks.set("hn", ts)
+
+    # Kaggle: max(dataset["last_modified"])
+    kaggle_timestamps = []
+    for ds in all_data.get("kaggle_datasets", []) or []:
+        norm = _normalize_ts(ds.get("last_modified"))
+        if norm:
+            kaggle_timestamps.append(norm)
+    ts = _max_ts(kaggle_timestamps)
+    if ts:
+        watermarks.set("kaggle", ts)
+
     # update cooldown metadata
     cooldowns = _load_org_watermarks(watermarks.get("_cooldowns"))
     cooldowns.update(all_data.get("cooldowns", {}))
@@ -1417,6 +1489,17 @@ async def async_main(args):
             if not args.no_reddit and config.get("reddit_tracker", {}).get("enabled", False)
             else None
         )
+        hn_tracker = (
+            HNTracker(config, http_client=http_client)
+            if not args.no_hn and config.get("hn_tracker", {}).get("enabled", False)
+            else None
+        )
+        from scrapers.kaggle_scraper import KaggleScraper
+        kaggle_scraper = (
+            KaggleScraper(config=config, http_client=http_client)
+            if not args.no_kaggle and config.get("sources", {}).get("kaggle", {}).get("enabled", False)
+            else None
+        )
         data_classifier = DataTypeClassifier(config)
         paper_filter = PaperFilter(config)
         report_generator = IntelReportGenerator(config)
@@ -1472,6 +1555,8 @@ async def async_main(args):
         blog_activity = []
         x_activity = {"accounts": [], "search_results": []}
         reddit_activity = {"posts": [], "metadata": {}}
+        hn_activity = {"stories": [], "metadata": {}}
+        kaggle_datasets = []
         papers = []
         pwc_datasets = []
 
@@ -1496,6 +1581,7 @@ async def async_main(args):
         blog_source_watermarks = _load_org_watermarks(watermarks.get("blog_sources"))
         x_account_watermarks = _load_org_watermarks(watermarks.get("x_accounts"))
         reddit_source_watermarks = _load_org_watermarks(watermarks.get("reddit_sources"))
+        hn_source_watermarks = _load_org_watermarks(watermarks.get("hn_sources"))
 
         # Calculate total progress steps
         _n = 0
@@ -1510,6 +1596,10 @@ async def async_main(args):
         if x_tracker:
             _n += 1
         if reddit_tracker:
+            _n += 1
+        if hn_tracker:
+            _n += 1
+        if kaggle_scraper:
             _n += 1
         if arxiv_scraper or hf_papers_scraper:
             _n += 1
@@ -1554,6 +1644,16 @@ async def async_main(args):
             tasks["reddit"] = reddit_tracker.fetch_all(
                 days=_days("reddit"), source_watermarks=reddit_source_watermarks
             )
+
+        if hn_tracker:
+            logger.info(_progress("Hacker News 追踪..."))
+            tasks["hn"] = hn_tracker.fetch_all(
+                days=_days("hn"), source_watermarks=hn_source_watermarks
+            )
+
+        if kaggle_scraper:
+            logger.info(_progress("Kaggle 数据集..."))
+            tasks["kaggle"] = kaggle_scraper.fetch(days=_days("kaggle"))
 
         if arxiv_scraper:
             if not hf_papers_scraper:
@@ -1639,6 +1739,13 @@ async def async_main(args):
                         reddit_activity = result
                         reddit_posts = len(result.get("posts", []))
                         logger.info("  ✓ Reddit: %d 相关帖子", reddit_posts)
+                    elif key == "hn":
+                        hn_activity = result
+                        hn_stories = len(result.get("stories", []))
+                        logger.info("  ✓ Hacker News: %d 相关讨论", hn_stories)
+                    elif key == "kaggle":
+                        kaggle_datasets = result or []
+                        logger.info("  ✓ Kaggle: %d 数据集", len(kaggle_datasets))
                     elif key == "arxiv":
                         papers.extend(paper_filter.filter_papers(result))
                     elif key == "hf_papers":
@@ -1774,6 +1881,8 @@ async def async_main(args):
             blog_activity=blog_activity,
             x_activity=x_activity,
             reddit_activity=reddit_activity,
+            hn_activity=hn_activity,
+            kaggle_datasets=kaggle_datasets,
             trend_data=trend_data,
             competitor_matrix=competitor_matrix,
             dataset_lineage=dataset_lineage,
@@ -1806,6 +1915,8 @@ async def async_main(args):
             "blog_posts": blog_activity,
             "x_activity": x_activity,
             "reddit_activity": reddit_activity,
+            "hn_activity": hn_activity,
+            "kaggle_datasets": kaggle_datasets,
             "huggingface_general": hf_general_datasets,
             "paperswithcode": pwc_datasets,
             "datasets": all_datasets,
@@ -1916,6 +2027,8 @@ async def async_main(args):
                 vendor_activity=vendor_activity,
                 x_activity=x_activity,
                 reddit_activity=reddit_activity,
+            hn_activity=hn_activity,
+            kaggle_datasets=kaggle_datasets,
                 pwc_datasets=pwc_datasets,
             )
 
@@ -2081,6 +2194,16 @@ def main():
         help="Skip Reddit tracking",
     )
     parser.add_argument(
+        "--no-hn",
+        action="store_true",
+        help="Skip Hacker News tracking",
+    )
+    parser.add_argument(
+        "--no-kaggle",
+        action="store_true",
+        help="Skip Kaggle dataset scraping",
+    )
+    parser.add_argument(
         "--no-insights",
         action="store_true",
         help="Skip insights prompt generation entirely",
@@ -2161,6 +2284,7 @@ async def run_intel_scan(
     blog_source_watermarks = _load_org_watermarks(watermarks.get("blog_sources"))
     x_account_watermarks = _load_org_watermarks(watermarks.get("x_accounts"))
     reddit_source_watermarks = _load_org_watermarks(watermarks.get("reddit_sources"))
+    hn_source_watermarks = _load_org_watermarks(watermarks.get("hn_sources"))
 
     http_client = AsyncHTTPClient()
     try:
@@ -2175,6 +2299,17 @@ async def run_intel_scan(
         reddit_tracker = (
             RedditTracker(config, http_client=http_client)
             if config.get("reddit_tracker", {}).get("enabled", False)
+            else None
+        )
+        hn_tracker = (
+            HNTracker(config, http_client=http_client)
+            if config.get("hn_tracker", {}).get("enabled", False)
+            else None
+        )
+        from scrapers.kaggle_scraper import KaggleScraper
+        kaggle_scraper = (
+            KaggleScraper(config=config, http_client=http_client)
+            if config.get("sources", {}).get("kaggle", {}).get("enabled", False)
             else None
         )
         data_classifier = DataTypeClassifier(config)
@@ -2223,6 +2358,12 @@ async def run_intel_scan(
             tasks["reddit"] = reddit_tracker.fetch_all(
                 days=_days("reddit"), source_watermarks=reddit_source_watermarks
             )
+        if hn_tracker:
+            tasks["hn"] = hn_tracker.fetch_all(
+                days=_days("hn"), source_watermarks=hn_source_watermarks
+            )
+        if kaggle_scraper:
+            tasks["kaggle"] = kaggle_scraper.fetch(days=_days("kaggle"))
 
         arxiv_config = config.get("sources", {}).get("arxiv", {})
         if arxiv_config.get("enabled", True):
@@ -2268,6 +2409,8 @@ async def run_intel_scan(
         blog_activity = []
         x_activity = {"accounts": [], "search_results": []}
         reddit_activity = {"posts": [], "metadata": {}}
+        hn_activity = {"stories": [], "metadata": {}}
+        kaggle_datasets = []
         papers = []
         pwc_datasets = []
 
@@ -2290,6 +2433,10 @@ async def run_intel_scan(
                     x_activity = result
                 elif key == "reddit":
                     reddit_activity = result
+                elif key == "hn":
+                    hn_activity = result
+                elif key == "kaggle":
+                    kaggle_datasets = result or []
                 elif key == "arxiv":
                     papers.extend(paper_filter.filter_papers(result))
                 elif key == "hf_papers":
@@ -2395,6 +2542,8 @@ async def run_intel_scan(
             blog_activity=blog_activity,
             x_activity=x_activity,
             reddit_activity=reddit_activity,
+            hn_activity=hn_activity,
+            kaggle_datasets=kaggle_datasets,
             trend_data=trend_data,
             competitor_matrix=competitor_matrix,
             dataset_lineage=dataset_lineage,
@@ -2427,6 +2576,8 @@ async def run_intel_scan(
             "blog_posts": blog_activity,
             "x_activity": x_activity,
             "reddit_activity": reddit_activity,
+            "hn_activity": hn_activity,
+            "kaggle_datasets": kaggle_datasets,
             "huggingface_general": hf_general_datasets,
             "paperswithcode": pwc_datasets,
             "datasets": all_datasets,
@@ -2492,6 +2643,8 @@ async def run_intel_scan(
                 vendor_activity=vendor_activity,
                 x_activity=x_activity,
                 reddit_activity=reddit_activity,
+            hn_activity=hn_activity,
+            kaggle_datasets=kaggle_datasets,
                 pwc_datasets=pwc_datasets,
             )
 

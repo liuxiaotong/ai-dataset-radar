@@ -1529,6 +1529,23 @@ reddit_tracker:
     - "open source dataset"
 
 # =============================================================================
+# Hacker News 追踪配置 | HN Tracker
+# =============================================================================
+
+hn_tracker:
+  enabled: true
+  min_points: 10
+  search_keywords:
+    - "dataset release"
+    - "training data"
+    - "AI benchmark"
+    - "open source dataset"
+    - "RLHF"
+    - "synthetic data"
+    - "LLM fine-tuning"
+    - "open source model"
+
+# =============================================================================
 # 通知配置 | Notifications
 # =============================================================================
 
