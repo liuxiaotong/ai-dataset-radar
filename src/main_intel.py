@@ -1196,13 +1196,6 @@ def _update_watermarks(watermarks, all_data: dict) -> None:
     for post in all_data.get("reddit_activity", {}).get("posts", []) or []:
         sub = post.get("subreddit")
         if not sub:
--            continue
--        ts = post.get("date") or post.get("created_utc")
--        if ts:
--            reddit_timestamps.append(str(ts))
--    ts = _max_ts(reddit_timestamps)
--    if ts:
--        watermarks.set("reddit", ts)
             continue
         norm = _normalize_ts(post.get("date")) or _normalize_ts(post.get("created_utc"))
         if not norm:
@@ -1428,6 +1421,21 @@ async def async_main(args):
         hf_mode = str(hf_cfg.get("mode", "targeted")).lower()
         hf_general_enabled = hf_mode in {"general", "hybrid"}
         hf_general_datasets = []
+
+        # Incremental scan: watermark-based days calculation
+        from utils.watermark import WatermarkStore
+
+        output_dir = Path(config.get("report", {}).get("output_dir", "data"))
+        watermarks = WatermarkStore(output_dir / "watermarks.json")
+        full_scan = getattr(args, "full_scan", False)
+        incremental = (
+            not full_scan
+            and watermarks.get("labs") is not None
+        )
+
+        if incremental:
+            logger.info("增量扫描模式（基于上次水位线）")
+
         pwc_config = config.get("sources", {}).get("paperswithcode", {})
         pwc_scraper = None
         pwc_days = args.days
@@ -1471,20 +1479,7 @@ async def async_main(args):
                     http_client=http_client,
                 )
 
-        # Incremental scan: watermark-based days calculation
-        from utils.watermark import WatermarkStore
-
-        output_dir = Path(config.get("report", {}).get("output_dir", "data"))
-        watermarks = WatermarkStore(output_dir / "watermarks.json")
-        full_scan = getattr(args, "full_scan", False)
-        incremental = (
-            not full_scan
-            and watermarks.get("labs") is not None
-        )
-
-        if incremental:
-            logger.info("增量扫描模式（基于上次水位线）")
-        else:
+        if not incremental:
             logger.info("全量扫描模式（%d 天窗口）", args.days)
 
         def _days(source: str) -> int:
