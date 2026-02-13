@@ -136,6 +136,8 @@ class DualOutputFormatter:
 
         return {
             "generated_at": end_time.isoformat(),
+            "scan_started_at": data.get("scan_started_at"),
+            "scan_duration_seconds": data.get("scan_duration_seconds"),
             "period": {
                 "days": days,
                 "start": start_time.isoformat(),

@@ -1334,6 +1334,10 @@ async def async_main(args):
     # Set up logging based on verbosity
     setup_logging(level="INFO")
 
+    import time as _time
+    _scan_start_mono = _time.monotonic()
+    _scan_started_at = datetime.now()
+
     # Load config
     logger.info("=" * 60)
     logger.info("  AI Dataset Radar v%s", __version__)
@@ -1785,9 +1789,12 @@ async def async_main(args):
                 {k: v for k, v in ds.items() if not k.startswith("_")} for ds in ds_list
             ]
 
+        _scan_elapsed = _time.monotonic() - _scan_start_mono
         all_data = {
             "data_quality_warnings": anomalies,
             "scan_mode": "incremental" if incremental else "full",
+            "scan_started_at": _scan_started_at.isoformat(),
+            "scan_duration_seconds": round(_scan_elapsed, 1),
             "period": {
                 "days": args.days,
                 "start": None,
@@ -1894,7 +1901,8 @@ async def async_main(args):
             )
         )
 
-        logger.info("Done!")
+        _total_elapsed = _time.monotonic() - _scan_start_mono
+        logger.info("Done! (%.1fs)", _total_elapsed)
 
         # Output insights prompt for LLM analysis (Claude Code / Claude App)
         if not args.no_insights:
@@ -2117,6 +2125,10 @@ async def run_intel_scan(
     Returns:
         Summary dict with scan results.
     """
+    import time as _time
+    _scan_start_mono = _time.monotonic()
+    _scan_started_at = datetime.now()
+
     setup_logging(level="INFO")
     config = load_config()
     validate_config(config)
@@ -2402,9 +2414,12 @@ async def run_intel_scan(
                 {k: v for k, v in ds.items() if not k.startswith("_")} for ds in ds_list
             ]
 
+        _scan_elapsed = _time.monotonic() - _scan_start_mono
         all_data = {
             "data_quality_warnings": anomalies,
             "scan_mode": "incremental" if incremental else "full",
+            "scan_started_at": _scan_started_at.isoformat(),
+            "scan_duration_seconds": round(_scan_elapsed, 1),
             "period": {"days": days, "end": datetime.now().isoformat()},
             "labs_activity": lab_activity,
             "vendor_activity": vendor_activity,
