@@ -134,7 +134,7 @@ watched_orgs:
     internlm:
       hf_ids: ["internlm", "Shanghai_AI_Laboratory"]
       github: ["InternLM"]
-      keywords: ["internlm", "书生", "shusheng"]
+      keywords: ["internlm", "书生", "shusheng", "上海人工智能实验室"]
       priority: medium
     minimax:
       hf_ids: ["MiniMaxAI"]
@@ -321,6 +321,11 @@ watched_orgs:
       github: ["FFTAI"]
       keywords: ["傅利叶", "fourier intelligence", "fourier robot"]
       priority: medium
+    Galaxea:
+      hf_ids: []
+      github: ["OpenGalaxea"]
+      keywords: ["星海图", "Galaxea","GalaxeaVLA"]
+      priority: medium     
 
 # 数据供应商（竞品监控）
 watched_vendors:
@@ -415,6 +420,10 @@ watched_vendors:
       hf_ids: []
       keywords: ["coactive ai", "coactive"]
       blog_url: "https://coactive.ai/blog"
+    micro1:
+      hf_ids: []
+      keywords: ["micro1", "micro1 ai"]
+      blog_url: "https://www.micro1.ai/research" 
 
   # China Data Vendors - 中国数据供应商（Tier 1）
   china_premium:
@@ -1452,6 +1461,7 @@ x_tracker:
     - EvidentlyAI
     - TolokaMI
     - ProlificAc
+    - micro1_ai
     # ── Infrastructure / MLOps (3) ──
     - modal_labs
     - datologyai
