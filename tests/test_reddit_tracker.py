@@ -171,6 +171,12 @@ class TestFetchSubreddit:
 
 # ─── Fetch all tests ────────────────────────────────────────────────────────
 
+@pytest.fixture(autouse=True, scope="class")
+def _no_sleep():
+    with patch("asyncio.sleep", new_callable=AsyncMock):
+        yield
+
+
 class TestFetchAll:
     @pytest.mark.asyncio
     async def test_fetch_all_structure(self, tracker, mock_http):

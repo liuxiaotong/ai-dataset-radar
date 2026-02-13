@@ -3,7 +3,7 @@
 import sys
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
-from unittest.mock import AsyncMock, MagicMock
+from unittest.mock import AsyncMock, MagicMock, patch
 
 # Add src to path
 sys.path.insert(0, str(Path(__file__).parent.parent / "src"))
@@ -635,7 +635,8 @@ class TestFetchBlog:
         """Blog without category in config defaults to empty string."""
         mock_http = _make_http_mock()
         tracker = BlogTracker({}, http_client=mock_http)
-        result = await tracker.fetch_blog({"name": "No Cat", "url": "https://x.com"})
+        with patch.object(tracker, "scrape_with_browser", new_callable=AsyncMock, return_value=([], None)):
+            result = await tracker.fetch_blog({"name": "No Cat", "url": "https://x.com"})
         assert result["category"] == ""
 
 

@@ -148,8 +148,9 @@ class TestModelScopeScraper:
 
         assert results == []
 
+    @patch("time.sleep")
     @patch("scrapers.modelscope.requests.get")
-    def test_fetch_org_datasets(self, mock_get, scraper):
+    def test_fetch_org_datasets(self, mock_get, _mock_sleep, scraper):
         """Test fetching datasets from specific organizations."""
         mock_response = MagicMock()
         mock_response.json.return_value = {
@@ -174,8 +175,9 @@ class TestModelScopeScraper:
         assert len(results) == 1
         assert results[0]["author"] == "qwen"
 
+    @patch("time.sleep")
     @patch("scrapers.modelscope.requests.get")
-    def test_scrape_targeted(self, mock_get, scraper):
+    def test_scrape_targeted(self, mock_get, _mock_sleep, scraper):
         """Test scrape with targeted org config."""
         mock_response = MagicMock()
         mock_response.json.return_value = {"Data": {"Datasets": []}}
