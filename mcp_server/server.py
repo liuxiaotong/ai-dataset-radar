@@ -315,6 +315,58 @@ async def list_tools():
                 },
             },
         ),
+        Tool(
+            name="radar_export",
+            description="导出最新报告为指定格式（CSV / Markdown 表格 / JSON 精简版）",
+            inputSchema={
+                "type": "object",
+                "properties": {
+                    "format": {
+                        "type": "string",
+                        "enum": ["csv", "markdown", "json"],
+                        "description": "导出格式（默认 markdown）",
+                        "default": "markdown",
+                    },
+                    "sections": {
+                        "type": "array",
+                        "items": {
+                            "type": "string",
+                            "enum": ["datasets", "github", "papers", "blogs", "reddit", "all"],
+                        },
+                        "description": "要导出的板块（默认 all）",
+                        "default": ["all"],
+                    },
+                    "output_path": {
+                        "type": "string",
+                        "description": "输出文件路径（可选，不传则直接返回文本）",
+                    },
+                },
+            },
+        ),
+        Tool(
+            name="radar_subscribe",
+            description="管理关注列表 — 添加/查看/删除关注的数据集或组织，后续扫描会高亮匹配结果",
+            inputSchema={
+                "type": "object",
+                "properties": {
+                    "action": {
+                        "type": "string",
+                        "enum": ["add", "list", "remove"],
+                        "description": "操作类型",
+                    },
+                    "target_type": {
+                        "type": "string",
+                        "enum": ["dataset", "org", "keyword"],
+                        "description": "关注目标类型（add/remove 时必填）",
+                    },
+                    "target_value": {
+                        "type": "string",
+                        "description": "关注目标值，如数据集 ID 或组织名（add/remove 时必填）",
+                    },
+                },
+                "required": ["action"],
+            },
+        ),
     ]
 
 
@@ -1601,6 +1653,105 @@ async def call_tool(name: str, arguments: dict):
             lines.append("")
 
         return [TextContent(type="text", text="\n".join(lines))]
+
+    elif name == "radar_export":
+        report = get_latest_report()
+        if not report:
+            return [TextContent(type="text", text="没有找到报告，请先运行 `radar_scan`。")]
+
+        fmt = arguments.get("format", "markdown")
+        sections = arguments.get("sections", ["all"])
+        if "all" in sections:
+            sections = ["datasets", "github", "papers", "blogs", "reddit"]
+
+        lines = []
+
+        if "datasets" in sections:
+            datasets = report.get("datasets", [])
+            if fmt == "csv":
+                lines.append("id,category,downloads")
+                for ds in datasets:
+                    lines.append(f"{ds.get('id','')},{ds.get('category','')},{ds.get('downloads',0)}")
+            elif fmt == "markdown":
+                lines.append("## 数据集\n")
+                lines.append("| ID | 类别 | 下载量 |")
+                lines.append("|-----|------|--------|")
+                for ds in datasets[:50]:
+                    lines.append(f"| {ds.get('id','')} | {ds.get('category','')} | {ds.get('downloads',0):,} |")
+            else:
+                lines.append(json.dumps({"datasets": datasets}, ensure_ascii=False))
+            lines.append("")
+
+        if "github" in sections:
+            repos = report.get("github_repos", [])
+            if fmt == "markdown":
+                lines.append("## GitHub 仓库\n")
+                lines.append("| 名称 | Stars | 相关度 |")
+                lines.append("|------|-------|--------|")
+                for r in repos[:50]:
+                    lines.append(f"| {r.get('name','')} | {r.get('stars',0)} | {r.get('relevance','')} |")
+            elif fmt == "csv":
+                lines.append("name,stars,relevance")
+                for r in repos:
+                    lines.append(f"{r.get('name','')},{r.get('stars',0)},{r.get('relevance','')}")
+            lines.append("")
+
+        if "papers" in sections:
+            papers = report.get("papers", [])
+            if fmt == "markdown":
+                lines.append("## 论文\n")
+                for p in papers[:30]:
+                    lines.append(f"- {p.get('title','')}")
+            lines.append("")
+
+        output_path = arguments.get("output_path")
+        text = "\n".join(lines)
+        if output_path:
+            Path(output_path).write_text(text, encoding="utf-8")
+            return [TextContent(type="text", text=f"已导出到 {output_path} ({len(text)} 字符)")]
+        return [TextContent(type="text", text=text)]
+
+    elif name == "radar_subscribe":
+        action = arguments["action"]
+        subs_file = PROJECT_ROOT / "data" / "subscriptions.json"
+
+        # Load existing subscriptions
+        subs: list[dict] = []
+        if subs_file.exists():
+            subs = json.loads(subs_file.read_text(encoding="utf-8"))
+
+        if action == "list":
+            if not subs:
+                return [TextContent(type="text", text="关注列表为空。")]
+            lines = ["## 关注列表\n"]
+            for s in subs:
+                lines.append(f"- [{s.get('type','')}] {s.get('value','')}")
+            return [TextContent(type="text", text="\n".join(lines))]
+
+        elif action == "add":
+            target_type = arguments.get("target_type", "keyword")
+            target_value = arguments.get("target_value", "")
+            if not target_value:
+                return [TextContent(type="text", text="错误: 需要 target_value")]
+            # Deduplicate
+            if any(s.get("type") == target_type and s.get("value") == target_value for s in subs):
+                return [TextContent(type="text", text=f"已存在: [{target_type}] {target_value}")]
+            subs.append({"type": target_type, "value": target_value})
+            subs_file.parent.mkdir(parents=True, exist_ok=True)
+            subs_file.write_text(json.dumps(subs, ensure_ascii=False, indent=2), encoding="utf-8")
+            return [TextContent(type="text", text=f"已添加关注: [{target_type}] {target_value}（共 {len(subs)} 项）")]
+
+        elif action == "remove":
+            target_type = arguments.get("target_type", "keyword")
+            target_value = arguments.get("target_value", "")
+            before = len(subs)
+            subs = [s for s in subs if not (s.get("type") == target_type and s.get("value") == target_value)]
+            if len(subs) == before:
+                return [TextContent(type="text", text=f"未找到: [{target_type}] {target_value}")]
+            subs_file.write_text(json.dumps(subs, ensure_ascii=False, indent=2), encoding="utf-8")
+            return [TextContent(type="text", text=f"已移除关注: [{target_type}] {target_value}（剩余 {len(subs)} 项）")]
+
+        return [TextContent(type="text", text=f"未知操作: {action}")]
 
     else:
         return [TextContent(type="text", text=f"未知工具: {name}")]
