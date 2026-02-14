@@ -37,6 +37,8 @@ class IntelReportGenerator:
         blog_activity: list[dict] = None,
         x_activity: dict = None,
         reddit_activity: dict = None,
+        hn_activity: dict = None,
+        kaggle_datasets: list[dict] = None,
         trend_data: dict = None,
         competitor_matrix: dict = None,
         dataset_lineage: dict = None,
@@ -54,6 +56,8 @@ class IntelReportGenerator:
             blog_activity: Blog/RSS activities.
             x_activity: X/Twitter activity data.
             reddit_activity: Reddit community activity data.
+            hn_activity: Hacker News activity data.
+            kaggle_datasets: Kaggle dataset listings.
             trend_data: Trend analysis results (top_growing_7d, rising_7d).
 
         Returns:
