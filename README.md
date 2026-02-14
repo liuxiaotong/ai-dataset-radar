@@ -13,7 +13,7 @@
 <br/>
 [![Tests](https://img.shields.io/badge/tests-933_passed-brightgreen.svg)](#开发路线)
 [![Agent Ready](https://img.shields.io/badge/Agent-Ready-orange.svg)](docs/agent-integration.md)
-[![MCP](https://img.shields.io/badge/MCP-17_Tools-purple.svg)](docs/mcp.md)
+[![MCP](https://img.shields.io/badge/MCP-19_Tools-purple.svg)](docs/mcp.md)
 
 [快速开始](#快速开始) · [使用方式](#使用方式) · [数据源](#数据源) · [生态](#生态) · [文档](docs/)
 
@@ -21,7 +21,7 @@
 
 > 🎯 **全源覆盖** 86 HF orgs · 50 GitHub orgs · 71 博客 · 125 X 账户 · 5 Reddit · Papers with Code
 > ⚡ **高性能异步** aiohttp 全链路并发，500+ 请求同时执行，组织级水位线增量扫描
-> 🤖 **智能体原生** MCP 17 工具 + REST API 19 端点 + Skills 7 命令
+> 🤖 **智能体原生** MCP 19 工具 + REST API 19 端点 + Skills 7 命令
 > 📊 **竞品分析** 竞品矩阵 · 数据集谱系 · 组织关系图谱三维交叉分析
 > 🔔 **异常告警** 7 条规则自动检测，Email + Webhook 推送
 
@@ -49,7 +49,7 @@ flowchart TD
 
     subgraph I[" Agent 接口"]
         direction LR
-        I1["REST API 19 端点"] ~~~ I2["MCP 17 工具"] ~~~ I3["Skills 7 命令"] ~~~ I4["Dashboard 12 Tab"]
+        I1["REST API 19 端点"] ~~~ I2["MCP 19 工具"] ~~~ I3["Skills 7 命令"] ~~~ I4["Dashboard 12 Tab"]
     end
 
     O --> I
@@ -160,7 +160,7 @@ python agent/api.py
 
 </details>
 
-> 17 个工具（scan/search/diff/trend/history/reddit/matrix/lineage/org-graph/alerts 等）及配置详情见 [MCP 文档](docs/mcp.md)。
+> 19 个工具（scan/search/diff/trend/history/reddit/matrix/lineage/org-graph/alerts/export/subscribe 等）及配置详情见 [MCP 文档](docs/mcp.md)。
 
 ### Claude Code Skills
 

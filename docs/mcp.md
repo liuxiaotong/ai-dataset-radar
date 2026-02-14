@@ -36,7 +36,7 @@
 }
 ```
 
-## 可用工具（17 个）
+## 可用工具（19 个）
 
 | 工具 | 功能 | 参数 |
 |------|------|------|
@@ -57,6 +57,8 @@
 | `radar_lineage` | 数据集谱系（派生/版本/Fork） | `dataset_id` |
 | `radar_org_graph` | 组织关系图谱（聚类/中心性） | `org` |
 | `radar_alerts` | 告警记录（零数据/阈值/趋势/变化） | `severity`, `limit` |
+| `radar_export` | 导出报告（CSV/Markdown/JSON，支持按节过滤） | `format`, `sections`, `output_file` |
+| `radar_subscribe` | 管理订阅（新增/列出/移除监控目标） | `action`, `name`, `url`, `type`, `sub_id` |
 
 ## 常见问题
 
