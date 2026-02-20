@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "ai-dataset-radar"
-version = "0.1.0"
+version = "0.1.1"
 description = "Competitive intelligence monitoring system for AI training datasets, tracking labs, vendors, and open-source releases"
 readme = "README.md"
 license = {text = "MIT"}

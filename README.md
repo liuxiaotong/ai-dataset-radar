@@ -13,7 +13,7 @@
 [![Python 3.10+](https://img.shields.io/badge/python-3.10+-blue.svg)](https://www.python.org/downloads/)
 [![License: MIT](https://img.shields.io/badge/License-MIT-green.svg)](LICENSE)
 <br/>
-[![Tests](https://img.shields.io/badge/tests-933_passed-brightgreen.svg)](#development)
+[![Tests](https://img.shields.io/badge/tests-999_passed-brightgreen.svg)](#development)
 [![MCP Tools](https://img.shields.io/badge/MCP_Tools-19-purple.svg)](#mcp-server)
 [![Data Sources](https://img.shields.io/badge/Data_Sources-7-orange.svg)](#data-sources)
 [![Skills](https://img.shields.io/badge/Skills-7-red.svg)](#claude-code-skills)
@@ -449,7 +449,7 @@ cd ai-dataset-radar
 pip install -r requirements.txt && playwright install chromium
 cp .env.example .env
 
-# 运行测试 (933 个用例)
+# 运行测试 (999 个用例)
 pytest
 
 # 代码格式化 + lint
@@ -457,7 +457,7 @@ ruff check src/
 ruff format src/
 ```
 
-**测试覆盖**: 34 个测试文件，933 个测试用例。
+**测试覆盖**: 36 个测试文件，999 个测试用例。
 
 **CI**: GitHub Actions，Tag push 自动发布。定时任务 (`daily.yml`) 支持每日自动扫描。
 
