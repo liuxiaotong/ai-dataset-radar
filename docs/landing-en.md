@@ -1,36 +1,16 @@
-<div align="right">
-
-**English** | [中文](README.zh-CN.md)
-
-</div>
-
 <div align="center">
 
 <h1>AI Dataset Radar</h1>
 
 <h3>Multi-Source Competitive Intelligence Engine<br/>for AI Training Data Ecosystems</h3>
 
-<p><strong>多源异步竞争情报引擎 — 增量水位线扫描 · 异常检测告警 · 三维交叉分析 · Agent 原生</strong><br/>
-<em>Async multi-source intelligence — watermark-driven incremental scanning, anomaly detection, cross-dimensional analysis, agent-native</em></p>
+<p><strong>Async multi-source intelligence — watermark-driven incremental scanning, anomaly detection, cross-dimensional analysis, agent-native</strong></p>
 
-[![PyPI](https://img.shields.io/pypi/v/knowlyr-radar?color=blue)](https://pypi.org/project/knowlyr-radar/)
-[![Downloads](https://img.shields.io/pypi/dm/knowlyr-radar)](https://pypi.org/project/knowlyr-radar/)
-[![CI](https://github.com/liuxiaotong/ai-dataset-radar/actions/workflows/ci.yml/badge.svg)](https://github.com/liuxiaotong/ai-dataset-radar/actions/workflows/ci.yml)
-[![Python 3.10+](https://img.shields.io/badge/python-3.10+-blue.svg)](https://www.python.org/downloads/)
-[![License: MIT](https://img.shields.io/badge/License-MIT-green.svg)](LICENSE)
-<br/>
-[![Tests](https://img.shields.io/badge/tests-999_passed-brightgreen.svg)](#development)
-[![MCP Tools](https://img.shields.io/badge/MCP_Tools-19-purple.svg)](#mcp-server)
-[![Data Sources](https://img.shields.io/badge/Data_Sources-7-orange.svg)](#data-sources)
-[![Skills](https://img.shields.io/badge/Skills-7-red.svg)](#claude-code-skills)
-[![REST Endpoints](https://img.shields.io/badge/REST_Endpoints-19-blue.svg)](#rest-api--dashboard)
-[![Monitored Targets](https://img.shields.io/badge/Monitored_Targets-337+-teal.svg)](#multi-source-async-crawling-engine)
-
-[Abstract](#abstract) · [Problem Statement](#problem-statement) · [Formal Framework](#formal-framework) · [Architecture](#architecture) · [Key Innovations](#key-innovations) · [Quick Start](#quick-start) · [CLI Reference](#cli-reference) · [REST API & Dashboard](#rest-api--dashboard) · [MCP Server](#mcp-server) · [Claude Code Skills](#claude-code-skills) · [Data Sources](#data-sources) · [Ecosystem](#ecosystem) · [References](#references)
+<p>
+<a href="https://github.com/liuxiaotong/ai-dataset-radar">GitHub</a> · <a href="https://pypi.org/project/knowlyr-radar/">PyPI</a> · <a href="https://knowlyr.com">knowlyr.com</a> · <a href="landing-zh.md">中文版</a>
+</p>
 
 </div>
-
----
 
 ## Abstract
 
@@ -39,8 +19,6 @@ AI 训练数据的竞争情报长期面临**信息不对称** (information asymm
 系统构建「**采集 → 分析 → 交叉关联 → 异常检测 → 告警分发**」的自动化情报管线，提供竞品矩阵 (competitive matrix)、数据集谱系 (dataset lineage)、组织关系图谱 (org relationship graph) 三维交叉分析能力，并以 Agent-native 方式暴露 MCP 19 工具 + REST 19 端点 + Skills 7 命令的完整接口层。
 
 > **AI Dataset Radar** implements a multi-source async competitive intelligence engine covering 86 HuggingFace orgs, 50 GitHub orgs, 71 blogs, 125 X accounts, 5 Reddit communities, and Papers with Code. The system features org-level watermark incremental scanning that reduces API calls from $O(N)$ to $O(\Delta N)$, anomaly detection with 7 rules across 4 categories, and three-dimensional cross-analysis (competitive matrix, dataset lineage, org relationship graph). It exposes 19 MCP tools, 19 REST endpoints, and 7 Claude Code Skills for agent-native integration.
-
----
 
 ## Problem Statement
 
@@ -54,8 +32,6 @@ AI 训练数据的竞争情报长期面临**信息不对称** (information asymm
 | **增量效率**<br/>Incremental Efficiency | 全量扫描 API 配额消耗与总数据量成正比，无法提升至小时级频率 | 每次全量拉取，调用量 $\propto N$ | 组织级水位线增量扫描，调用量 $\propto \Delta N$ |
 
 > Radar 不是又一个 RSS 聚合器。它是面向 AI 训练数据生态的**主动式竞争情报系统**——多源采集、增量追踪、异常告警、Agent 原生集成，将"信息搜集"变为"情报输出"。
-
----
 
 ## Formal Framework
 
@@ -91,8 +67,6 @@ $$A(d) = \sum_{i=1}^{7} w_i \cdot r_i(d)$$
 | **Cross-Source** | 跨源关联 | 同一组织在 $\geq 2$ 个平台同步活跃 |
 
 指纹去重函数 $\text{fingerprint}(d) = \text{hash}(source, org, id)$ 确保同一事件不重复告警。
-
----
 
 ## Architecture
 
@@ -142,8 +116,6 @@ flowchart TD
 | **Persistence** | Time-Series Store · SQLite Snapshots | 批量 upsert + 作用域趋势计算，每日快照 |
 | **Interface** | REST API · MCP Server · Skills · Dashboard | 19 + 19 + 7 Agent 接口 + 12 Tab Web 仪表盘 |
 | **Intelligence** | AI Insights · DataRecipe Integration | LLM 分析报告生成，DataRecipe 逆向分析联动 |
-
----
 
 ## Key Innovations
 
@@ -248,8 +220,6 @@ Radar 以 Agent-native 方式暴露三套完整接口，覆盖从自动化采集
 | Search | 跨源全文搜索 |
 | Trends | 时序趋势可视化 |
 
----
-
 ## Quick Start
 
 ```bash
@@ -282,8 +252,6 @@ data/reports/2026-02-08/
 
 > 环境变量、RSSHub 配置、Docker 部署、调度设置详见 `.env.example` 和 [系统架构](docs/architecture.md)。
 
----
-
 ## CLI Reference
 
 ```bash
@@ -304,8 +272,6 @@ python src/main_intel.py --days 7 --api-insights    # 显式调用 LLM API 生�
 
 </details>
 
----
-
 ## REST API & Dashboard
 
 ```bash
@@ -323,8 +289,6 @@ python agent/api.py
 | 操作 | `/scan` · `/summary` · `/config` · `/schema` · `/tools` |
 
 > 完整端点列表、代码示例（OpenAI / Anthropic / LangChain）见 [Agent 集成文档](docs/agent-integration.md)。
-
----
 
 ## MCP Server
 
@@ -345,8 +309,6 @@ python agent/api.py
 </details>
 
 > 19 个工具（scan / search / diff / trend / history / reddit / matrix / lineage / org-graph / alerts / export / subscribe 等）及配置详情见 [MCP 文档](docs/mcp.md)。
-
----
 
 ## Claude Code Skills
 
@@ -379,8 +341,6 @@ python agent/api.py
 - **纯本地读取**：`/brief`、`/search`、`/diff`、`/deep-dive` 不触发网络请求
 - **交叉引用**：每个 Skill 的输出中推荐相关的后续 Skill
 
----
-
 ## Data Sources
 
 | 来源 | 数量 | 覆盖 |
@@ -394,8 +354,6 @@ python agent/api.py
 | **Reddit** | 5 社区 | MachineLearning、LocalLLaMA、dataset、deeplearning、LanguageTechnology |
 
 > 供应商分类、X 账户明细、数据集分类体系见 [数据源文档](docs/data-sources.md)。输出 JSON Schema 见 [输出规范](docs/schema.md)。
-
----
 
 ## Ecosystem
 
@@ -445,30 +403,6 @@ graph LR
 
 > DataRecipe 联动详情（评分公式、输出结构、MCP 双服务配置）见 [DataRecipe 文档](docs/datarecipe.md)。
 
----
-
-## Development
-
-```bash
-git clone https://github.com/liuxiaotong/ai-dataset-radar.git
-cd ai-dataset-radar
-pip install -r requirements.txt && playwright install chromium
-cp .env.example .env
-
-# 运行测试 (999 个用例)
-pytest
-
-# 代码格式化 + lint
-ruff check src/
-ruff format src/
-```
-
-**测试覆盖**: 36 个测试文件，999 个测试用例。
-
-**CI**: GitHub Actions，Tag push 自动发布。定时任务 (`daily.yml`) 支持每日自动扫描。
-
----
-
 ## References
 
 - **Competitive Intelligence** — Kahaner, L., 1997. *Competitive Intelligence: How to Gather, Analyze, and Use Information to Move Your Business to the Top*. Touchstone
@@ -478,14 +412,6 @@ ruff format src/
 - **Papers with Code** — Stojnic, R. et al., 2020. *Papers with Code: Linking Papers with Code.* [paperswithcode.com](https://paperswithcode.com/) — 论文-数据集-榜单关联的数据源
 - **Incremental Processing** — Zaharia, M. et al., 2013. *Discretized Streams: Fault-Tolerant Streaming Computation at Scale.* SOSP '13 — 增量处理与水位线机制的工程参考
 - **Information Fusion** — Hall, D.L. & Llinas, J., 1997. *An Introduction to Multisensor Data Fusion.* Proceedings of the IEEE, 85(1) — 多源信息融合的理论框架
-
----
-
-## License
-
-[MIT](LICENSE)
-
----
 
 <div align="center">
 <sub><a href="https://github.com/liuxiaotong">knowlyr</a> — multi-source competitive intelligence for AI training data</sub>

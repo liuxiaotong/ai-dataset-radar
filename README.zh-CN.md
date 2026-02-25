@@ -1,6 +1,6 @@
 <div align="right">
 
-**English** | [中文](README.zh-CN.md)
+[English](README.md) | **中文**
 
 </div>
 
@@ -8,10 +8,9 @@
 
 <h1>AI Dataset Radar</h1>
 
-<h3>Multi-Source Competitive Intelligence Engine<br/>for AI Training Data Ecosystems</h3>
+<h3>面向 AI 训练数据生态的多源竞争情报引擎</h3>
 
-<p><strong>多源异步竞争情报引擎 — 增量水位线扫描 · 异常检测告警 · 三维交叉分析 · Agent 原生</strong><br/>
-<em>Async multi-source intelligence — watermark-driven incremental scanning, anomaly detection, cross-dimensional analysis, agent-native</em></p>
+<p><strong>多源异步竞争情报引擎 — 增量水位线扫描 · 异常检测告警 · 三维交叉分析 · Agent 原生</strong></p>
 
 [![PyPI](https://img.shields.io/pypi/v/knowlyr-radar?color=blue)](https://pypi.org/project/knowlyr-radar/)
 [![Downloads](https://img.shields.io/pypi/dm/knowlyr-radar)](https://pypi.org/project/knowlyr-radar/)
@@ -19,30 +18,30 @@
 [![Python 3.10+](https://img.shields.io/badge/python-3.10+-blue.svg)](https://www.python.org/downloads/)
 [![License: MIT](https://img.shields.io/badge/License-MIT-green.svg)](LICENSE)
 <br/>
-[![Tests](https://img.shields.io/badge/tests-999_passed-brightgreen.svg)](#development)
-[![MCP Tools](https://img.shields.io/badge/MCP_Tools-19-purple.svg)](#mcp-server)
-[![Data Sources](https://img.shields.io/badge/Data_Sources-7-orange.svg)](#data-sources)
-[![Skills](https://img.shields.io/badge/Skills-7-red.svg)](#claude-code-skills)
-[![REST Endpoints](https://img.shields.io/badge/REST_Endpoints-19-blue.svg)](#rest-api--dashboard)
-[![Monitored Targets](https://img.shields.io/badge/Monitored_Targets-337+-teal.svg)](#multi-source-async-crawling-engine)
+[![Tests](https://img.shields.io/badge/tests-999_passed-brightgreen.svg)](#开发-development)
+[![MCP Tools](https://img.shields.io/badge/MCP_Tools-19-purple.svg)](#mcp-服务器-mcp-server)
+[![Data Sources](https://img.shields.io/badge/Data_Sources-7-orange.svg)](#数据源-data-sources)
+[![Skills](https://img.shields.io/badge/Skills-7-red.svg)](#claude-code-技能-claude-code-skills)
+[![REST Endpoints](https://img.shields.io/badge/REST_Endpoints-19-blue.svg)](#rest-api-与仪表盘-rest-api--dashboard)
+[![Monitored Targets](https://img.shields.io/badge/Monitored_Targets-337+-teal.svg)](#1-多源异步采集引擎-multi-source-async-crawling-engine)
 
-[Abstract](#abstract) · [Problem Statement](#problem-statement) · [Formal Framework](#formal-framework) · [Architecture](#architecture) · [Key Innovations](#key-innovations) · [Quick Start](#quick-start) · [CLI Reference](#cli-reference) · [REST API & Dashboard](#rest-api--dashboard) · [MCP Server](#mcp-server) · [Claude Code Skills](#claude-code-skills) · [Data Sources](#data-sources) · [Ecosystem](#ecosystem) · [References](#references)
+[摘要](#摘要-abstract) · [问题陈述](#问题陈述-problem-statement) · [形式化框架](#形式化框架-formal-framework) · [系统架构](#系统架构-architecture) · [核心创新](#核心创新-key-innovations) · [快速开始](#快速开始-quick-start) · [CLI 参考](#cli-参考-cli-reference) · [REST API 与仪表盘](#rest-api-与仪表盘-rest-api--dashboard) · [MCP 服务器](#mcp-服务器-mcp-server) · [Claude Code 技能](#claude-code-技能-claude-code-skills) · [数据源](#数据源-data-sources) · [生态系统](#生态系统-ecosystem) · [参考文献](#参考文献-references)
 
 </div>
 
 ---
 
-## Abstract
+## 摘要 (Abstract)
 
 AI 训练数据的竞争情报长期面临**信息不对称** (information asymmetry)、**源碎片化** (source fragmentation) 和**被动式监控** (reactive monitoring) 三重瓶颈。AI Dataset Radar 提出一种多源异步竞争情报引擎：通过 **aiohttp 全链路并发采集** (async full-pipeline crawling) 覆盖 7 大数据源共 337+ 监控目标（86 HF orgs / 50 GitHub orgs / 71 博客 / 125 X 账户 / 5 Reddit / Papers with Code），通过**组织级水位线增量扫描** (org-level watermark incremental scanning) 将 API 调用量从 $O(N)$ 降至 $O(\Delta N)$，通过 **7 条异常检测规则** (anomaly detection rules) 跨 4 类别实现从被动查看到主动告警的闭环。
 
 系统构建「**采集 → 分析 → 交叉关联 → 异常检测 → 告警分发**」的自动化情报管线，提供竞品矩阵 (competitive matrix)、数据集谱系 (dataset lineage)、组织关系图谱 (org relationship graph) 三维交叉分析能力，并以 Agent-native 方式暴露 MCP 19 工具 + REST 19 端点 + Skills 7 命令的完整接口层。
 
-> **AI Dataset Radar** implements a multi-source async competitive intelligence engine covering 86 HuggingFace orgs, 50 GitHub orgs, 71 blogs, 125 X accounts, 5 Reddit communities, and Papers with Code. The system features org-level watermark incremental scanning that reduces API calls from $O(N)$ to $O(\Delta N)$, anomaly detection with 7 rules across 4 categories, and three-dimensional cross-analysis (competitive matrix, dataset lineage, org relationship graph). It exposes 19 MCP tools, 19 REST endpoints, and 7 Claude Code Skills for agent-native integration.
+> **AI Dataset Radar** 实现了一个多源异步竞争情报引擎，覆盖 86 个 HuggingFace 组织、50 个 GitHub 组织、71 个博客、125 个 X 账户、5 个 Reddit 社区以及 Papers with Code。系统特色包括组织级水位线增量扫描（将 API 调用量从 $O(N)$ 降至 $O(\Delta N)$）、4 类别 7 条规则的异常检测，以及三维交叉分析（竞品矩阵、数据集谱系、组织关系图谱）。对外暴露 19 个 MCP 工具、19 个 REST 端点和 7 个 Claude Code Skills，实现 Agent 原生集成。
 
 ---
 
-## Problem Statement
+## 问题陈述 (Problem Statement)
 
 竞争情报 (Competitive Intelligence, CI) 在 AI 训练数据领域面临独特的工程挑战——数据发布高度分散、更新频率不可预测、跨源关联关系隐含在元数据中。传统方法以人工浏览 + 关键词订阅为主，无法应对指数增长的监控规模：
 
@@ -57,9 +56,9 @@ AI 训练数据的竞争情报长期面临**信息不对称** (information asymm
 
 ---
 
-## Formal Framework
+## 形式化框架 (Formal Framework)
 
-### Multi-Source Intelligence Fusion
+### 多源情报融合 (Multi-Source Intelligence Fusion)
 
 情报采集形式化为多源融合模型。设 $S$ 为数据源集合，每个源 $s \in S$ 在时间窗口 $[t - \Delta t, t]$ 内产出数据集合 $D_s$，全局情报视图为：
 
@@ -67,7 +66,7 @@ $$I(t) = \bigcup_{s \in S} f_s(t, \Delta t)$$
 
 其中 $f_s: \mathbb{T} \times \mathbb{T} \to 2^{\mathcal{D}}$ 为源特定的采集函数，$\mathcal{D}$ 为结构化数据集元数据的全集。当前 $|S| = 7$，覆盖 $\sum_{s} |targets_s| = 337+$ 个监控目标。
 
-### Watermark-Driven Incremental Scanning
+### 水位线驱动增量扫描 (Watermark-Driven Incremental Scanning)
 
 每个源 $s$ 的每个组织 $o$ 维护独立水位线 $W_{s,o}(t)$，表示该组织在该源上已知的最新时间戳：
 
@@ -75,7 +74,7 @@ $$W_{s,o}(t) = \max\left\{W_{s,o}(t-1),\ \max_{d \in D_{s,o}} \text{timestamp}(d
 
 增量扫描仅拉取水位线之后的数据：$D_{s,o}^{\Delta}(t) = \{d \in D_{s,o} \mid \text{timestamp}(d) > W_{s,o}(t-1)\}$。首次执行时 $W_{s,o}(0) = -\infty$，自动触发全量采集建立基线。API 调用量从 $O(|D|)$（全量）降至 $O(|D^{\Delta}|)$（增量），每个组织独立窗口避免慢源拖累快源。
 
-### Anomaly Scoring Function
+### 异常评分函数 (Anomaly Scoring Function)
 
 异常评分函数对每条新增数据 $d$ 计算加权得分，触发告警阈值：
 
@@ -94,31 +93,31 @@ $$A(d) = \sum_{i=1}^{7} w_i \cdot r_i(d)$$
 
 ---
 
-## Architecture
+## 系统架构 (Architecture)
 
 ```mermaid
 flowchart TD
-    subgraph S[" 7 Data Sources · 337+ Targets"]
+    subgraph S[" 7 大数据源 · 337+ 监控目标"]
         direction LR
-        S1["HuggingFace<br/>86 orgs"] ~~~ S2["GitHub<br/>50 orgs"] ~~~ S3["Blogs<br/>71 sources"]
-        S4["Papers<br/>arXiv + HF"] ~~~ S5["X / Twitter<br/>125 accounts"] ~~~ S6["Reddit<br/>5 communities"]
+        S1["HuggingFace<br/>86 orgs"] ~~~ S2["GitHub<br/>50 orgs"] ~~~ S3["博客<br/>71 sources"]
+        S4["论文<br/>arXiv + HF"] ~~~ S5["X / Twitter<br/>125 accounts"] ~~~ S6["Reddit<br/>5 communities"]
         S7["Papers with Code"]
     end
 
-    S --> T["Trackers<br/>aiohttp async · org-level watermark"]
-    T --> A["Analyzers<br/>classification · trends · matrix · lineage · org graph"]
-    A --> D["Anomaly Detection<br/>7 rules × 4 categories · fingerprint dedup"]
+    S --> T["采集器<br/>aiohttp 异步 · 组织级水位线"]
+    T --> A["分析器<br/>分类 · 趋势 · 矩阵 · 谱系 · 组织图谱"]
+    A --> D["异常检测<br/>7 规则 × 4 类别 · 指纹去重"]
 
-    subgraph O[" Output Layer"]
+    subgraph O[" 输出层"]
         direction LR
-        O1["JSON structured"] ~~~ O2["Markdown reports"] ~~~ O3["AI Insights"]
+        O1["JSON 结构化数据"] ~~~ O2["Markdown 报告"] ~~~ O3["AI 洞察分析"]
     end
 
     D --> O
 
-    subgraph I[" Agent Interface Layer"]
+    subgraph I[" Agent 接口层"]
         direction LR
-        I1["REST API<br/>19 endpoints"] ~~~ I2["MCP Server<br/>19 tools"] ~~~ I3["Skills<br/>7 commands"] ~~~ I4["Dashboard<br/>12 tabs"]
+        I1["REST API<br/>19 端点"] ~~~ I2["MCP Server<br/>19 工具"] ~~~ I3["Skills<br/>7 命令"] ~~~ I4["仪表盘<br/>12 面板"]
     end
 
     O --> I
@@ -131,31 +130,31 @@ flowchart TD
     style I fill:#2da44e,color:#fff,stroke:#2da44e
 ```
 
-### Layered Architecture
+### 分层架构 (Layered Architecture)
 
 | 层 | 模块 | 职责 |
 |:---|:---|:---|
-| **Collection** | Trackers · Watermark Manager | 7 源异步采集，组织级水位线增量扫描，Playwright 动态渲染 |
-| **Analysis** | Classifiers · Trend Engine · Matrix Builder | 数据集分类、时序趋势计算、竞品矩阵构建 |
-| **Cross-Analysis** | Lineage · Org Graph · Competitive Matrix | 数据集谱系追踪、组织关系图谱、三维交叉关联 |
-| **Detection** | Anomaly Rules · Alert Engine | 7 条规则 × 4 类别异常检测，指纹去重，Email/Webhook 分发 |
-| **Persistence** | Time-Series Store · SQLite Snapshots | 批量 upsert + 作用域趋势计算，每日快照 |
-| **Interface** | REST API · MCP Server · Skills · Dashboard | 19 + 19 + 7 Agent 接口 + 12 Tab Web 仪表盘 |
-| **Intelligence** | AI Insights · DataRecipe Integration | LLM 分析报告生成，DataRecipe 逆向分析联动 |
+| **采集层** (Collection) | Trackers · Watermark Manager | 7 源异步采集，组织级水位线增量扫描，Playwright 动态渲染 |
+| **分析层** (Analysis) | Classifiers · Trend Engine · Matrix Builder | 数据集分类、时序趋势计算、竞品矩阵构建 |
+| **交叉分析层** (Cross-Analysis) | Lineage · Org Graph · Competitive Matrix | 数据集谱系追踪、组织关系图谱、三维交叉关联 |
+| **检测层** (Detection) | Anomaly Rules · Alert Engine | 7 条规则 × 4 类别异常检测，指纹去重，Email/Webhook 分发 |
+| **持久层** (Persistence) | Time-Series Store · SQLite Snapshots | 批量 upsert + 作用域趋势计算，每日快照 |
+| **接口层** (Interface) | REST API · MCP Server · Skills · Dashboard | 19 + 19 + 7 Agent 接口 + 12 面板 Web 仪表盘 |
+| **情报层** (Intelligence) | AI Insights · DataRecipe Integration | LLM 分析报告生成，DataRecipe 逆向分析联动 |
 
 ---
 
-## Key Innovations
+## 核心创新 (Key Innovations)
 
-### 1. Multi-Source Async Crawling Engine
+### 1. 多源异步采集引擎 (Multi-Source Async Crawling Engine)
 
 AI 训练数据的情报来源高度分散——实验室在 HuggingFace 发模型、在 GitHub 发代码、在博客写解读、在 X/Twitter 预告方向。Radar 通过 aiohttp 全链路并发覆盖 7 大数据源 337+ 监控目标：
 
-| 来源 | 数量 | 覆盖 |
+| 来源 | 数量 | 覆盖范围 |
 |:---|---:|:---|
-| **HuggingFace** | 86 orgs | 67 Labs + 27 供应商（含机器人、欧洲、亚太） |
+| **HuggingFace** | 86 orgs | 67 个实验室 + 27 个供应商（含机器人、欧洲、亚太） |
 | **博客** | 71 源 | 实验室 + 研究者 + 独立博客 + 数据供应商 |
-| **GitHub** | 50 orgs | AI Labs + 中国开源 + 机器人 + 数据供应商 |
+| **GitHub** | 50 orgs | AI 实验室 + 中国开源 + 机器人 + 数据供应商 |
 | **论文** | 2 源 | arXiv (cs.CL/AI/LG/CV/RO) + HF Papers |
 | **Papers with Code** | API | 数据集/榜单追踪，论文引用关系 |
 | **X/Twitter** | 125 账户 | 13 类别，CEO/Leaders + 研究者 + 机器人 |
@@ -165,7 +164,7 @@ AI 训练数据的情报来源高度分散——实验室在 HuggingFace 发模�
 
 > 供应商分类、X 账户明细、数据集分类体系见 [数据源文档](docs/data-sources.md)。输出 JSON Schema 见 [输出规范](docs/schema.md)。
 
-### 2. Watermark-Driven Incremental Scanning
+### 2. 水位线驱动增量扫描 (Watermark-Driven Incremental Scanning)
 
 传统全量扫描的 API 配额消耗与总数据集数成正比，难以提升至小时级频率。Radar 实现**组织级水位线增量扫描**——每源每 org 维护独立的增量窗口 $W_{s,o}(t)$：
 
@@ -179,7 +178,7 @@ python src/main_intel.py --days 7                  # 增量扫描（水位线驱
 python src/main_intel.py --full-scan --days 7       # 强制全量扫描（重建基线）
 ```
 
-### 3. Three-Dimensional Cross-Analysis
+### 3. 三维交叉分析 (Three-Dimensional Cross-Analysis)
 
 单一数据源只能提供碎片化视角。Radar 构建三维交叉分析能力，揭示隐含的竞争格局：
 
@@ -191,7 +190,7 @@ python src/main_intel.py --full-scan --days 7       # 强制全量扫描（重�
 
 三个维度交叉关联：矩阵揭示"谁在做什么"，谱系揭示"从哪来到哪去"，图谱揭示"谁和谁协作"。
 
-### 4. Rule-Based Anomaly Detection & Alerting
+### 4. 基于规则的异常检测与告警 (Rule-Based Anomaly Detection & Alerting)
 
 情报系统的核心闭环在于从"被动查看"转为"主动通知"。Radar 实现 $A(d) = \sum_i w_i \cdot r_i(d)$ 异常评分，7 条规则覆盖 4 类别：
 
@@ -202,7 +201,7 @@ python src/main_intel.py --full-scan --days 7       # 强制全量扫描（重�
 
 指纹去重避免重复告警，Email + Webhook 双通道分发。
 
-### 5. Time-Series Persistence & Trend Analysis
+### 5. 时序持久化与趋势分析 (Time-Series Persistence & Trend Analysis)
 
 批量 upsert + 作用域趋势计算，SQLite 每日快照，支持长周期趋势分析：
 
@@ -213,19 +212,19 @@ python src/main_intel.py --full-scan --days 7       # 强制全量扫描（重�
 
 时序数据持久化使情报系统从"快照"升级为"影片"——不仅知道当前状态，还能回答"变化趋势是什么"。
 
-### 6. Agent-Native Interface Layer
+### 6. Agent 原生接口层 (Agent-Native Interface Layer)
 
 Radar 以 Agent-native 方式暴露三套完整接口，覆盖从自动化采集到交互式分析的全工作流：
 
 | 接口 | 数量 | 说明 |
 |:---|:---|:---|
-| **MCP Server** | 19 tools | scan / search / diff / trend / history / reddit / matrix / lineage / org-graph / alerts / export / subscribe 等 |
-| **REST API** | 19 endpoints | 数据查询 + 分析 + 操作，含 Swagger 文档 |
-| **Claude Code Skills** | 7 commands | `/scan` `/brief` `/search` `/diff` `/deep-dive` `/recipe` `/radar` |
+| **MCP Server** | 19 工具 | scan / search / diff / trend / history / reddit / matrix / lineage / org-graph / alerts / export / subscribe 等 |
+| **REST API** | 19 端点 | 数据查询 + 分析 + 操作，含 Swagger 文档 |
+| **Claude Code Skills** | 7 命令 | `/scan` `/brief` `/search` `/diff` `/deep-dive` `/recipe` `/radar` |
 
 三套接口共享同一数据层和分析引擎，Agent 可按场景选择最合适的交互协议。
 
-### 7. AI-Powered Insight Generation
+### 7. AI 驱动的洞察生成 (AI-Powered Insight Generation)
 
 采集和分析产出结构化数据后，LLM 自动生成决策层可直读的情报报告：
 
@@ -234,23 +233,23 @@ Radar 以 Agent-native 方式暴露三套完整接口，覆盖从自动化采集
 - 多 Provider 支持：Anthropic / Kimi / DeepSeek
 - 输出 Markdown 格式的 AI 分析报告 (`_insights.md`)，聚焦趋势判断和行动建议
 
-### 8. Dashboard Real-Time Visualization
+### 8. 仪表盘实时可视化 (Dashboard Real-Time Visualization)
 
-12 Tab Web 仪表盘，实时呈现情报全景：
+12 面板 Web 仪表盘，实时呈现情报全景：
 
 | 面板 | 内容 |
 |:---|:---|
-| Overview | 全局统计、最新动态、异常告警 |
-| Datasets / GitHub / Papers / Blogs / Reddit | 各源详情浏览与搜索 |
-| Competitive Matrix | 竞品对比矩阵 |
-| Lineage | 数据集谱系追踪 |
-| Org Graph | 组织关系图谱 |
-| Search | 跨源全文搜索 |
-| Trends | 时序趋势可视化 |
+| 概览 (Overview) | 全局统计、最新动态、异常告警 |
+| 数据集 / GitHub / 论文 / 博客 / Reddit | 各源详情浏览与搜索 |
+| 竞品矩阵 (Competitive Matrix) | 竞品对比矩阵 |
+| 谱系 (Lineage) | 数据集谱系追踪 |
+| 组织图谱 (Org Graph) | 组织关系图谱 |
+| 搜索 (Search) | 跨源全文搜索 |
+| 趋势 (Trends) | 时序趋势可视化 |
 
 ---
 
-## Quick Start
+## 快速开始 (Quick Start)
 
 ```bash
 git clone https://github.com/liuxiaotong/ai-dataset-radar.git
@@ -284,7 +283,7 @@ data/reports/2026-02-08/
 
 ---
 
-## CLI Reference
+## CLI 参考 (CLI Reference)
 
 ```bash
 python src/main_intel.py --days 7                  # 增量扫描（首次全量，后续增量）
@@ -306,7 +305,7 @@ python src/main_intel.py --days 7 --api-insights    # 显式调用 LLM API 生�
 
 ---
 
-## REST API & Dashboard
+## REST API 与仪表盘 (REST API & Dashboard)
 
 ```bash
 python agent/api.py
@@ -326,7 +325,7 @@ python agent/api.py
 
 ---
 
-## MCP Server
+## MCP 服务器 (MCP Server)
 
 <details>
 <summary>MCP 配置</summary>
@@ -348,7 +347,7 @@ python agent/api.py
 
 ---
 
-## Claude Code Skills
+## Claude Code 技能 (Claude Code Skills)
 
 在 Claude Code 中输入 `/` 即可调用，覆盖完整的竞争情报工作流：
 
@@ -381,13 +380,13 @@ python agent/api.py
 
 ---
 
-## Data Sources
+## 数据源 (Data Sources)
 
-| 来源 | 数量 | 覆盖 |
+| 来源 | 数量 | 覆盖范围 |
 |:---|---:|:---|
-| **HuggingFace** | 86 orgs | 67 Labs + 27 供应商（含机器人、欧洲、亚太） |
+| **HuggingFace** | 86 orgs | 67 个实验室 + 27 个供应商（含机器人、欧洲、亚太） |
 | **博客** | 71 源 | 实验室 + 研究者 + 独立博客 + 数据供应商 |
-| **GitHub** | 50 orgs | AI Labs + 中国开源 + 机器人 + 数据供应商 |
+| **GitHub** | 50 orgs | AI 实验室 + 中国开源 + 机器人 + 数据供应商 |
 | **论文** | 2 源 | arXiv (cs.CL/AI/LG/CV/RO) + HF Papers |
 | **Papers with Code** | API | 数据集/榜单追踪，论文引用关系 |
 | **X/Twitter** | 125 账户 | 13 类别，CEO/Leaders + 研究者 + 机器人 |
@@ -397,10 +396,10 @@ python agent/api.py
 
 ---
 
-## Ecosystem
+## 生态系统 (Ecosystem)
 
 <details>
-<summary>Architecture Diagram</summary>
+<summary>架构图</summary>
 
 ```mermaid
 graph LR
@@ -431,45 +430,23 @@ graph LR
 
 </details>
 
-| Layer | Project | PyPI | Description | Repo |
+| 层 | 项目 | PyPI | 描述 | 仓库 |
 |:---|:---|:---|:---|:---|
-| Discovery | **Radar** | knowlyr-radar | 多源竞争情报 · 增量扫描 · 异常告警 | You are here |
-| Analysis | **DataRecipe** | knowlyr-datarecipe | 逆向分析、Schema 提取、成本估算 | [GitHub](https://github.com/liuxiaotong/data-recipe) |
-| Production | **DataSynth** | knowlyr-datasynth | LLM 批量合成 | [GitHub](https://github.com/liuxiaotong/data-synth) |
-| Production | **DataLabel** | knowlyr-datalabel | 轻量标注 | [GitHub](https://github.com/liuxiaotong/data-label) |
-| Quality | **DataCheck** | knowlyr-datacheck | 规则验证、重复检测、分布分析 | [GitHub](https://github.com/liuxiaotong/data-check) |
-| Audit | **ModelAudit** | knowlyr-modelaudit | 蒸馏检测、模型指纹 | [GitHub](https://github.com/liuxiaotong/model-audit) |
-| Deliberation | **Crew** | knowlyr-crew | 对抗式多智能体协商 · 持久记忆进化 · MCP 原生 | [GitHub](https://github.com/liuxiaotong/knowlyr-crew) |
-| Identity | **knowlyr-id** | — | 身份系统 + AI 员工运行时 | [GitHub](https://github.com/liuxiaotong/knowlyr-id) |
-| Agent Training | **knowlyr-gym** | sandbox/recorder/reward/hub | Gymnasium 风格 RL 框架 · 过程奖励模型 · SFT/DPO/GRPO | [GitHub](https://github.com/liuxiaotong/knowlyr-gym) |
+| 发现 (Discovery) | **Radar** | knowlyr-radar | 多源竞争情报 · 增量扫描 · 异常告警 | 当前项目 |
+| 分析 (Analysis) | **DataRecipe** | knowlyr-datarecipe | 逆向分析、Schema 提取、成本估算 | [GitHub](https://github.com/liuxiaotong/data-recipe) |
+| 生产 (Production) | **DataSynth** | knowlyr-datasynth | LLM 批量合成 | [GitHub](https://github.com/liuxiaotong/data-synth) |
+| 生产 (Production) | **DataLabel** | knowlyr-datalabel | 轻量标注 | [GitHub](https://github.com/liuxiaotong/data-label) |
+| 质量 (Quality) | **DataCheck** | knowlyr-datacheck | 规则验证、重复检测、分布分析 | [GitHub](https://github.com/liuxiaotong/data-check) |
+| 审计 (Audit) | **ModelAudit** | knowlyr-modelaudit | 蒸馏检测、模型指纹 | [GitHub](https://github.com/liuxiaotong/model-audit) |
+| 协商 (Deliberation) | **Crew** | knowlyr-crew | 对抗式多智能体协商 · 持久记忆进化 · MCP 原生 | [GitHub](https://github.com/liuxiaotong/knowlyr-crew) |
+| 身份 (Identity) | **knowlyr-id** | — | 身份系统 + AI 员工运行时 | [GitHub](https://github.com/liuxiaotong/knowlyr-id) |
+| Agent 训练 (Agent Training) | **knowlyr-gym** | sandbox/recorder/reward/hub | Gymnasium 风格 RL 框架 · 过程奖励模型 · SFT/DPO/GRPO | [GitHub](https://github.com/liuxiaotong/knowlyr-gym) |
 
 > DataRecipe 联动详情（评分公式、输出结构、MCP 双服务配置）见 [DataRecipe 文档](docs/datarecipe.md)。
 
 ---
 
-## Development
-
-```bash
-git clone https://github.com/liuxiaotong/ai-dataset-radar.git
-cd ai-dataset-radar
-pip install -r requirements.txt && playwright install chromium
-cp .env.example .env
-
-# 运行测试 (999 个用例)
-pytest
-
-# 代码格式化 + lint
-ruff check src/
-ruff format src/
-```
-
-**测试覆盖**: 36 个测试文件，999 个测试用例。
-
-**CI**: GitHub Actions，Tag push 自动发布。定时任务 (`daily.yml`) 支持每日自动扫描。
-
----
-
-## References
+## 参考文献 (References)
 
 - **Competitive Intelligence** — Kahaner, L., 1997. *Competitive Intelligence: How to Gather, Analyze, and Use Information to Move Your Business to the Top*. Touchstone
 - **OSINT Techniques** — Bazzell, M., 2023. *Open Source Intelligence Techniques*. IntelTechniques — 多源情报采集方法论的参考来源
@@ -481,12 +458,12 @@ ruff format src/
 
 ---
 
-## License
+## 许可证 (License)
 
 [MIT](LICENSE)
 
 ---
 
 <div align="center">
-<sub><a href="https://github.com/liuxiaotong">knowlyr</a> — multi-source competitive intelligence for AI training data</sub>
+<sub><a href="https://github.com/liuxiaotong">knowlyr</a> — 面向 AI 训练数据的多源竞争情报引擎</sub>
 </div>
