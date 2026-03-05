@@ -1208,9 +1208,6 @@ sources:
     enabled: true
     mode: targeted
 
-  paperswithcode:
-    enabled: true
-    limit: 30
 
   # Semantic Scholar - 高影响力论文追踪
   semantic_scholar:

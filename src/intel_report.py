@@ -43,7 +43,6 @@ class IntelReportGenerator:
         competitor_matrix: dict = None,
         dataset_lineage: dict = None,
         org_graph: dict = None,
-        pwc_datasets: list[dict] = None,
     ) -> str:
         """Generate the full intelligence report.
 
@@ -78,7 +77,6 @@ class IntelReportGenerator:
                 datasets_by_type,
                 github_activity,
                 blog_activity,
-                pwc_datasets,
             )
         )
 
@@ -100,7 +98,6 @@ class IntelReportGenerator:
         lines.extend(self._generate_papers_section(papers))
 
         # Papers with Code datasets
-        lines.extend(self._generate_pwc_section(pwc_datasets))
 
         # X/Twitter Activity
         lines.extend(self._generate_x_section(x_activity))
@@ -168,7 +165,6 @@ class IntelReportGenerator:
         datasets_by_type: dict,
         github_activity: list[dict] = None,
         blog_activity: list[dict] = None,
-        pwc_datasets: list[dict] = None,
     ) -> list[str]:
         """Generate executive summary section."""
         lines = []
@@ -211,7 +207,6 @@ class IntelReportGenerator:
                     blog_sources += 1
                     blog_articles += len(activity["articles"])
 
-        pwc_count = len(pwc_datasets or [])
 
         # Count by type
         type_counts = {}
@@ -234,8 +229,6 @@ class IntelReportGenerator:
         lines.append(
             f"- **数据供应商监控**: HF({active_vendors}家), GitHub({github_orgs}组织/{github_repos}仓库), 博客({blog_sources}源/{blog_articles}文章)"
         )
-        if pwc_count:
-            lines.append(f"- **Papers with Code**: {pwc_count} 个新数据集/榜单")
         lines.append(
             f"- **高价值数据集**: {total_datasets} 个（已分类 {total_datasets - other_count} 个）"
         )
@@ -572,39 +565,6 @@ class IntelReportGenerator:
 
         return lines
 
-    def _generate_pwc_section(self, datasets: list[dict] = None) -> list[str]:
-        """Generate Papers with Code dataset section."""
-        if not datasets:
-            return []
-
-        limit = self.limits.get("paperswithcode", 10)
-        lines = []
-        lines.append("## 📚 Papers with Code 数据集/榜单")
-        lines.append("")
-
-        for ds in datasets[:limit]:
-            name = ds.get("full_name") or ds.get("name", "Unknown")
-            url = ds.get("url") or ds.get("homepage") or ""
-            desc = (ds.get("description") or "").strip()
-            paper_count = ds.get("paper_count", 0)
-            modalities = ds.get("modalities") or ds.get("languages") or []
-            modal_str = ", ".join(modalities[:4]) if modalities else "-"
-            created_at = ds.get("created_at")
-            badges = [f"论文 {paper_count}"]
-            if created_at:
-                badges.append(created_at[:10])
-            badges.append(f"模态: {modal_str}")
-            title = f"- **{name}**"
-            if url:
-                title = f"- **[{name}]({url})**"
-            lines.append(f"{title}（{'; '.join(badges)}）")
-            if desc:
-                snippet = desc[:280] + ("…" if len(desc) > 280 else "")
-                lines.append(f"  {snippet}")
-
-        lines.append("")
-        return lines
-
     def _generate_x_section(self, x_activity: dict = None) -> list[str]:
         """Generate X/Twitter activity section."""
         lines = []
@@ -806,7 +766,6 @@ class IntelReportGenerator:
         datasets_by_type: dict,
         github_activity: list[dict] = None,
         blog_activity: list[dict] = None,
-        pwc_datasets: list[dict] = None,
     ) -> str:
         """Generate a brief console summary."""
         lines = []
@@ -839,8 +798,6 @@ class IntelReportGenerator:
             if active_blogs:
                 lines.append(f"  博客更新: {', '.join(active_blogs[:5])}")
 
-        if pwc_datasets:
-            lines.append(f"  Papers with Code: {len(pwc_datasets)} 项")
 
         # Type summary
         lines.append("")

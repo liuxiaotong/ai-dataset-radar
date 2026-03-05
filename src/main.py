@@ -17,12 +17,10 @@ logger = get_logger("main")
 
 from scrapers import (
     HuggingFaceScraper,
-    PapersWithCodeScraper,
     ArxivScraper,
     GitHubScraper,
     HFPapersScraper,
     SemanticScholarScraper,
-    PwCSOTAScraper,
 )
 from filters import filter_datasets, DomainFilter
 from notifiers import create_notifiers, expand_env_vars, BusinessIntelNotifier
@@ -88,16 +86,6 @@ def fetch_all_data(config: dict) -> dict:
         logger.info("Found %d datasets from HuggingFace", len(result))
         return "huggingface", result
 
-    def fetch_paperswithcode():
-        pwc_cfg = sources_cfg.get("paperswithcode", {})
-        if not pwc_cfg.get("enabled", True):
-            return "paperswithcode", []
-        logger.info("Fetching Papers with Code datasets...")
-        scraper = PapersWithCodeScraper(limit=pwc_cfg.get("limit", 50))
-        result = scraper.fetch()
-        logger.info("Found %d datasets from PapersWithCode", len(result))
-        return "paperswithcode", result
-
     def fetch_arxiv():
         arxiv_cfg = sources_cfg.get("arxiv", {})
         if not arxiv_cfg.get("enabled", True):
@@ -148,7 +136,7 @@ def fetch_all_data(config: dict) -> dict:
         return "hf_papers", result
 
     # Run all fetchers in parallel
-    fetchers = [fetch_huggingface, fetch_paperswithcode, fetch_arxiv, fetch_github, fetch_hf_papers]
+    fetchers = [fetch_huggingface, fetch_arxiv, fetch_github, fetch_hf_papers]
 
     with ThreadPoolExecutor(max_workers=5) as executor:
         futures = {executor.submit(fn): fn.__name__ for fn in fetchers}
@@ -222,7 +210,6 @@ def save_data(data: dict, config: dict) -> str:
         "sources": data,
         "summary": {
             "huggingface_count": len(data.get("huggingface", [])),
-            "paperswithcode_count": len(data.get("paperswithcode", [])),
             "arxiv_count": len(data.get("arxiv", [])),
             "github_count": len(data.get("github", [])),
             "hf_papers_count": len(data.get("hf_papers", [])),
@@ -459,19 +446,6 @@ def run_value_analysis(data: dict, config: dict) -> dict:
         aggregator.add_model_card_data(model_card_results)
         results["model_card_results"] = model_card_results
 
-    # SOTA analysis
-    sota_cfg = config.get("value_analysis", {}).get("sota", {})
-    if sota_cfg.get("enabled", True):
-        print("Analyzing SOTA associations...")
-        scraper = PwCSOTAScraper(
-            areas=sota_cfg.get("areas"),
-            top_n=sota_cfg.get("top_n", 10),
-        )
-        sota_results = scraper.analyze_sota_datasets()
-        print(f"  Found {sota_results.get('unique_datasets', 0)} datasets with SOTA associations")
-        aggregator.add_sota_data(sota_results)
-        results["sota_results"] = sota_results
-
     # Add HuggingFace data
     if data.get("huggingface"):
         aggregator.add_huggingface_data(data["huggingface"])
@@ -637,7 +611,6 @@ def main():
         print("Skipping data fetch (--no-fetch)")
         filtered_data = {
             "huggingface": [],
-            "paperswithcode": [],
             "arxiv": [],
             "github": [],
             "hf_papers": [],

@@ -333,7 +333,7 @@ class ValueAggregator:
         """Add SOTA usage data from Papers with Code.
 
         Args:
-            sota_results: Results from PwCSOTAScraper.
+            sota_results: Results from SOTA scraper.
         """
         for ds in sota_results.get("ranked_datasets", []):
             key = self._normalize_name(ds.get("name", ""))

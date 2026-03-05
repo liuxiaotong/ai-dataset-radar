@@ -19,14 +19,12 @@ from .registry import (
 
 # Import all scrapers to trigger registration
 from .huggingface import HuggingFaceScraper
-from .paperswithcode import PapersWithCodeScraper
 from .arxiv import ArxivScraper
 from .github import GitHubScraper
 from .github_org import GitHubOrgScraper
 from .blog_rss import BlogRSSScraper
 from .hf_papers import HFPapersScraper
 from .semantic_scholar import SemanticScholarScraper
-from .pwc_sota import PwCSOTAScraper
 from .modelscope import ModelScopeScraper
 
 __all__ = [
@@ -41,13 +39,11 @@ __all__ = [
     "clear_registry",
     # Scrapers
     "HuggingFaceScraper",
-    "PapersWithCodeScraper",
     "ArxivScraper",
     "GitHubScraper",
     "GitHubOrgScraper",
     "BlogRSSScraper",
     "HFPapersScraper",
     "SemanticScholarScraper",
-    "PwCSOTAScraper",
     "ModelScopeScraper",
 ]

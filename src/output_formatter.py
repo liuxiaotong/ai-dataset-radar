@@ -104,7 +104,6 @@ class DualOutputFormatter:
         vendor_activity = data.get("vendor_activity", {})
         datasets_by_type = data.get("datasets_by_type", {})
         trend_data = data.get("trend_data", {})
-        pwc_datasets = data.get("paperswithcode", [])
         hf_general = data.get("huggingface_general", [])
 
         # Calculate period with proper start date
@@ -152,7 +151,6 @@ class DualOutputFormatter:
                 "total_github_repos": github_stats["repos"],
                 "total_github_repos_high_relevance": github_stats["high_relevance"],
                 "total_papers": len(papers),
-                "paperswithcode_count": len(pwc_datasets),
                 "huggingface_general_count": len(hf_general),
                 "total_blog_posts": self._count_blog_posts(blog_posts),
                 "total_x_tweets": sum(
@@ -174,7 +172,6 @@ class DualOutputFormatter:
             "blog_posts": blog_posts,
             "x_activity": x_activity,
             "featured_trends": trend_data if trend_data else None,
-            "paperswithcode": pwc_datasets,
             "huggingface_general": hf_general,
             "hn_activity": data.get("hn_activity"),
             "kaggle_datasets": data.get("kaggle_datasets"),

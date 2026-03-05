@@ -56,17 +56,6 @@ class ConsoleNotifier:
             print()
 
         # Papers with Code datasets
-        pwc_data = data.get("paperswithcode", [])
-        print(f"\n{self._color('Papers with Code Datasets', 'yellow')} ({len(pwc_data)} found)")
-        print("-" * 40)
-        for ds in pwc_data[:10]:
-            print(f"  {self._color(ds.get('name', 'N/A'), 'green')}")
-            desc = ds.get("description", "")
-            if desc:
-                desc = desc[:100] + "..." if len(desc) > 100 else desc
-                print(f"    {desc}")
-            print(f"    Papers: {ds.get('paper_count', 0)}")
-            print(f"    URL: {ds.get('url', 'N/A')}")
             print()
 
         # arXiv papers
@@ -123,7 +112,7 @@ class ConsoleNotifier:
 
         print("=" * 60)
         total = (
-            len(hf_data) + len(pwc_data) + len(arxiv_data) + len(github_data) + len(hf_papers_data)
+            len(hf_data) + len(arxiv_data) + len(github_data) + len(hf_papers_data)
         )
         print(f"Total: {total} items found")
         print("=" * 60 + "\n")
@@ -166,7 +155,6 @@ class MarkdownNotifier:
 
         # Summary
         hf_count = len(data.get("huggingface", []))
-        pwc_count = len(data.get("paperswithcode", []))
         arxiv_count = len(data.get("arxiv", []))
         github_data = data.get("github", [])
         github_count = len(github_data)
@@ -174,12 +162,11 @@ class MarkdownNotifier:
         hf_papers_data = data.get("hf_papers", [])
         hf_papers_count = len(hf_papers_data)
         hf_papers_dataset_count = len([p for p in hf_papers_data if p.get("is_dataset_paper")])
-        total = hf_count + pwc_count + arxiv_count + github_count + hf_papers_count
+        total = hf_count + arxiv_count + github_count + hf_papers_count
 
         lines.append("## Summary\n")
         lines.append(f"- **Total items found:** {total}")
         lines.append(f"- **Hugging Face datasets:** {hf_count}")
-        lines.append(f"- **Papers with Code datasets:** {pwc_count}")
         lines.append(f"- **arXiv papers:** {arxiv_count}")
         lines.append(f"- **GitHub repos:** {github_count} ({github_dataset_count} dataset-related)")
         lines.append(
@@ -204,23 +191,6 @@ class MarkdownNotifier:
         lines.append("")
 
         # Papers with Code
-        lines.append("## Papers with Code Datasets\n")
-        pwc_data = data.get("paperswithcode", [])
-        if pwc_data:
-            lines.append("| Name | Description | Papers |")
-            lines.append("|------|-------------|--------|")
-            for ds in pwc_data:
-                name = f"[{ds.get('name', 'N/A')}]({ds.get('url', '#')})"
-                desc = ds.get("description", "")
-                desc = desc[:80] + "..." if len(desc) > 80 else desc
-                desc = desc.replace("|", "\\|").replace("\n", " ")
-                papers = ds.get("paper_count", 0)
-                lines.append(f"| {name} | {desc} | {papers} |")
-        else:
-            lines.append("No datasets found")
-        lines.append("")
-
-        # arXiv
         lines.append("## arXiv Papers\n")
         arxiv_data = data.get("arxiv", [])
         if arxiv_data:
@@ -608,7 +578,6 @@ class WebhookNotifier:
             "timestamp": datetime.now().isoformat(),
             "summary": {
                 "huggingface_count": len(data.get("huggingface", [])),
-                "paperswithcode_count": len(data.get("paperswithcode", [])),
                 "arxiv_count": len(data.get("arxiv", [])),
             },
             "data": data,

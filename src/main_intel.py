@@ -47,7 +47,6 @@ from intel_report import IntelReportGenerator
 from scrapers.arxiv import ArxivScraper
 from scrapers.hf_papers import HFPapersScraper
 from scrapers.huggingface import HuggingFaceScraper
-from scrapers.paperswithcode import PapersWithCodeScraper
 from output_formatter import DualOutputFormatter
 from db import RadarDatabase
 from analyzers.trend import TrendAnalyzer
@@ -129,7 +128,6 @@ def format_insights_prompt(
     vendor_activity: dict = None,
     x_activity: dict = None,
     reddit_activity: dict = None,
-    pwc_datasets: list = None,
     hn_activity: dict = None,
     kaggle_datasets: list = None,
     semantic_scholar_papers: list = None,
@@ -467,36 +465,8 @@ def format_insights_prompt(
     else:
         lines.append("无 Reddit 动态\n")
 
-    # ── Section 5.7: Papers with Code ──
-    lines.append("## 5.7、Papers with Code 数据集/榜单\n")
-    pwc_items = (pwc_datasets or [])[:15]
-    if pwc_items:
-        for ds in pwc_items:
-            name = ds.get("full_name") or ds.get("name", "")
-            url = ds.get("url") or ds.get("homepage", "")
-            paper_count = ds.get("paper_count", 0)
-            desc = (ds.get("description") or "").strip()
-            created_at = ds.get("created_at", "")
-            meta = []
-            if created_at:
-                meta.append(created_at[:10])
-            meta.append(f"论文: {paper_count}")
-            modalities = ds.get("modalities") or ds.get("languages") or []
-            if modalities:
-                meta.append(f"模态: {', '.join(modalities[:3])}")
-            title = name or "未命名"
-            if url:
-                lines.append(f"- **[{title}]({url})** ({'; '.join(meta)})")
-            else:
-                lines.append(f"- **{title}** ({'; '.join(meta)})")
-            if desc:
-                lines.append(f"  {desc[:400]}" + ("…" if len(desc) > 400 else ""))
-        lines.append("")
-    else:
-        lines.append("本周无 Papers with Code 更新\n")
-
-    # ── Section 5.8: Hacker News ──
-    lines.append("## 5.8、Hacker News 社区动态\n")
+    # ── Section 5.7: Hacker News ──
+    lines.append("## 5.7、Hacker News 社区动态\n")
     hn_data = hn_activity or {}
     hn_stories = hn_data.get("stories", [])
     if hn_stories:
@@ -516,8 +486,8 @@ def format_insights_prompt(
     else:
         lines.append("无 Hacker News 动态\n")
 
-    # ── Section 5.9: Kaggle ──
-    lines.append("## 5.9、Kaggle 数据集动态\n")
+    # ── Section 5.7: Kaggle ──
+    lines.append("## 5.7、Kaggle 数据集动态\n")
     kaggle_items = (kaggle_datasets or [])[:15]
     if kaggle_items:
         for ds in kaggle_items:
@@ -544,8 +514,8 @@ def format_insights_prompt(
     else:
         lines.append("无 Kaggle 数据集动态\n")
 
-    # ── Section 5.10: Semantic Scholar ──
-    lines.append("## 5.10、Semantic Scholar 高影响力论文\n")
+    # ── Section 5.7: Semantic Scholar ──
+    lines.append("## 5.7、Semantic Scholar 高影响力论文\n")
     ss_items = (semantic_scholar_papers or [])[:20]
     if ss_items:
         for p in ss_items:
@@ -570,8 +540,8 @@ def format_insights_prompt(
     else:
         lines.append("无 Semantic Scholar 数据\n")
 
-    # ── Section 5.11: GitHub Trending ──
-    lines.append("## 5.11、GitHub Trending\n")
+    # ── Section 5.7: GitHub Trending ──
+    lines.append("## 5.7、GitHub Trending\n")
     gh_repos = (gh_trending or {}).get("repos", [])
     if gh_repos:
         for repo in gh_repos[:20]:
@@ -592,8 +562,8 @@ def format_insights_prompt(
     else:
         lines.append("无 GitHub Trending 数据\n")
 
-    # ── Section 5.12: Product Hunt ──
-    lines.append("## 5.12、Product Hunt AI 产品\n")
+    # ── Section 5.7: Product Hunt ──
+    lines.append("## 5.7、Product Hunt AI 产品\n")
     ph_products = (producthunt or {}).get("products", [])
     if ph_products:
         for prod in ph_products[:15]:
@@ -1140,32 +1110,6 @@ def _effective_days(watermarks, source: str, default_days: int) -> int:
         return default_days
 
 
-def _filter_pwc_datasets(datasets: list[dict], days: int) -> list[dict]:
-    """Filter Papers with Code datasets by introduced date."""
-    if not datasets or not days:
-        return datasets or []
-
-    cutoff = datetime.now() - timedelta(days=days)
-    filtered = []
-    for ds in datasets:
-        created_at = ds.get("created_at") or ds.get("introduced_date")
-        if created_at:
-            try:
-                dt = datetime.fromisoformat(str(created_at))
-            except ValueError:
-                try:
-                    dt = datetime.strptime(str(created_at)[:10], "%Y-%m-%d")
-                except ValueError:
-                    dt = None
-        else:
-            dt = None
-
-        if dt and dt < cutoff:
-            continue
-        filtered.append(ds)
-    return filtered
-
-
 def _load_org_watermarks(raw_value) -> dict[str, str]:
     if not raw_value:
         return {}
@@ -1478,16 +1422,6 @@ def _update_watermarks(watermarks, all_data: dict) -> None:
     if ts:
         watermarks.set("reddit", ts)
 
-    # Papers with Code: max(dataset["created_at"])
-    pwc_timestamps = []
-    for ds in all_data.get("paperswithcode", []) or []:
-        ts = ds.get("created_at") or ds.get("introduced_date")
-        norm = _normalize_ts(ts)
-        if norm:
-            pwc_timestamps.append(norm)
-    ts = _max_ts(pwc_timestamps)
-    if ts:
-        watermarks.set("pwc", ts)
 
     hf_general_ts = []
     for ds in all_data.get("huggingface_general", []) or []:
@@ -1649,24 +1583,6 @@ async def async_main(args):
         else:
             logger.info("全量扫描模式（%d 天窗口）", args.days)
 
-        pwc_config = config.get("sources", {}).get("paperswithcode", {})
-        pwc_scraper = None
-        pwc_days = args.days
-        if (
-            not args.no_pwc
-            and pwc_config.get("enabled", True)
-        ):
-            pwc_scraper = PapersWithCodeScraper(
-                config=config,
-                limit=pwc_config.get("limit", 50),
-            )
-            base_days = _days("pwc") if incremental else args.days
-            config_days = pwc_config.get("days")
-            if config_days is not None:
-                pwc_days = min(config_days, base_days) if incremental else config_days
-            else:
-                pwc_days = base_days
-
         # 1-3. Fetch all data sources concurrently
         lab_activity = {"labs": {}}
         vendor_activity = {"vendors": {}}
@@ -1680,7 +1596,6 @@ async def async_main(args):
         gh_trending = {"repos": [], "metadata": {}}
         producthunt = {"products": [], "metadata": {}}
         papers = []
-        pwc_datasets = []
 
         # Pre-build paper scrapers
         arxiv_scraper = None
@@ -1732,8 +1647,6 @@ async def async_main(args):
         if ph_tracker:
             _n += 1
         if arxiv_scraper or hf_papers_scraper:
-            _n += 1
-        if pwc_scraper:
             _n += 1
         _total = _n + 3  # + classify + report + finalize
 
@@ -1831,15 +1744,6 @@ async def async_main(args):
 
             tasks["hf_general"] = _fetch_hf_general()
 
-        if pwc_scraper:
-            logger.info(_progress("Papers with Code 数据集..."))
-
-            async def _fetch_pwc():
-                result = await asyncio.to_thread(pwc_scraper.fetch)
-                return _filter_pwc_datasets(result, pwc_days)
-
-            tasks["pwc"] = _fetch_pwc()
-
         # Run all tasks concurrently
         if tasks:
             logger.info("  ↳ 等待数据采集完成...")
@@ -1906,9 +1810,6 @@ async def async_main(args):
                     elif key == "hf_papers":
                         filtered = paper_filter.filter_papers(result)
                         papers.extend(filtered)
-                    elif key == "pwc":
-                        pwc_datasets = result or []
-                        logger.info("  ✓ Papers with Code: %d 数据集", len(pwc_datasets))
                 except Exception as e:
                     logger.warning("  ✗ %s: %s", key, e)
 
@@ -2042,7 +1943,6 @@ async def async_main(args):
             competitor_matrix=competitor_matrix,
             dataset_lineage=dataset_lineage,
             org_graph=org_graph,
-            pwc_datasets=pwc_datasets,
         )
 
         # Prepare structured data for JSON output
@@ -2076,7 +1976,6 @@ async def async_main(args):
             "gh_trending": gh_trending,
             "producthunt": producthunt,
             "huggingface_general": hf_general_datasets,
-            "paperswithcode": pwc_datasets,
             "datasets": all_datasets,
             "datasets_by_type": datasets_json,
             "papers": papers,
@@ -2166,7 +2065,6 @@ async def async_main(args):
                 datasets_by_type,
                 github_activity,
                 blog_activity,
-                pwc_datasets,
             )
         )
 
@@ -2190,7 +2088,6 @@ async def async_main(args):
                 semantic_scholar_papers=semantic_scholar_papers,
                 gh_trending=gh_trending,
                 producthunt=producthunt,
-                pwc_datasets=pwc_datasets,
             )
 
             # Save insights prompt to file (always — for Claude Code environment)
@@ -2338,11 +2235,6 @@ def main():
         "--no-readme",
         action="store_true",
         help="Skip fetching dataset READMEs",
-    )
-    parser.add_argument(
-        "--no-pwc",
-        action="store_true",
-        help="Skip Papers with Code dataset scraping",
     )
     parser.add_argument(
         "--no-x",
@@ -2514,21 +2406,6 @@ async def run_intel_scan(
         hf_mode = str(hf_cfg.get("mode", "targeted")).lower()
         hf_general_enabled = hf_mode in {"general", "hybrid"}
         hf_general_datasets = []
-        pwc_config = config.get("sources", {}).get("paperswithcode", {})
-        pwc_scraper = None
-        pwc_days = days
-        if pwc_config.get("enabled", True):
-            pwc_scraper = PapersWithCodeScraper(
-                config=config,
-                limit=pwc_config.get("limit", 50),
-            )
-            base_days = _days("pwc") if incremental else days
-            config_days = pwc_config.get("days")
-            if config_days is not None:
-                pwc_days = min(config_days, base_days) if incremental else config_days
-            else:
-                pwc_days = base_days
-
         # Build async tasks
         tasks = {
             "labs": org_tracker.fetch_lab_activity(
@@ -2599,13 +2476,6 @@ async def run_intel_scan(
 
             tasks["hf_general"] = _fetch_hf_general()
 
-        if pwc_scraper:
-            async def _fetch_pwc():
-                result = await asyncio.to_thread(pwc_scraper.fetch)
-                return _filter_pwc_datasets(result, pwc_days)
-
-            tasks["pwc"] = _fetch_pwc()
-
         # Run all tasks concurrently
         lab_activity = {"labs": {}}
         vendor_activity = {"vendors": {}}
@@ -2619,7 +2489,6 @@ async def run_intel_scan(
         gh_trending = {"repos": [], "metadata": {}}
         producthunt = {"products": [], "metadata": {}}
         papers = []
-        pwc_datasets = []
 
         keys = list(tasks.keys())
         results = await asyncio.gather(*tasks.values(), return_exceptions=True)
@@ -2659,8 +2528,6 @@ async def run_intel_scan(
                     logger.info(
                         "  ✓ HuggingFace 通用: %d 数据集", len(hf_general_datasets)
                     )
-                elif key == "pwc":
-                    pwc_datasets = result or []
             except Exception as e:
                 logger.warning("Error fetching %s: %s", key, e)
 
@@ -2759,7 +2626,6 @@ async def run_intel_scan(
             competitor_matrix=competitor_matrix,
             dataset_lineage=dataset_lineage,
             org_graph=org_graph,
-            pwc_datasets=pwc_datasets,
         )
 
         date_str = datetime.now().strftime("%Y-%m-%d")
@@ -2793,7 +2659,6 @@ async def run_intel_scan(
             "gh_trending": gh_trending,
             "producthunt": producthunt,
             "huggingface_general": hf_general_datasets,
-            "paperswithcode": pwc_datasets,
             "datasets": all_datasets,
             "datasets_by_type": datasets_json,
             "papers": papers,
@@ -2862,7 +2727,6 @@ async def run_intel_scan(
                 semantic_scholar_papers=semantic_scholar_papers,
                 gh_trending=gh_trending,
                 producthunt=producthunt,
-                pwc_datasets=pwc_datasets,
             )
 
             insights_prompt_path = reports_dir / f"intel_report_{date_str}_insights_prompt.md"
