@@ -328,13 +328,13 @@ def format_insights_prompt(
         for dtype, ds_list in classified.items():
             type_name = dtype.value if hasattr(dtype, "value") else str(dtype)
             lines.append(
-                f"- **{type_name}**: {len(ds_list)} 个 — {', '.join(ds.get('id', '') for ds in ds_list[:5])}"
+                f"- **{type_name}**: {len(ds_list)} 个 — {', '.join((ds.get('id', '') if isinstance(ds, dict) else str(ds)) for ds in ds_list[:5])}"
             )
 
         if other:
             other_list = list(other.values())[0]
             lines.append(
-                f"- **未分类**: {len(other_list)} 个 — {', '.join(ds.get('id', '') for ds in other_list[:5])}"
+                f"- **未分类**: {len(other_list)} 个 — {', '.join((ds.get('id', '') if isinstance(ds, dict) else str(ds)) for ds in other_list[:5])}"
             )
         lines.append("")
     else:
