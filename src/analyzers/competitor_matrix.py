@@ -7,7 +7,7 @@ from collections import defaultdict
 from typing import Optional
 
 from .org_detector import OrgDetector
-from .data_type_classifier import DataTypeClassifier, DataType
+from .data_type_classifier import DataTypeClassifier
 
 logger = logging.getLogger(__name__)
 

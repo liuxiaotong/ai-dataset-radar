@@ -2,14 +2,14 @@
 
 import sys
 from pathlib import Path
-from unittest.mock import AsyncMock, patch
+from unittest.mock import AsyncMock
 
 import pytest
 
 PROJECT_ROOT = Path(__file__).parent.parent
 sys.path.insert(0, str(PROJECT_ROOT / "src"))
 
-from trackers.hn_tracker import HNTracker, SIGNAL_KEYWORDS
+from trackers.hn_tracker import HNTracker
 
 
 @pytest.fixture

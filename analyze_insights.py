@@ -89,7 +89,7 @@ def main():
     if recipe_file.exists():
         user_parts.append(f"\n\n## DataRecipe 汇总\n\n{recipe_file.read_text()}")
 
-    user_parts.append(f"\n\n---\n请基于以上数据撰写竞争情报分析报告，严格按照你的系统指令中的格式要求输出。")
+    user_parts.append("\n\n---\n请基于以上数据撰写竞争情报分析报告，严格按照你的系统指令中的格式要求输出。")
 
     user_message = "".join(user_parts)
 

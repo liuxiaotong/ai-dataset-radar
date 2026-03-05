@@ -11,7 +11,12 @@ logger = logging.getLogger(__name__)
 
 # Patterns that indicate derivation from another dataset
 _DERIVATION_PATTERNS = [
-    re.compile(r"(?:based on|derived from|built on|extends|extension of|fine[- ]?tuned on|trained on|subset of|filtered from|sampled from|translated from|distilled from)\s+[\"']?([A-Za-z0-9_/.-]{3,60})[\"']?", re.IGNORECASE),
+    re.compile(
+        r"(?:based on|derived from|built on|extends|extension of|fine[- ]?tuned on|trained on"
+        r"|subset of|filtered from|sampled from|translated from|distilled from)"
+        r"\s+[\"']?([A-Za-z0-9_/.-]{3,60})[\"']?",
+        re.IGNORECASE,
+    ),
     re.compile(r"(?:using|from)\s+(?:the\s+)?([A-Za-z0-9_/-]{3,60})\s+dataset", re.IGNORECASE),
 ]
 
@@ -47,8 +52,6 @@ class DatasetLineageTracker:
         version_map: dict[str, list[tuple[str, str]]] = defaultdict(list)  # base -> [(version, id)]
         name_to_authors: dict[str, list[str]] = defaultdict(list)  # base_name -> [full_ids]
 
-        dataset_ids = {ds.get("id", "") for ds in datasets}
-
         for ds in datasets:
             ds_id = ds.get("id", "")
             if not ds_id:
@@ -72,7 +75,6 @@ class DatasetLineageTracker:
             if vm:
                 base = vm.group(1)
                 version = vm.group(2)
-                author = ds_id.split("/")[0] if "/" in ds_id else ""
                 version_map[base].append((version, ds_id))
                 # Also add an edge from newer to older if both exist
             else:
@@ -106,7 +108,6 @@ class DatasetLineageTracker:
         # Find root datasets (no parents)
         children = {e[0] for e in edges}
         parents = {e[1] for e in edges}
-        all_nodes = children | parents
         root_datasets = sorted(parents - children)
 
         return {
