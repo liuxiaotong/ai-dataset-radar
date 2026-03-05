@@ -8,7 +8,6 @@ discussions, RLHF/DPO/SFT resources, model releases with data components.
 """
 
 import asyncio
-import re
 from datetime import datetime, timedelta, timezone
 
 from utils.async_http import AsyncHTTPClient

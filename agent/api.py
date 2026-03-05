@@ -569,7 +569,10 @@ async def search(
         repos = []
         for org_data in report.get("github_activity", []):
             for repo in org_data.get("repos_updated", []):
-                text = (repo.get("full_name", "") + " " + repo.get("description", "") + " " + " ".join(repo.get("topics", []))).lower()
+                text = (
+                    repo.get("full_name", "") + " " + repo.get("description", "")
+                    + " " + " ".join(repo.get("topics", []))
+                ).lower()
                 if q_lower in text:
                     repos.append(repo)
         results["github"] = repos[:limit]
@@ -578,7 +581,10 @@ async def search(
         papers = report.get("papers", [])
         matched = [
             p for p in papers
-            if q_lower in (p.get("title", "") + " " + p.get("abstract", "") + " " + " ".join(p.get("authors", []))).lower()
+            if q_lower in (
+                p.get("title", "") + " " + p.get("abstract", "")
+                + " " + " ".join(p.get("authors", []))
+            ).lower()
         ]
         results["papers"] = matched[:limit]
 

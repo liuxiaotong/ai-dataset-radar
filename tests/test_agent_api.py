@@ -82,8 +82,16 @@ SAMPLE_REPORT = {
     ],
     "reddit_activity": {
         "posts": [
-            {"subreddit": "MachineLearning", "title": "New RLHF dataset released", "url": "https://reddit.com/r/1", "score": 150, "num_comments": 42, "selftext": "training data", "author": "ai_user", "signals": ["dataset", "rlhf"]},
-            {"subreddit": "LocalLLaMA", "title": "My cat is cute", "url": "https://reddit.com/r/2", "score": 500, "num_comments": 100, "selftext": "", "author": "cat_lover", "signals": []},
+            {
+                "subreddit": "MachineLearning", "title": "New RLHF dataset released",
+                "url": "https://reddit.com/r/1", "score": 150, "num_comments": 42,
+                "selftext": "training data", "author": "ai_user", "signals": ["dataset", "rlhf"],
+            },
+            {
+                "subreddit": "LocalLLaMA", "title": "My cat is cute",
+                "url": "https://reddit.com/r/2", "score": 500, "num_comments": 100,
+                "selftext": "", "author": "cat_lover", "signals": [],
+            },
         ],
         "metadata": {"subreddits_checked": 2, "total_posts": 2, "relevant_posts": 1},
     },
@@ -91,7 +99,10 @@ SAMPLE_REPORT = {
         "matrix": {"openai": {"sft_instruction": 1}, "anthropic": {"rlhf_preference": 1}},
         "rankings": {"sft_instruction": [("openai", 1)]},
         "top_orgs": [("openai", 2), ("anthropic", 1)],
-        "org_details": {"openai": {"datasets": 1, "repos": 1, "papers": 0, "blogs": 0}, "anthropic": {"datasets": 1, "repos": 0, "papers": 0, "blogs": 0}},
+        "org_details": {
+            "openai": {"datasets": 1, "repos": 1, "papers": 0, "blogs": 0},
+            "anthropic": {"datasets": 1, "repos": 0, "papers": 0, "blogs": 0},
+        },
     },
     "dataset_lineage": {
         "edges": [("child/ds", "parent/ds", "derived_from"), ("org/data-v2", "org/data-v1", "version_of")],
@@ -101,7 +112,10 @@ SAMPLE_REPORT = {
         "stats": {"total_datasets": 42, "total_edges": 2, "derivation_edges": 1, "version_chains": 1, "fork_groups": 1},
     },
     "org_graph": {
-        "nodes": [{"id": "openai", "display_name": "OpenAI", "dataset_count": 1}, {"id": "google", "display_name": "Google", "dataset_count": 0}],
+        "nodes": [
+            {"id": "openai", "display_name": "OpenAI", "dataset_count": 1},
+            {"id": "google", "display_name": "Google", "dataset_count": 0},
+        ],
         "edges": [{"source": "google", "target": "openai", "type": "co_citation", "weight": 3}],
         "clusters": [["google", "openai"]],
         "centrality": {"google": 0.5, "openai": 0.5},
@@ -948,7 +962,10 @@ class TestTrendsEndpoint:
             d = reports_dir / date
             d.mkdir(parents=True)
             (d / "intel_report_20260207.json").write_text(json.dumps({
-                "summary": {"total_datasets": 10, "total_github_repos": 5, "total_papers": 3, "total_blog_posts": 2, "total_reddit_posts": 1},
+                "summary": {
+                    "total_datasets": 10, "total_github_repos": 5, "total_papers": 3,
+                    "total_blog_posts": 2, "total_reddit_posts": 1,
+                },
                 "datasets_by_type": {"sft_instruction": [1, 2], "code": [3]},
             }))
 

@@ -5,7 +5,6 @@ using the unofficial ghapi.huchen.dev API (no auth required).
 """
 
 from datetime import datetime, timezone
-from typing import Optional
 
 from utils.async_http import AsyncHTTPClient
 from utils.logging_config import get_logger

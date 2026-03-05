@@ -9,7 +9,7 @@ import pytest
 PROJECT_ROOT = Path(__file__).parent.parent
 sys.path.insert(0, str(PROJECT_ROOT / "src"))
 
-from trackers.github_trending_tracker import GitHubTrendingTracker, SIGNAL_KEYWORDS
+from trackers.github_trending_tracker import GitHubTrendingTracker
 
 
 SAMPLE_TRENDING_RESPONSE = [

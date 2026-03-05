@@ -11,7 +11,7 @@ import json
 import math
 import os
 import sys
-from datetime import datetime, timezone, timedelta
+from datetime import datetime, timezone
 from pathlib import Path
 
 import yaml
