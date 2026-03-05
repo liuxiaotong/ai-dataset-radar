@@ -1,0 +1,227 @@
+name: Auto Review
+
+on:
+  pull_request:
+    types: [opened, synchronize]
+
+permissions:
+  pull-requests: write
+  contents: read
+  checks: read
+
+jobs:
+  review:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Wait for CI checks to pass
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          PR_NUMBER=${{ github.event.pull_request.number }}
+          echo "Waiting for CI checks on PR #${PR_NUMBER}..."
+
+          TIMEOUT=600
+          INTERVAL=15
+          ELAPSED=0
+
+          while [ $ELAPSED -lt $TIMEOUT ]; do
+            # 获取所有 check 状态，排除自己（Auto Review）
+            CHECKS=$(gh pr checks "$PR_NUMBER" --json name,state 2>/dev/null || echo "[]")
+
+            # 过滤掉自己这个 workflow 的 check
+            OTHER_CHECKS=$(echo "$CHECKS" | python3 -c "
+          import json, sys
+          checks = json.load(sys.stdin)
+          others = [c for c in checks if c['name'] != 'review']
+          if not others:
+              print('WAITING')
+              sys.exit(0)
+          states = [c['state'] for c in others]
+          if any(s == 'FAILURE' for s in states):
+              print('FAILURE')
+          elif all(s == 'SUCCESS' for s in states):
+              print('SUCCESS')
+          else:
+              print('WAITING')
+          ")
+
+            if [ "$OTHER_CHECKS" = "SUCCESS" ]; then
+              echo "All CI checks passed"
+              break
+            elif [ "$OTHER_CHECKS" = "FAILURE" ]; then
+              echo "CI checks failed — skipping review"
+              exit 0
+            fi
+
+            echo "  Checks still running... (${ELAPSED}s / ${TIMEOUT}s)"
+            sleep $INTERVAL
+            ELAPSED=$((ELAPSED + INTERVAL))
+          done
+
+          if [ $ELAPSED -ge $TIMEOUT ]; then
+            echo "Timeout waiting for CI checks — skipping review"
+            exit 0
+          fi
+
+      - name: Determine review round
+        id: round
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          PR_NUMBER=${{ github.event.pull_request.number }}
+          LABELS=$(gh pr view "$PR_NUMBER" --json labels -q '.labels[].name' 2>/dev/null || echo "")
+
+          # 找当前最大轮次
+          CURRENT_ROUND=0
+          for label in $LABELS; do
+            if echo "$label" | grep -qE '^review-round-[0-9]+$'; then
+              NUM=$(echo "$label" | sed 's/review-round-//')
+              if [ "$NUM" -gt "$CURRENT_ROUND" ]; then
+                CURRENT_ROUND=$NUM
+              fi
+            fi
+          done
+
+          NEXT_ROUND=$((CURRENT_ROUND + 1))
+          echo "round=$NEXT_ROUND" >> "$GITHUB_OUTPUT"
+          echo "Review round: $NEXT_ROUND"
+
+      - name: Run code review
+        id: review
+        env:
+          GH_TOKEN: ${{ github.token }}
+          CREW_API_TOKEN: ${{ secrets.CREW_API_TOKEN }}
+        run: |
+          PR_NUMBER=${{ github.event.pull_request.number }}
+          REPO=${{ github.repository }}
+          ROUND=${{ steps.round.outputs.round }}
+
+          # 获取 PR diff
+          DIFF=$(gh pr diff "$PR_NUMBER" | head -c 50000)
+
+          # 获取 PR 信息
+          PR_TITLE=$(gh pr view "$PR_NUMBER" --json title -q '.title')
+          PR_BODY=$(gh pr view "$PR_NUMBER" --json body -q '.body' | head -c 2000)
+
+          # 构建审查请求
+          TASK="审查 PR #${PR_NUMBER} 的代码变更。仓库: ${REPO}。这是第 ${ROUND} 轮审查。
+
+          PR 标题: ${PR_TITLE}
+          PR 描述: ${PR_BODY}
+
+          代码变更 (diff):
+          ${DIFF}
+
+          请以 JSON 格式返回审查结果，包含:
+          - approved: true/false
+          - summary: 审查总结
+          - comments: 具体意见数组（每条包含 file, line, comment）"
+
+          # 调用林锐审查
+          RESPONSE=$(curl -s -X POST "https://crew.knowlyr.com/api/run/employee/code-reviewer" \
+            -H "Authorization: Bearer ${CREW_API_TOKEN}" \
+            -H "Content-Type: application/json" \
+            -d "$(python3 -c "
+          import json, sys
+          task = sys.stdin.read()
+          print(json.dumps({'task': task, 'format': 'json'}))
+          " <<< "$TASK")")
+
+          echo "Review response received"
+
+          # 解析返回结果，提取 JSON
+          RESULT=$(echo "$RESPONSE" | python3 -c "
+          import json, sys, re
+          data = json.load(sys.stdin)
+          text = data.get('result', data.get('output', ''))
+          # 尝试从文本中提取 JSON
+          match = re.search(r'\{.*\}', text, re.DOTALL)
+          if match:
+              try:
+                  parsed = json.loads(match.group())
+                  print(json.dumps(parsed))
+              except:
+                  print(json.dumps({'approved': False, 'summary': text, 'comments': []}))
+          else:
+              print(json.dumps({'approved': False, 'summary': text, 'comments': []}))
+          " 2>/dev/null || echo '{"approved": false, "summary": "Failed to parse review response", "comments": []}')
+
+          APPROVED=$(echo "$RESULT" | python3 -c "import json,sys; print(json.load(sys.stdin).get('approved', False))")
+          SUMMARY=$(echo "$RESULT" | python3 -c "import json,sys; print(json.load(sys.stdin).get('summary', 'No summary'))")
+          COMMENTS=$(echo "$RESULT" | python3 -c "
+          import json, sys
+          data = json.load(sys.stdin)
+          comments = data.get('comments', [])
+          for c in comments:
+              f = c.get('file', '')
+              l = c.get('line', '')
+              msg = c.get('comment', '')
+              if f:
+                  print(f'- **{f}**{(\" L\"+str(l)) if l else \"\"}: {msg}')
+              else:
+                  print(f'- {msg}')
+          ")
+
+          echo "approved=$APPROVED" >> "$GITHUB_OUTPUT"
+          echo "round=$ROUND" >> "$GITHUB_OUTPUT"
+
+          # 保存 summary 和 comments 到文件（避免多行变量问题）
+          echo "$SUMMARY" > /tmp/review_summary.txt
+          echo "$COMMENTS" > /tmp/review_comments.txt
+
+      - name: Apply review result
+        env:
+          GH_TOKEN: ${{ github.token }}
+          CREW_API_TOKEN: ${{ secrets.CREW_API_TOKEN }}
+        run: |
+          PR_NUMBER=${{ github.event.pull_request.number }}
+          REPO=${{ github.repository }}
+          APPROVED="${{ steps.review.outputs.approved }}"
+          ROUND=${{ steps.review.outputs.round }}
+          SUMMARY=$(cat /tmp/review_summary.txt)
+          COMMENTS=$(cat /tmp/review_comments.txt)
+
+          # 添加轮次 label
+          gh pr edit "$PR_NUMBER" --add-label "review-round-${ROUND}" 2>/dev/null || \
+            gh label create "review-round-${ROUND}" --color "0E8A16" 2>/dev/null && \
+            gh pr edit "$PR_NUMBER" --add-label "review-round-${ROUND}"
+
+          if [ "$APPROVED" = "True" ] || [ "$APPROVED" = "true" ]; then
+            echo "PR approved by code reviewer"
+            gh pr review "$PR_NUMBER" --approve --body "$(cat <<EOF
+          **Auto Review (Round ${ROUND}) — Approved**
+
+          ${SUMMARY}
+          EOF
+          )"
+          else
+            echo "PR not approved — leaving review comments"
+            gh pr comment "$PR_NUMBER" --body "$(cat <<EOF
+          **Auto Review (Round ${ROUND}) — Changes Requested**
+
+          ${SUMMARY}
+
+          ${COMMENTS}
+          EOF
+          )"
+
+            # 第 4 轮：需要人工介入
+            if [ "$ROUND" -ge 4 ]; then
+              echo "Round ${ROUND}: escalating to human review"
+              gh label create "needs-human-review" --color "D93F0B" 2>/dev/null || true
+              gh pr edit "$PR_NUMBER" --add-label "needs-human-review"
+
+              # 通知 Kai
+              curl -s -X POST "https://crew.knowlyr.com/api/run/employee/ceo-assistant" \
+                -H "Authorization: Bearer ${CREW_API_TOKEN}" \
+                -H "Content-Type: application/json" \
+                -d "$(python3 -c "
+          import json
+          task = 'PR #${PR_NUMBER} 经过 ${ROUND} 轮审查仍未通过，需要 Kai 介入。仓库: ${REPO}。请通过飞书通知 Kai。'
+          print(json.dumps({'task': task}))
+          ")"
+              echo "Human review notification sent"
+            fi
+          fi
