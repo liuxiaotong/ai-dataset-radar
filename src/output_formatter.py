@@ -116,8 +116,11 @@ class DualOutputFormatter:
         # Count GitHub repos and orgs
         github_stats = self._count_github_stats(github_activity)
 
-        # Count total datasets
-        total_datasets = len(datasets)
+        # Count total datasets (all sources)
+        kaggle_datasets = data.get("kaggle_datasets", [])
+        if not isinstance(kaggle_datasets, list):
+            kaggle_datasets = []
+        total_datasets = len(datasets) + len(kaggle_datasets)
 
         # Clean and enrich datasets
         cleaned_datasets = [self._clean_dataset(ds, datasets_by_type) for ds in datasets]
@@ -157,6 +160,7 @@ class DualOutputFormatter:
                     for a in x_activity.get("accounts", [])
                 ),
                 "total_trending_datasets": len(trend_data.get("top_growing_7d", [])),
+                "kaggle_count": len(kaggle_datasets),
                 "semantic_scholar_count": len(data.get("semantic_scholar_papers") or []),
                 "gh_trending_count": len((data.get("gh_trending") or {}).get("repos", [])),
                 "producthunt_count": len((data.get("producthunt") or {}).get("products", [])),
