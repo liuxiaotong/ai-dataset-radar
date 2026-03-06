@@ -243,6 +243,27 @@ jobs:
           EOF
           )"
 
+            # 审查不通过 — 只在第 1 轮自动派回修复（避免循环：审查→派单→修复→再审查→再派单）
+            if [ "$ROUND" -eq 1 ]; then
+              curl -s -X POST "https://crew.knowlyr.com/run/employee/ceo-assistant" \
+                -H "Authorization: Bearer ${CREW_API_TOKEN}" \
+                -H "Content-Type: application/json" \
+                -d "$(python3 -c "
+          import json
+          task = '''PR #${PR_NUMBER} 第 ${ROUND} 轮审查不通过，需要派人修复。
+          仓库: ${REPO}
+
+          审查意见:
+          ${SUMMARY}
+
+          ${COMMENTS}
+
+          请根据仓库和问题类型派合适的工程师修复，修完后推代码触发下一轮审查。'''
+          print(json.dumps({'task': task}))
+          ")"
+              echo "Auto-dispatch: review feedback sent to ceo-assistant"
+            fi
+
             # 第 4 轮：需要人工介入
             if [ "$ROUND" -ge 4 ]; then
               echo "Round ${ROUND}: escalating to human review"
