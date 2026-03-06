@@ -98,36 +98,47 @@ jobs:
           REPO=${{ github.repository }}
           ROUND=${{ steps.round.outputs.round }}
 
-          # 获取 PR diff
-          DIFF=$(gh pr diff "$PR_NUMBER" | head -c 50000)
+          # 获取 PR diff — 写文件避免 shell 变量截断特殊字符
+          gh pr diff "$PR_NUMBER" | head -c 50000 > /tmp/pr_diff.txt
 
           # 获取 PR 信息
           PR_TITLE=$(gh pr view "$PR_NUMBER" --json title -q '.title')
           PR_BODY=$(gh pr view "$PR_NUMBER" --json body -q '.body' | head -c 2000)
 
-          # 构建审查请求
-          TASK="审查 PR #${PR_NUMBER} 的代码变更。仓库: ${REPO}。这是第 ${ROUND} 轮审查。
+          # 用 python3 从文件读 diff 构建 JSON payload，避免 shell 展开问题
+          PR_TITLE="$PR_TITLE" PR_BODY="$PR_BODY" REPO="$REPO" PR_NUMBER="$PR_NUMBER" ROUND="$ROUND" python3 << 'PYEOF' > /tmp/review_payload.json
+          import json, os
 
-          PR 标题: ${PR_TITLE}
-          PR 描述: ${PR_BODY}
+          with open('/tmp/pr_diff.txt') as f:
+              diff = f.read()
+
+          repo = os.environ['REPO']
+          pr_number = os.environ['PR_NUMBER']
+          round_num = os.environ['ROUND']
+          title = os.environ['PR_TITLE']
+          body = os.environ['PR_BODY']
+
+          task = f"""审查 PR #{pr_number} 的代码变更。仓库: {repo}。这是第 {round_num} 轮审查。
+
+          PR 标题: {title}
+          PR 描述: {body}
 
           代码变更 (diff):
-          ${DIFF}
+          {diff}
 
           请以 JSON 格式返回审查结果，包含:
           - approved: true/false
           - summary: 审查总结
-          - comments: 具体意见数组（每条包含 file, line, comment）"
+          - comments: 具体意见数组（每条包含 file, line, comment）"""
+
+          print(json.dumps({'task': task, 'format': 'json'}))
+          PYEOF
 
           # 调用林锐审查（异步 API：POST 返回 task_id，轮询等结果）
           SUBMIT=$(curl -s -X POST "https://crew.knowlyr.com/run/employee/code-reviewer" \
             -H "Authorization: Bearer ${CREW_API_TOKEN}" \
             -H "Content-Type: application/json" \
-            -d "$(python3 -c "
-          import json, sys
-          task = sys.stdin.read()
-          print(json.dumps({'task': task, 'format': 'json'}))
-          " <<< "$TASK")")
+            -d @/tmp/review_payload.json)
 
           TASK_ID=$(echo "$SUBMIT" | python3 -c "import json,sys; print(json.load(sys.stdin).get('task_id',''))" 2>/dev/null)
           if [ -z "$TASK_ID" ]; then
@@ -206,6 +217,9 @@ jobs:
           # 保存 summary 和 comments 到文件（避免多行变量问题）
           echo "$SUMMARY" > /tmp/review_summary.txt
           echo "$COMMENTS" > /tmp/review_comments.txt
+
+          # 清理临时文件
+          rm -f /tmp/pr_diff.txt /tmp/review_payload.json
 
       - name: Apply review result
         env:
