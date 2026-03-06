@@ -11,8 +11,6 @@ sys.path.insert(0, str(Path(__file__).parent.parent / "src"))
 from analyzers.value_scorer import ValueScorer, ValueAggregator
 from analyzers.model_card_analyzer import ModelCardAnalyzer
 from scrapers.semantic_scholar import SemanticScholarScraper
-from scrapers.pwc_sota import PwCSOTAScraper
-
 
 class TestValueScorer:
     """Tests for ValueScorer class."""
@@ -371,45 +369,6 @@ class TestSemanticScholarScraper:
         )
         assert s.enabled is False
 
-
-class TestPwCSOTAScraper:
-    """Tests for PwCSOTAScraper class."""
-
-    @pytest.fixture
-    def scraper(self):
-        """Create a PwCSOTAScraper instance."""
-        return PwCSOTAScraper(
-            areas=["robotics", "question-answering"],
-            top_n=5,
-        )
-
-    def test_init(self, scraper):
-        """Test initialization."""
-        assert "robotics" in scraper.areas
-        assert "question-answering" in scraper.areas
-        assert scraper.top_n == 5
-
-    def test_generate_report(self, scraper):
-        """Test report generation."""
-        results = {
-            "total_associations": 100,
-            "unique_datasets": 50,
-            "areas_covered": ["robotics", "nlp"],
-            "ranked_datasets": [
-                {
-                    "name": "test-dataset",
-                    "sota_model_count": 10,
-                    "areas": ["robotics"],
-                    "sota_models": [{"model_name": "TestModel"}],
-                }
-            ],
-        }
-
-        report = scraper.generate_report(results)
-
-        assert "SOTA Dataset Analysis" in report
-        assert "test-dataset" in report
-        assert "10" in report
 
 
 class TestIntegration:
