@@ -176,19 +176,32 @@ jobs:
               RESULT='{"approved": false, "summary": "Review task timed out", "comments": []}'
             else
               # 解析返回结果：result.output 是林锐的文本输出，从中提取 JSON
+              # 逐位置尝试解析，找包含 approved key 的 JSON 对象（避免贪婪正则被文本中花括号干扰）
               RESULT=$(echo "$RESPONSE" | python3 -c "
-          import json, sys, re
+          import json, sys
+
           data = json.load(sys.stdin)
           result = data.get('result', {})
           text = result.get('output', '') if isinstance(result, dict) else str(result)
-          # 尝试从文本中提取 JSON
-          match = re.search(r'\{.*\}', text, re.DOTALL)
-          if match:
-              try:
-                  parsed = json.loads(match.group())
-                  print(json.dumps(parsed))
-              except:
-                  print(json.dumps({'approved': False, 'summary': text[:2000], 'comments': []}))
+
+          # 逐位置尝试解析 JSON，找包含 approved 的对象
+          parsed = None
+          for i, ch in enumerate(text):
+              if ch == '{':
+                  for j in range(len(text), i, -1):
+                      if text[j-1] == '}':
+                          try:
+                              candidate = json.loads(text[i:j])
+                              if isinstance(candidate, dict) and 'approved' in candidate:
+                                  parsed = candidate
+                                  break
+                          except (json.JSONDecodeError, ValueError):
+                              continue
+                  if parsed:
+                      break
+
+          if parsed:
+              print(json.dumps(parsed))
           else:
               print(json.dumps({'approved': False, 'summary': text[:2000], 'comments': []}))
           " 2>/dev/null || echo '{"approved": false, "summary": "Failed to parse review response", "comments": []}')
