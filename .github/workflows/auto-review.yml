@@ -119,8 +119,8 @@ jobs:
           - summary: 审查总结
           - comments: 具体意见数组（每条包含 file, line, comment）"
 
-          # 调用林锐审查
-          RESPONSE=$(curl -s -X POST "https://crew.knowlyr.com/api/run/employee/code-reviewer" \
+          # 调用林锐审查（异步 API：POST 返回 task_id，轮询等结果）
+          SUBMIT=$(curl -s -X POST "https://crew.knowlyr.com/run/employee/code-reviewer" \
             -H "Authorization: Bearer ${CREW_API_TOKEN}" \
             -H "Content-Type: application/json" \
             -d "$(python3 -c "
@@ -129,13 +129,47 @@ jobs:
           print(json.dumps({'task': task, 'format': 'json'}))
           " <<< "$TASK")")
 
-          echo "Review response received"
+          TASK_ID=$(echo "$SUBMIT" | python3 -c "import json,sys; print(json.load(sys.stdin).get('task_id',''))" 2>/dev/null)
+          if [ -z "$TASK_ID" ]; then
+            echo "Failed to submit review task: $SUBMIT"
+            RESULT='{"approved": false, "summary": "Failed to submit review task", "comments": []}'
+          else
+            echo "Review task submitted: $TASK_ID — polling for result..."
 
-          # 解析返回结果，提取 JSON
-          RESULT=$(echo "$RESPONSE" | python3 -c "
+            # 轮询等待完成（最多 5 分钟）
+            POLL_TIMEOUT=300
+            POLL_INTERVAL=10
+            POLL_ELAPSED=0
+            RESPONSE=""
+
+            while [ $POLL_ELAPSED -lt $POLL_TIMEOUT ]; do
+              sleep $POLL_INTERVAL
+              POLL_ELAPSED=$((POLL_ELAPSED + POLL_INTERVAL))
+              POLL_RESP=$(curl -s "https://crew.knowlyr.com/tasks/${TASK_ID}" \
+                -H "Authorization: Bearer ${CREW_API_TOKEN}")
+              STATUS=$(echo "$POLL_RESP" | python3 -c "import json,sys; print(json.load(sys.stdin).get('status','unknown'))" 2>/dev/null)
+
+              if [ "$STATUS" = "completed" ]; then
+                RESPONSE="$POLL_RESP"
+                echo "Review completed (${POLL_ELAPSED}s)"
+                break
+              elif [ "$STATUS" = "failed" ]; then
+                echo "Review task failed"
+                break
+              fi
+              echo "  Still running... (${POLL_ELAPSED}s / ${POLL_TIMEOUT}s)"
+            done
+
+            if [ -z "$RESPONSE" ]; then
+              echo "Review task timed out or failed"
+              RESULT='{"approved": false, "summary": "Review task timed out", "comments": []}'
+            else
+              # 解析返回结果：result.output 是林锐的文本输出，从中提取 JSON
+              RESULT=$(echo "$RESPONSE" | python3 -c "
           import json, sys, re
           data = json.load(sys.stdin)
-          text = data.get('result', data.get('output', ''))
+          result = data.get('result', {})
+          text = result.get('output', '') if isinstance(result, dict) else str(result)
           # 尝试从文本中提取 JSON
           match = re.search(r'\{.*\}', text, re.DOTALL)
           if match:
@@ -143,10 +177,12 @@ jobs:
                   parsed = json.loads(match.group())
                   print(json.dumps(parsed))
               except:
-                  print(json.dumps({'approved': False, 'summary': text, 'comments': []}))
+                  print(json.dumps({'approved': False, 'summary': text[:2000], 'comments': []}))
           else:
-              print(json.dumps({'approved': False, 'summary': text, 'comments': []}))
+              print(json.dumps({'approved': False, 'summary': text[:2000], 'comments': []}))
           " 2>/dev/null || echo '{"approved": false, "summary": "Failed to parse review response", "comments": []}')
+            fi
+          fi
 
           APPROVED=$(echo "$RESULT" | python3 -c "import json,sys; print(json.load(sys.stdin).get('approved', False))")
           SUMMARY=$(echo "$RESULT" | python3 -c "import json,sys; print(json.load(sys.stdin).get('summary', 'No summary'))")
@@ -198,7 +234,7 @@ jobs:
           )"
           else
             echo "PR not approved — leaving review comments"
-            gh pr comment "$PR_NUMBER" --body "$(cat <<EOF
+            gh pr review "$PR_NUMBER" --request-changes --body "$(cat <<EOF
           **Auto Review (Round ${ROUND}) — Changes Requested**
 
           ${SUMMARY}
@@ -214,7 +250,7 @@ jobs:
               gh pr edit "$PR_NUMBER" --add-label "needs-human-review"
 
               # 通知 Kai
-              curl -s -X POST "https://crew.knowlyr.com/api/run/employee/ceo-assistant" \
+              curl -s -X POST "https://crew.knowlyr.com/run/employee/ceo-assistant" \
                 -H "Authorization: Bearer ${CREW_API_TOKEN}" \
                 -H "Content-Type: application/json" \
                 -d "$(python3 -c "
