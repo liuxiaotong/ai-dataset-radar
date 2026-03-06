@@ -233,6 +233,11 @@ jobs:
           SUMMARY=$(cat /tmp/review_summary.txt)
           COMMENTS=$(cat /tmp/review_comments.txt)
 
+          # [Fix #2] CREW_API_TOKEN 校验
+          if [ -z "${CREW_API_TOKEN}" ]; then
+            echo "::warning::CREW_API_TOKEN not configured — skipping auto-dispatch"
+          fi
+
           # 添加轮次 label
           gh pr edit "$PR_NUMBER" --add-label "review-round-${ROUND}" 2>/dev/null || \
             gh label create "review-round-${ROUND}" --color "0E8A16" 2>/dev/null && \
@@ -257,25 +262,37 @@ jobs:
           EOF
           )"
 
-            # 审查不通过 — 只在第 1 轮自动派回修复（避免循环：审查→派单→修复→再审查→再派单）
-            if [ "$ROUND" -eq 1 ]; then
-              curl -s -X POST "https://crew.knowlyr.com/run/employee/ceo-assistant" \
-                -H "Authorization: Bearer ${CREW_API_TOKEN}" \
-                -H "Content-Type: application/json" \
-                -d "$(python3 -c "
-          import json
-          task = '''PR #${PR_NUMBER} 第 ${ROUND} 轮审查不通过，需要派人修复。
-          仓库: ${REPO}
+            # 审查不通过 — 只在第 1 轮自动派回修复（避免循环：审查->派单->修复->再审查->再派单）
+            if [ "$ROUND" -eq 1 ] && [ -n "${CREW_API_TOKEN}" ]; then
+              # [Fix #1] 用环境变量+文件方式传参，避免命令注入
+              PR_NUMBER="$PR_NUMBER" ROUND="$ROUND" REPO="$REPO" python3 << 'PYEOF' > /tmp/dispatch_payload.json
+          import json, os
+          summary = open('/tmp/review_summary.txt').read()
+          comments = open('/tmp/review_comments.txt').read()
+          task = f"""PR #{os.environ['PR_NUMBER']} 第 {os.environ['ROUND']} 轮审查不通过，需要派人修复。
+          仓库: {os.environ['REPO']}
 
           审查意见:
-          ${SUMMARY}
+          {summary}
 
-          ${COMMENTS}
+          {comments}
 
-          请根据仓库和问题类型派合适的工程师修复，修完后推代码触发下一轮审查。'''
+          请根据仓库和问题类型派合适的工程师修复，修完后推代码触发下一轮审查。"""
           print(json.dumps({'task': task}))
-          ")"
-              echo "Auto-dispatch: review feedback sent to ceo-assistant"
+          PYEOF
+
+              # [Fix #3] dispatch curl 加 HTTP 状态码检查
+              DISPATCH_RESP=$(curl -s -w "\n%{http_code}" -X POST "https://crew.knowlyr.com/run/employee/ceo-assistant" \
+                -H "Authorization: Bearer ${CREW_API_TOKEN}" \
+                -H "Content-Type: application/json" \
+                -d @/tmp/dispatch_payload.json)
+              HTTP_CODE=$(echo "$DISPATCH_RESP" | tail -n1)
+              if [ "$HTTP_CODE" != "200" ] && [ "$HTTP_CODE" != "201" ]; then
+                echo "::warning::Auto-dispatch failed (HTTP $HTTP_CODE)"
+              else
+                echo "Auto-dispatch: review feedback sent to ceo-assistant"
+              fi
+              rm -f /tmp/dispatch_payload.json
             fi
 
             # 第 4 轮：需要人工介入
@@ -284,15 +301,26 @@ jobs:
               gh label create "needs-human-review" --color "D93F0B" 2>/dev/null || true
               gh pr edit "$PR_NUMBER" --add-label "needs-human-review"
 
-              # 通知 Kai
-              curl -s -X POST "https://crew.knowlyr.com/run/employee/ceo-assistant" \
-                -H "Authorization: Bearer ${CREW_API_TOKEN}" \
-                -H "Content-Type: application/json" \
-                -d "$(python3 -c "
-          import json
-          task = 'PR #${PR_NUMBER} 经过 ${ROUND} 轮审查仍未通过，需要 Kai 介入。仓库: ${REPO}。请通过飞书通知 Kai。'
+              if [ -n "${CREW_API_TOKEN}" ]; then
+                # [Fix #1] 用环境变量+文件方式传参，避免命令注入
+                PR_NUMBER="$PR_NUMBER" ROUND="$ROUND" REPO="$REPO" python3 << 'PYEOF' > /tmp/escalate_payload.json
+          import json, os
+          task = f"PR #{os.environ['PR_NUMBER']} 经过 {os.environ['ROUND']} 轮审查仍未通过，需要 Kai 介入。仓库: {os.environ['REPO']}。请通过飞书通知 Kai。"
           print(json.dumps({'task': task}))
-          ")"
-              echo "Human review notification sent"
+          PYEOF
+
+                # [Fix #3] dispatch curl 加 HTTP 状态码检查
+                ESCALATE_RESP=$(curl -s -w "\n%{http_code}" -X POST "https://crew.knowlyr.com/run/employee/ceo-assistant" \
+                  -H "Authorization: Bearer ${CREW_API_TOKEN}" \
+                  -H "Content-Type: application/json" \
+                  -d @/tmp/escalate_payload.json)
+                HTTP_CODE=$(echo "$ESCALATE_RESP" | tail -n1)
+                if [ "$HTTP_CODE" != "200" ] && [ "$HTTP_CODE" != "201" ]; then
+                  echo "::warning::Human review notification failed (HTTP $HTTP_CODE)"
+                else
+                  echo "Human review notification sent"
+                fi
+                rm -f /tmp/escalate_payload.json
+              fi
             fi
           fi
