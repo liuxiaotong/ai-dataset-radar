@@ -142,8 +142,8 @@ jobs:
 
           TASK_ID=$(echo "$SUBMIT" | python3 -c "import json,sys; print(json.load(sys.stdin).get('task_id',''))" 2>/dev/null)
           if [ -z "$TASK_ID" ]; then
-            echo "Failed to submit review task: $SUBMIT"
-            RESULT='{"approved": false, "summary": "Failed to submit review task", "comments": []}'
+            echo "Failed to submit review task: $SUBMIT — skipping review (not blocking PR)"
+            RESULT='{"approved": "skip", "summary": "Failed to submit review task", "comments": []}'
           else
             echo "Review task submitted: $TASK_ID — polling for result..."
 
@@ -172,8 +172,8 @@ jobs:
             done
 
             if [ -z "$RESPONSE" ]; then
-              echo "Review task timed out or failed"
-              RESULT='{"approved": false, "summary": "Review task timed out", "comments": []}'
+              echo "Review task timed out or failed — skipping review (not blocking PR)"
+              RESULT='{"approved": "skip", "summary": "Review task timed out", "comments": []}'
             else
               # 解析返回结果：result.output 是林锐的文本输出，从中提取 JSON
               # 逐位置尝试解析，找包含 approved key 的 JSON 对象（避免贪婪正则被文本中花括号干扰）
@@ -256,18 +256,32 @@ jobs:
             gh label create "review-round-${ROUND}" --color "0E8A16" 2>/dev/null && \
             gh pr edit "$PR_NUMBER" --add-label "review-round-${ROUND}"
 
-          if [ "$APPROVED" = "True" ] || [ "$APPROVED" = "true" ]; then
+          # 用 comment + exit code 控制 status check，不依赖 gh pr review --approve/--request-changes
+          # （GITHUB_TOKEN 无权 approve PR，--request-changes 会阻塞合并）
+          if [ "$APPROVED" = "skip" ]; then
+            echo "Review skipped (timeout or submit failure) — not blocking PR"
+            gh pr comment "$PR_NUMBER" --body "$(cat <<EOF
+          **Auto Review (Round ${ROUND}) — ⏭️ Skipped**
+
+          ${SUMMARY}
+
+          审查任务超时或提交失败，不阻塞 PR。请人工确认是否需要审查。
+          EOF
+          )"
+            exit 0
+          elif [ "$APPROVED" = "True" ] || [ "$APPROVED" = "true" ]; then
             echo "PR approved by code reviewer"
-            gh pr review "$PR_NUMBER" --approve --body "$(cat <<EOF
-          **Auto Review (Round ${ROUND}) — Approved**
+            gh pr comment "$PR_NUMBER" --body "$(cat <<EOF
+          **Auto Review (Round ${ROUND}) — ✅ Approved**
 
           ${SUMMARY}
           EOF
           )"
+            exit 0
           else
-            echo "PR not approved — leaving review comments"
-            gh pr review "$PR_NUMBER" --request-changes --body "$(cat <<EOF
-          **Auto Review (Round ${ROUND}) — Changes Requested**
+            echo "PR not approved — review has issues"
+            gh pr comment "$PR_NUMBER" --body "$(cat <<EOF
+          **Auto Review (Round ${ROUND}) — ❌ Changes Requested**
 
           ${SUMMARY}
 
@@ -336,4 +350,7 @@ jobs:
                 rm -f /tmp/escalate_payload.json
               fi
             fi
+
+            # 审查不通过 → exit 1 让 status check 变红，阻塞 PR 合并
+            exit 1
           fi
