@@ -131,7 +131,7 @@ jobs:
           - summary: 审查总结
           - comments: 具体意见数组（每条包含 file, line, comment）"""
 
-          print(json.dumps({'task': task, 'format': 'json'}))
+          print(json.dumps({'task': task, 'format': 'json', 'user_id': 'github-actions'}))
           PYEOF
 
           # 调用林锐审查（异步 API：POST 返回 task_id，轮询等结果）
@@ -156,7 +156,7 @@ jobs:
             while [ $POLL_ELAPSED -lt $POLL_TIMEOUT ]; do
               sleep $POLL_INTERVAL
               POLL_ELAPSED=$((POLL_ELAPSED + POLL_INTERVAL))
-              POLL_RESP=$(curl -s "https://crew.knowlyr.com/tasks/${TASK_ID}" \
+              POLL_RESP=$(curl -s "https://crew.knowlyr.com/tasks/${TASK_ID}?user_id=github-actions" \
                 -H "Authorization: Bearer ${CREW_API_TOKEN}")
               STATUS=$(echo "$POLL_RESP" | python3 -c "import json,sys; print(json.load(sys.stdin).get('status','unknown'))" 2>/dev/null)
 
