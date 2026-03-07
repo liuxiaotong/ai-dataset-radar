@@ -6,7 +6,7 @@ on:
 
 permissions:
   pull-requests: write
-  contents: read
+  contents: write
   checks: read
 
 jobs:
@@ -277,6 +277,10 @@ jobs:
           ${SUMMARY}
           EOF
           )"
+
+            # Auto merge — review 通过，自动合并
+            gh pr merge "$PR_NUMBER" --squash --auto
+
             exit 0
           else
             echo "PR not approved — review has issues"
