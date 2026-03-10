@@ -6,6 +6,9 @@
 
 <div align="center">
 
+<img src="assets/icon.png" width="128" alt="ai-dataset-radar icon">
+<br/>
+
 <h1>AI Dataset Radar</h1>
 
 <h3>面向 AI 训练数据生态的多源竞争情报引擎</h3>
