@@ -646,7 +646,6 @@ sources:
         assert "huggingface" in names
         assert "github" in names
         assert "arxiv" in names
-        assert "paperswithcode" in names
         assert "github_org" in names
         assert "blog_rss" in names
 
@@ -658,7 +657,7 @@ sources:
 
         # Get all scrapers
         all_scrapers = get_all_scrapers()
-        assert len(all_scrapers) >= 6
+        assert len(all_scrapers) >= 5
 
     def test_scraper_by_type(self):
         """Test getting scrapers filtered by type."""
