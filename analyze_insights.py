@@ -6,8 +6,7 @@
 用法:
     python3 analyze_insights.py --date 2026-03-04
 
-在 SG 服务器上自动使用 claude-proxy (127.0.0.1:9100)。
-本地可通过 ANTHROPIC_API_KEY 环境变量直接调 API。
+模型配置优先走 SSOT（organization.yaml），回退到 SG claude-proxy 或 ANTHROPIC_API_KEY。
 """
 
 import argparse
@@ -22,10 +21,31 @@ try:
 except ImportError:
     pass
 
+# SSOT 模型配置（knowlyr-crew）
+try:
+    from crew.organization import resolve_model_config, get_default_model
+    HAS_CREW = True
+except ImportError:
+    HAS_CREW = False
 
-def detect_api_config():
-    """检测 API 配置：优先 SG proxy，回退到直接 API。"""
-    # SG 服务器上有 claude-proxy（TCP 探测，不依赖 HTTP 根路径响应）
+
+def detect_api_config(tier: str = "strong"):
+    """检测 API 配置：优先 SSOT → SG proxy → 环境变量直连。"""
+    # 1. 优先走 SSOT
+    if HAS_CREW:
+        try:
+            cfg = resolve_model_config(tier)
+            if cfg and cfg.model and cfg.api_key:
+                return {
+                    "base_url": cfg.base_url or "https://api.anthropic.com",
+                    "api_key": cfg.api_key,
+                    "model": cfg.model,
+                    "source": f"SSOT ({tier})",
+                }
+        except Exception as e:
+            print(f"  ⚠ SSOT 配置读取失败（{e}），回退到备用方案", file=sys.stderr)
+
+    # 2. Fallback: SG 代理探测（保持原逻辑）
     try:
         import socket
         s = socket.create_connection(("127.0.0.1", 9100), timeout=2)
@@ -33,17 +53,19 @@ def detect_api_config():
         return {
             "base_url": "http://127.0.0.1:9100",
             "api_key": "proxy",  # proxy 不需要真实 key
+            "model": None,  # 让命令行参数决定
             "source": "claude-proxy (SG)"
         }
     except Exception:
         pass
 
-    # 直接 API
+    # 3. Fallback: 环境变量直连
     api_key = os.environ.get("ANTHROPIC_API_KEY") or os.environ.get("LLM_API_KEY")
     if api_key:
         return {
             "base_url": "https://api.anthropic.com",
             "api_key": api_key,
+            "model": None,
             "source": "Anthropic API (direct)"
         }
 
@@ -55,7 +77,8 @@ def main():
     parser.add_argument("--date", required=True, help="报告日期 YYYY-MM-DD")
     parser.add_argument("--radar-dir", default=str(Path(__file__).parent),
                         help="ai-dataset-radar 目录")
-    parser.add_argument("--model", default="claude-opus-4-0")
+    default_model = get_default_model("strong") if HAS_CREW else "claude-opus-4-20250514"
+    parser.add_argument("--model", default=default_model)
     parser.add_argument("--max-tokens", type=int, default=8192)
     args = parser.parse_args()
 
@@ -99,6 +122,10 @@ def main():
         print("✗ 无可用 API：SG 上无 claude-proxy，也无 ANTHROPIC_API_KEY", file=sys.stderr)
         sys.exit(1)
 
+    # SSOT 配置的模型优先（用户未手动指定时）
+    if config.get("model") and args.model == default_model:
+        args.model = config["model"]
+
     print(f"  → API: {config['source']}")
     print(f"  → Model: {args.model}")
     print(f"  → Input: {len(user_message):,} chars")
@@ -115,7 +142,7 @@ def main():
         timeout=300.0,  # Opus 生成长报告可能需 2-3 分钟
     )
 
-    print("  → 正在分析（Opus 4.6，预计 1-3 分钟）...")
+    print(f"  → 正在分析（{args.model}，预计 1-3 分钟）...")
     for attempt in range(2):
         try:
             message = client.messages.create(

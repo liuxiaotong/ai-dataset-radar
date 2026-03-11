@@ -12,9 +12,16 @@ Supports multiple providers via environment variables:
 import os
 import logging
 
+try:
+    from crew.organization import resolve_model_config, get_default_model
+    HAS_CREW = True
+except ImportError:
+    HAS_CREW = False
+
 logger = logging.getLogger("llm_client")
 
-DEFAULT_ANTHROPIC_MODEL = "claude-sonnet-4-5-20250929"
+_FALLBACK_ANTHROPIC_MODEL = "claude-sonnet-4-5-20250929"
+DEFAULT_ANTHROPIC_MODEL = get_default_model("default") if HAS_CREW else _FALLBACK_ANTHROPIC_MODEL
 DEFAULT_OPENAI_MODEL = "gpt-4o"
 MAX_TOKENS = 8192
 
@@ -50,8 +57,17 @@ def generate_insights(prompt: str, model: str = None, api_key: str = None) -> st
 
 def _generate_anthropic(prompt: str, model: str = None, api_key: str = None) -> str | None:
     """Generate insights via Anthropic API (Claude)."""
+    # 优先 SSOT 配置
+    ssot_cfg = None
+    if HAS_CREW and not api_key:
+        try:
+            ssot_cfg = resolve_model_config("default")
+        except Exception:
+            pass
+
     api_key = (
         api_key
+        or (ssot_cfg.api_key if ssot_cfg and ssot_cfg.api_key else None)
         or os.environ.get("LLM_API_KEY")
         or os.environ.get("ANTHROPIC_API_KEY")
     )
@@ -59,7 +75,8 @@ def _generate_anthropic(prompt: str, model: str = None, api_key: str = None) -> 
         logger.info("No API key found — falling back to environment LLM")
         return None
 
-    model = model or os.environ.get("LLM_MODEL") or DEFAULT_ANTHROPIC_MODEL
+    model = model or (ssot_cfg.model if ssot_cfg and ssot_cfg.model else None) or os.environ.get("LLM_MODEL") or DEFAULT_ANTHROPIC_MODEL
+    base_url = (ssot_cfg.base_url if ssot_cfg and ssot_cfg.base_url else None) or None
 
     try:
         import anthropic
@@ -70,7 +87,10 @@ def _generate_anthropic(prompt: str, model: str = None, api_key: str = None) -> 
     logger.info("Generating insights via Anthropic %s ...", model)
 
     try:
-        client = anthropic.Anthropic(api_key=api_key)
+        client_kwargs = {"api_key": api_key}
+        if base_url:
+            client_kwargs["base_url"] = base_url
+        client = anthropic.Anthropic(**client_kwargs)
         message = client.messages.create(
             model=model,
             max_tokens=MAX_TOKENS,

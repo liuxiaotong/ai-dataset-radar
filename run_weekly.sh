@@ -169,8 +169,12 @@ echo -e "${GREEN}✓ 页面生成完成${NC}"
 step 4.5 "翻译英文版"
 
 cd "$WEBSITE_DIR"
-"$PYTHON_BRIEF" scripts/translate.py --file "${WEEK}.json" 2>&1 || {
-  warn "英文翻译失败，跳过（不影响中文版部署）"
+YEAR=$(echo "$DATE" | cut -d- -f1)
+"$PYTHON_BRIEF" scripts/translate.py --file "${YEAR}-${WEEK}.json" 2>&1 || {
+  warn "英文 context 翻译失败"
+}
+"$PYTHON_BRIEF" scripts/translate.py --file .issues.json 2>&1 || {
+  warn "英文 issues 翻译失败"
 }
 
 # ══════════════════════════════════════════════════════
