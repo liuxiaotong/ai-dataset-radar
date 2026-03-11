@@ -273,7 +273,6 @@ class TestConsoleNotifier:
         notifier.notify(rich_data)
         captured = capsys.readouterr()
         assert "test-dataset" in captured.out
-        assert "PWC-Dataset" in captured.out
         assert "An Interesting Paper Title" in captured.out
         assert "org/dataset-repo" in captured.out
         assert "HF Daily Paper About Datasets" in captured.out
@@ -335,7 +334,6 @@ class TestMarkdownNotifier:
         assert "# AI Dataset Radar Report" in content
         assert "## Summary" in content
         assert "## Hugging Face Datasets" in content
-        assert "## Papers with Code Datasets" in content
         assert "## arXiv Papers" in content
         assert "## GitHub Repos (Early Signal)" in content
         assert "## HF Daily Papers (Early Signal)" in content
@@ -351,8 +349,8 @@ class TestMarkdownNotifier:
         """Summary section reflects correct item counts."""
         notifier = MarkdownNotifier(output_dir=str(tmp_path))
         content = notifier._generate_markdown(rich_data)
-        # 2 hf + 1 pwc + 1 arxiv + 2 github + 2 hf_papers = 8
-        assert "**Total items found:** 8" in content
+        # 2 hf + 1 arxiv + 2 github + 2 hf_papers = 7
+        assert "**Total items found:** 7" in content
         assert "**Hugging Face datasets:** 2" in content
 
     def test_generate_markdown_output_dir_created(self, tmp_path, empty_data):
@@ -583,7 +581,6 @@ class TestWebhookNotifier:
         assert "summary" in payload
         assert "data" in payload
         assert payload["summary"]["huggingface_count"] == 0
-        assert payload["summary"]["paperswithcode_count"] == 0
         assert payload["summary"]["arxiv_count"] == 0
 
 
