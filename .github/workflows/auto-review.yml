@@ -15,7 +15,7 @@ permissions:
 
 jobs:
   review:
-    uses: liuxiaotong/knowlyr-crew/.github/workflows/reusable-auto-review.yml@main
+    uses: liuxiaotong/knowlyr-workflows/.github/workflows/reusable-auto-review.yml@main
     with:
       dispatch_employee: "backend-engineer"
     secrets:
