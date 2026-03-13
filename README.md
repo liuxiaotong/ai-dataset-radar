@@ -492,3 +492,4 @@ ruff format src/
 <div align="center">
 <sub><a href="https://github.com/liuxiaotong">knowlyr</a> -- multi-source competitive intelligence for AI training data</sub>
 </div>
+
