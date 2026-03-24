@@ -13,6 +13,7 @@ from .paper_filter import PaperFilter
 from .competitor_matrix import CompetitorMatrix
 from .dataset_lineage import DatasetLineageTracker
 from .org_graph import OrgRelationshipGraph
+from .deduplication import CrossSourceDeduplicator, dataset_fingerprint
 
 __all__ = [
     "ModelDatasetAnalyzer",
@@ -30,4 +31,6 @@ __all__ = [
     "CompetitorMatrix",
     "DatasetLineageTracker",
     "OrgRelationshipGraph",
+    "CrossSourceDeduplicator",
+    "dataset_fingerprint",
 ]
