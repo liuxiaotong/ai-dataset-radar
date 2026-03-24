@@ -26,6 +26,10 @@ DEFAULT_RULES = {
     "trend_rapid_growth": 2.0,
     "change_new_org": True,
     "change_dataset_removed": True,
+    "sudden_burst": True,
+    "sudden_burst_threshold": 20,
+    "quality_drop": True,
+    "quality_drop_threshold": 0.3,
 }
 
 
@@ -58,361 +62,257 @@ class AlertManager:
         self.dedup_hours = alert_cfg.get("dedup_hours", 24)
         self.rules = {**DEFAULT_RULES, **alert_cfg.get("rules", {})}
         self.output_dir = Path(config.get("notifications", {}).get(
-            "markdown", {}
-        ).get("output_dir", "data"))
+            "marketing_dir", "output/notifications"
+        ))
+        self.output_dir.mkdir(parents=True, exist_ok=True)
+        self._alert_history_path = self.output_dir / "alert_history.json"
+        self._alert_history = self._load_alert_history()
 
-    def evaluate(
-        self,
-        report: dict,
-        prev_report: Optional[dict] = None,
-    ) -> list[Alert]:
-        """Run all rules, deduplicate, dispatch, and save alerts."""
-        if not self.enabled:
-            return []
-
-        alerts = []
-        alerts.extend(self._check_zero_data(report))
-        alerts.extend(self._check_thresholds(report, prev_report))
-        alerts.extend(self._check_trends(report))
-        alerts.extend(self._check_changes(report, prev_report))
-
-        alerts = self._deduplicate(alerts)
-
-        if alerts:
-            self._save_log(alerts)
-            self._dispatch(alerts)
-
-        return alerts
-
-    # ── Rule: zero data ──────────────────────────────────────
-
-    def _check_zero_data(self, report: dict) -> list[Alert]:
-        if not self.rules.get("zero_data"):
-            return []
-
-        alerts = []
-        checks = [
-            ("datasets", report.get("datasets", []), "Datasets: 0 from all tracked orgs"),
-            ("github", report.get("github_activity", []), "GitHub: 0 active orgs"),
-            ("papers", report.get("papers", []), "Papers: 0 results"),
-            ("blogs", report.get("blog_posts", []), "Blogs: 0 active sources"),
-            ("reddit", report.get("reddit_activity", {}).get("posts", []), "Reddit: 0 posts"),
-        ]
-        for source, data, msg in checks:
-            if len(data) == 0:
-                alerts.append(Alert(
-                    rule=f"zero_data_{source}",
-                    severity="critical",
-                    title=msg,
-                    detail=f"Data source '{source}' returned 0 results. Check connectivity and API keys.",
-                ))
-        return alerts
-
-    # ── Rule: thresholds ─────────────────────────────────────
-
-    def _check_thresholds(
-        self,
-        report: dict,
-        prev_report: Optional[dict],
-    ) -> list[Alert]:
-        if prev_report is None:
-            return []
-
-        alerts = []
-        drop_pct = self.rules.get("threshold_dataset_drop", 0.3)
-
-        curr_count = len(report.get("datasets", []))
-        prev_count = len(prev_report.get("datasets", []))
-
-        if prev_count > 0 and curr_count < prev_count:
-            change = (prev_count - curr_count) / prev_count
-            if change >= drop_pct:
-                alerts.append(Alert(
-                    rule="threshold_dataset_drop",
-                    severity="warning",
-                    title=f"Dataset count dropped {change:.0%} ({prev_count} → {curr_count})",
-                    detail=(
-                        f"Total datasets dropped from {prev_count} to {curr_count}"
-                        f" ({change:.0%} decrease). Threshold: {drop_pct:.0%}."
-                    ),
-                ))
-
-        # Org silence: active org in prev becomes completely absent in curr
-        prev_orgs = _extract_active_orgs(prev_report)
-        curr_orgs = _extract_active_orgs(report)
-        silent_orgs = prev_orgs - curr_orgs
-        for org in sorted(silent_orgs):
-            alerts.append(Alert(
-                rule="threshold_org_silent",
-                severity="warning",
-                title=f"Org '{org}' went silent",
-                detail=f"Organization '{org}' was active in the previous report but has zero activity now.",
-            ))
-
-        return alerts
-
-    # ── Rule: trends ─────────────────────────────────────────
-
-    def _check_trends(self, report: dict) -> list[Alert]:
-        alerts = []
-        trend_data = report.get("trend_data", {})
-
-        if self.rules.get("trend_breakthrough"):
-            for ds in trend_data.get("breakthroughs", []):
-                name = ds.get("name", ds.get("id", "unknown"))
-                old_dl = ds.get("old_downloads", 0)
-                new_dl = ds.get("current_downloads", 0)
-                alerts.append(Alert(
-                    rule="trend_breakthrough",
-                    severity="info",
-                    title=f"Breakthrough: {name} ({old_dl:,} → {new_dl:,} downloads)",
-                    detail=f"Dataset '{name}' crossed the breakthrough threshold ({old_dl:,} → {new_dl:,}).",
-                ))
-
-        min_growth = self.rules.get("trend_rapid_growth", 2.0)
-        if min_growth:
-            for ds in trend_data.get("rising_7d", []):
-                growth = ds.get("growth", 0)
-                if growth >= min_growth:
-                    name = ds.get("name", ds.get("id", "unknown"))
-                    alerts.append(Alert(
-                        rule="trend_rapid_growth",
-                        severity="info",
-                        title=f"Rapid growth: {name} (+{growth:.0%} in 7d)",
-                        detail=f"Dataset '{name}' grew {growth:.0%} in 7 days (threshold: {min_growth:.0%}).",
-                    ))
-
-        return alerts
-
-    # ── Rule: changes ────────────────────────────────────────
-
-    def _check_changes(
-        self,
-        report: dict,
-        prev_report: Optional[dict],
-    ) -> list[Alert]:
-        if prev_report is None:
-            return []
-
-        alerts = []
-
-        if self.rules.get("change_new_org"):
-            prev_orgs = _extract_all_orgs(prev_report)
-            curr_orgs = _extract_all_orgs(report)
-            new_orgs = curr_orgs - prev_orgs
-            for org in sorted(new_orgs):
-                alerts.append(Alert(
-                    rule="change_new_org",
-                    severity="info",
-                    title=f"New org detected: {org}",
-                    detail=f"Organization '{org}' appeared for the first time in this scan.",
-                ))
-
-        if self.rules.get("change_dataset_removed"):
-            prev_ids = {d.get("id", d.get("name", "")) for d in prev_report.get("datasets", [])}
-            curr_ids = {d.get("id", d.get("name", "")) for d in report.get("datasets", [])}
-            removed = prev_ids - curr_ids - {""}
-            for ds_id in sorted(removed):
-                alerts.append(Alert(
-                    rule="change_dataset_removed",
-                    severity="warning",
-                    title=f"Dataset removed: {ds_id}",
-                    detail=f"Dataset '{ds_id}' was present in the previous report but is now missing.",
-                ))
-
-        return alerts
-
-    # ── Deduplication ────────────────────────────────────────
-
-    def _deduplicate(self, alerts: list[Alert]) -> list[Alert]:
-        """Filter out alerts that were already fired within dedup_hours."""
-        log_path = self.output_dir / "alerts.json"
-        recent_fps = set()
-
-        if log_path.exists():
+    def _load_alert_history(self) -> dict:
+        if self._alert_history_path.exists():
             try:
-                with open(log_path, "r", encoding="utf-8") as f:
-                    history = json.load(f)
-                cutoff = datetime.now(timezone.utc).replace(tzinfo=None).isoformat()
-                # Walk backwards through history
-                for entry in reversed(history):
-                    ts = entry.get("timestamp", "")
-                    if ts and _hours_between(ts, cutoff) <= self.dedup_hours:
-                        recent_fps.add(entry.get("fingerprint", ""))
-                    elif ts:
-                        break  # History is chronological, stop when outside window
-            except (json.JSONDecodeError, KeyError):
-                pass
+                return json.loads(self._alert_history_path.read_text())
+            except Exception:
+                return {}
+        return {}
 
-        return [a for a in alerts if a.fingerprint not in recent_fps]
+    def _save_alert_history(self):
+        self._alert_history_path.write_text(json.dumps(self._alert_history, indent=2))
 
-    # ── Dispatch ─────────────────────────────────────────────
+    def _is_duplicate(self, alert: Alert) -> bool:
+        key = alert.fingerprint
+        if key not in self._alert_history:
+            return False
+        last_sent = datetime.fromisoformat(self._alert_history[key])
+        elapsed = (datetime.now() - last_sent).total_seconds() / 3600
+        return elapsed < self.dedup_hours
 
-    def _dispatch(self, alerts: list[Alert]) -> None:
-        """Send alerts via configured channels."""
-        notif_cfg = self.config.get("notifications", {})
+    def evaluate(self, current: dict, previous: dict) -> list[Alert]:
+        """Run all rules and return fired alerts."""
+        alerts = []
+        alerts.extend(self._check_thresholds(current, previous))
+        alerts.extend(self._check_trends(current, previous))
+        alerts.extend(self._check_changes(current, previous))
+        alerts.extend(self._check_sudden_burst(current, previous))
+        alerts.extend(self._check_quality_drop(current, previous))
+        return alerts
 
-        if "webhook" in self.channels:
-            self._send_webhook(alerts, notif_cfg.get("webhook", {}))
-
-        if "email" in self.channels:
-            self._send_email(alerts, notif_cfg.get("email", {}))
-
-    def _send_webhook(self, alerts: list[Alert], cfg: dict) -> None:
-        url = _expand_env(cfg.get("url", ""))
-        if not url:
-            url = os.environ.get("WEBHOOK_URL", "")
-        if not url:
-            logger.warning("Webhook URL not configured, skipping webhook alerts")
+    def dispatch(self, alerts: list[Alert]) -> None:
+        """Filter duplicates and send alerts via configured channels."""
+        if not self.enabled:
+            logger.info("Alerting disabled, skipping dispatch")
             return
+        new_alerts = [a for a in alerts if not self._is_duplicate(a)]
+        if not new_alerts:
+            logger.info("All alerts are duplicates, nothing to send")
+            return
+        for channel in self.channels:
+            channel_type = channel.get("type", "")
+            if channel_type == "email":
+                self._send_email(channel, new_alerts)
+            elif channel_type == "webhook":
+                self._send_webhook(channel, new_alerts)
+            else:
+                logger.warning(f"Unknown channel type: {channel_type}")
+        for a in new_alerts:
+            self._alert_history[a.fingerprint] = a.timestamp
+        self._save_alert_history()
 
+    def _send_email(self, channel: dict, alerts: list[Alert]) -> None:
+        smtp_host = channel.get("smtp_host", "")
+        smtp_port = int(channel.get("smtp_port", 587))
+        username = channel.get("username", "") or os.environ.get("SMTPUSER", "")
+        password = channel.get("password", "") or os.environ.get("SMTPPASS", "")
+        recipients = channel.get("recipients", [])
+        if not all ([smtp_host, username, password, recipients]):
+            logger.error("Email channel missing required config")
+            return
+        body = self._format_email_body(alerts)
+        msg = MIMEText(body)
+        msg["Subject"] = f"[AI Dataset Radar] {len(alerts)} Alert(s) Detected"
+        msg["From"] = username
+        msg["To"] = ", ".join(recipients)
+        try:
+            with smtplib.SMTP(smtp_host, smtp_port) as server:
+                server.starttls()
+                server.login(username, password)
+                server.sendmessage(msg)
+            logger.info(f"Email sent to {recipients}")
+        except Exception as e:
+            logger.error(f"Failed to send email: {e}")
+
+    def _send_webhook(self, channel: dict, alerts: list[Alert]) -> None:
+        url = channel.get("url", "")
+        if not url:
+            logger.error("Webhook channel missing url")
+            return
         payload = {
-            "event": "radar_alert",
-            "timestamp": datetime.now(timezone.utc).replace(tzinfo=None).isoformat(),
-            "alert_count": len(alerts),
             "alerts": [a.to_dict() for a in alerts],
+            "total": len(alerts),
+            "timestamp": datetime.now(timezone.utc).isoformat(),
         }
         try:
             resp = requests.post(url, json=payload, timeout=10)
             resp.raise_for_status()
-            logger.info("Webhook alerts sent (%d alerts)", len(alerts))
+            logger.info(f"Webhook sent to {url}")
         except Exception as e:
-            logger.warning("Webhook alert failed: %s", e)
+            logger.error(f"Failed to send webhook: {e}")
 
-    def _send_email(self, alerts: list[Alert], cfg: dict) -> None:
-        smtp_server = _expand_env(cfg.get("smtp_server", "")) or os.environ.get("SMTP_SERVER", "")
-        username = _expand_env(cfg.get("username", "")) or os.environ.get("SMTP_USERNAME", "")
-        password = _expand_env(cfg.get("password", "")) or os.environ.get("SMTP_PASSWORD", "")
-        from_addr = _expand_env(cfg.get("from_addr", "")) or os.environ.get("EMAIL_FROM", "")
-        to_addrs = cfg.get("to_addrs", [])
-        if not to_addrs:
-            to_env = os.environ.get("EMAIL_TO", "")
-            if to_env:
-                to_addrs = [a.strip() for a in to_env.split(",")]
+    def _check_thresholds(self, current: dict, previous: dict) -> list[Alert]:
+        alerts = []
+        current_count = len(current.get("datasets", []))
+        prev_count = len(previous.get("datasets", []))
+        if self.rules.get("zero_data") and current_count == 0:
+            alerts.append(Alert(
+                rule="zero_data",
+                severity="critical",
+                title="Zero datasets detected",
+                detail="Current scan returned 0 datasets. Possible source outage or config error.",
+            ))
+        if prev_count > 0:
+            drop_ratio = (prev_count - current_count) / prev_count
+            threshold = self.rules.get("threshold_dataset_drop", 0.3)
+            if drop_ratio >= threshold:
+                alerts.append(Alert(
+                    rule="threshold_dataset_drop",
+                    severity="critical",
+                    title=f"Dataset count dropped {drop_ratio:.1%}",
+                    detail=f"Count fell from {prev_count} to {current_count} ({drop_ratio:.1%} drop, threshold={threshold:.0%}).",
+                ))
+        return alerts
 
-        if not all([smtp_server, username, from_addr, to_addrs]):
-            logger.warning("Email not fully configured, skipping email alerts")
-            return
+    def _check_trends(self, current: dict, previous: dict) -> list[Alert]:
+        alerts = []
+        current_trends = current.get("trending_datasets", [])
+        prev_trends = previous.get("trending_datasets", [])
+        prev_ids = {s["id"] for s in prev_trends if "id" in s}
+        if self.rules.get("trend_breakthrough"):
+            for dataset in current_trends:
+                if dataset.get("id") not in prev_ids:
+                    alerts.append(Alert(
+                        rule="trend_breakthrough",
+                        severity="info",
+                        title=f"New trending dataset: {dataset.get('name', 'unknown')}",
+                        detail=f"Dataset '{dataset.get('name', 'unknown')}' appeared in trending for the first time.",
+                    ))
+        growth_threshold = self.rules.get("trend_rapid_growth", 2.0)
+        prev_downloads = {d["id"]: d.get("downloads", 0) for d in prev_trends if "id" in d}
+        for dataset in current_trends:
+            ds_id = dataset.get("id")
+            if not ds_id or ds_id not in prev_downloads:
+                continue
+            prev_dl = prev_downloads[ds_id]
+            curr_dl = dataset.get("downloads", 0)
+            if prev_dl > 0 and curr_dl / prev_dl >= growth_threshold:
+                alerts.append(Alert(
+                    rule="trend_rapid_growth",
+                    severity="warning",
+                    title=f"Rapid growth: {dataset.get('name', 'unknown')}",
+                    detail=f"Downloads grew from {prev_dl} to {curr_dl} ({curr_dl/prev_dl:.1f}x, threshold={growth_threshold:.1f}x).",
+                ))
+        return alerts
 
-        body = _format_email_body(alerts)
-        msg = MIMEText(body, "plain", "utf-8")
-        date_str = datetime.now(timezone.utc).replace(tzinfo=None).strftime("%Y-%m-%d")
-        msg["Subject"] = f"[Radar Alert] {len(alerts)} alert(s) - {date_str}"
-        msg["From"] = from_addr
-        msg["To"] = ", ".join(to_addrs)
+    def _check_changes(self, current: dict, previous: dict) -> list[Alert]:
+        alerts = []
+        current_orgs = {ds.get("author") or ds.get("org") for ds in current.get("datasets", [])}
+        prev_orgs = {ds.get("author") or ds.get("org") for ds in previous.get("datasets", [])}
+        if self.rules.get("change_new_org"):
+            for org in current_orgs - prev_orgs:
+                if org:
+                    alerts.append(Alert(
+                        rule="change_new_org",
+                        severity="info",
+                        title=f"New org detected: {org}",
+                        detail=f"Organization '{org}' appeared in the dataset landscape for the first time.",
+                    ))
+        current_ids = {ds.get("id") for ds in current.get("datasets", [])}
+        prev_ids = {ds.get("id") for ds in previous.get("datasets", [])}
+        if self.rules.get("change_dataset_removed"):
+            removed = prev_ids - current_ids - {None}
+            if removed:
+                alerts.append(Alert(
+                    rule="change_dataset_removed",
+                    severity="warning",
+                    title=f"{len(removed)} dataset(s) removed",
+                    detail=f"Removed IDs: {', '.join(str(i) for i in list(removed)[:5])}{' ...' if len(removed) > 5 else ''}.",
+                ))
+        return alerts
 
-        try:
-            port = cfg.get("smtp_port", 587)
-            with smtplib.SMTP(smtp_server, port) as server:
-                server.starttls()
-                server.login(username, password)
-                server.send_message(msg)
-            logger.info("Email alerts sent (%d alerts)", len(alerts))
-        except Exception as e:
-            logger.warning("Email alert failed: %s", e)
+    def _save_alerts_to_file(self, alerts: list[Alert], scan_id: str) -> Path:
+        output_path = self.output_dir / f"alerts_{scan_id}.json"
+        data = {
+            "scan_id": scan_id,
+            "total": len(alerts),
+            "alerts": [a.to_dict() for a in alerts],
+        }
+        output_path.write_text(json.dumps(data, indent=2))
+        return output_path
 
-    # ── Save log ─────────────────────────────────────────────
+    def _format_email_body(self, alerts: list[Alert]) -> str:
+        lines = ["AI Dataset Radar Alert Report", "=" * 40, ""]
+        by_severity = {"critical": [], "warning": [], "info": []}
+        for a in alerts:
+            by_severity.get(a.severity, by_severity["info"]).append(a)
+        for severity in ("critical", "warning", "info"):
+            group = by_severity[severity]
+            if not group:
+                continue
+            icon = {"critical": "!!!", "warning": "!!", "info": "i"}[severity]
+            lines.append(f"[{icon}] {severity.upper()} ({len(group)})")
+            lines.append("-" * 30)
+            for a in group:
+                lines.append(f"  {a.title}")
+                lines.append(f"    {a.detail}")
+                lines.append("")
+        lines.append("---")
+        lines.append("Generated by AI Dataset Radar")
+        return "\n".join(lines)
 
-    def _save_log(self, alerts: list[Alert]) -> Path:
-        """Append alerts to global log and date-specific log."""
-        # Global dedup log
-        global_log = self.output_dir / "alerts.json"
-        history = []
-        if global_log.exists():
-            try:
-                with open(global_log, "r", encoding="utf-8") as f:
-                    history = json.load(f)
-            except (json.JSONDecodeError, ValueError):
-                pass
+    def _check_sudden_burst(self, current: dict, previous: dict) -> list:
+        """单中亏 org 作次‌scan 新增数损集计分 warningÌ�"""
+        alerts = []
+        if not self.rules.get("sudden_burst", True):
+            return alerts
+        threshold = self.rules.get("sudden_burst_threshold", 20)
+        current_by_org = {}
+        for ds in current.get("datasets", []):
+            org = ds.get("author") or ds.get("org") or "unknown"
+            current_by_org[org] = current_by_org.get(org, 0) + 1
+        prev_by_org = {}
+        for ds in previous.get("datasets", []):
+            org = ds.get("author") or ds.get("org") or "unknown"
+            prev_by_org[org] = prev_by_org.get(org, 0) + 1
+        for org, count in current_by_org.items():
+            prev_count = prev_by_org.get(org, 0)
+            delta = count - prev_count
+            if delta >= threshold:
+                alerts.append(Alert(
+                    rule="sudden_burst",
+                    severity="warning",
+                    title=f"Sudden burst: {org} +{delta} datasets",
+                    detail=f"Org '{org}' added {delta} datasets in one scan (threshold={threshold}).",
+                ))
+        return alerts
 
-        new_entries = [a.to_dict() for a in alerts]
-        history.extend(new_entries)
-
-        os.makedirs(global_log.parent, exist_ok=True)
-        with open(global_log, "w", encoding="utf-8") as f:
-            json.dump(history, f, ensure_ascii=False, indent=2)
-
-        # Date-specific log
-        date_str = datetime.now(timezone.utc).replace(tzinfo=None).strftime("%Y-%m-%d")
-        date_dir = self.output_dir / "reports" / date_str
-        os.makedirs(date_dir, exist_ok=True)
-        date_log = date_dir / "alerts.json"
-
-        date_history = []
-        if date_log.exists():
-            try:
-                with open(date_log, "r", encoding="utf-8") as f:
-                    date_history = json.load(f)
-            except (json.JSONDecodeError, ValueError):
-                pass
-
-        date_history.extend(new_entries)
-        with open(date_log, "w", encoding="utf-8") as f:
-            json.dump(date_history, f, ensure_ascii=False, indent=2)
-
-        logger.info("Saved %d alerts to %s", len(alerts), date_log)
-        return date_log
-
-
-# ── Helpers ──────────────────────────────────────────────────
-
-
-def _extract_active_orgs(report: dict) -> set[str]:
-    """Extract orgs that have at least one dataset or active repo."""
-    orgs = set()
-    for ds in report.get("datasets", []):
-        author = ds.get("author", "")
-        if author:
-            orgs.add(author)
-    for repo in report.get("github_activity", []):
-        org = repo.get("org", "")
-        if org:
-            orgs.add(org)
-    return orgs
-
-
-def _extract_all_orgs(report: dict) -> set[str]:
-    """Extract all mentioned org names from datasets + github."""
-    return _extract_active_orgs(report)
-
-
-def _hours_between(ts1: str, ts2: str) -> float:
-    """Calculate hours between two ISO timestamps."""
-    try:
-        t1 = datetime.fromisoformat(ts1)
-        t2 = datetime.fromisoformat(ts2)
-        return abs((t2 - t1).total_seconds()) / 3600
-    except (ValueError, TypeError):
-        return float("inf")
-
-
-def _expand_env(value: str) -> str:
-    """Expand ${VAR} or $VAR patterns in a string."""
-    if not value:
-        return value
-    return os.path.expandvars(value)
-
-
-def _format_email_body(alerts: list[Alert]) -> str:
-    """Format alerts into a plain-text email body."""
-    lines = ["AI Dataset Radar - Alert Summary", "=" * 40, ""]
-
-    by_severity = {"critical": [], "warning": [], "info": []}
-    for a in alerts:
-        by_severity.get(a.severity, by_severity["info"]).append(a)
-
-    for severity in ("critical", "warning", "info"):
-        group = by_severity[severity]
-        if not group:
-            continue
-        icon = {"critical": "!!!", "warning": "!!", "info": "i"}[severity]
-        lines.append(f"[{icon}] {severity.upper()} ({len(group)})")
-        lines.append("-" * 30)
-        for a in group:
-            lines.append(f"  {a.title}")
-            lines.append(f"    {a.detail}")
-            lines.append("")
-
-    lines.append("---")
-    lines.append("Generated by AI Dataset Radar")
-    return "\n".join(lines)
+    def _check_quality_drop(self, current: dict, previous: dict) -> list:
+        """平型责重分 为 30% 触号 warningÌ�"""
+        alerts = []
+        if not self.rules.get("quality_drop", True):
+            return alerts
+        drop_threshold = self.rules.get("quality_drop_threshold", 0.3)
+        def avg_quality(scan):
+            scores = [ds.get("quality_score", 0) for ds in scan.get("datasets", []) if ds.get("quality_score") is not None]
+            return sum(scores) / len(scores) if scores else None
+        curr_q = avg_quality(current)
+        prev_q = avg_quality(previous)
+        if curr_q is None or prev_q is None or prev_q == 0:
+            return alerts
+        drop_ratio = (prev_q - curr_q) / prev_q
+        if drop_ratio >= drop_threshold:
+            alerts.append(Alert(
+                rule="quality_drop",
+                severity="warning",
+                title=f"Quality drop: {drop_ratio:.1%} decrease",
+                detail=f"Avg quality score dropped from {prev_q:.2f} to {curr_q:.2f} ({drop_ratio:.1%} drop, threshold={drop_threshold:.0%}).",
+            ))
+        return alerts
