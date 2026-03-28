@@ -19,6 +19,8 @@ step() { echo -e "\n${GREEN}▶ Step $1: $2${NC}"; }
 warn() { echo -e "${YELLOW}⚠ $1${NC}"; }
 fail() { echo -e "${RED}✗ $1${NC}"; exit 1; }
 PUBLISH_CHANGED=false
+LIVE_CHECK_OK=false
+DEPLOY_RUN_ID=""
 
 # ── 解析参数 ──
 SKIP_SCAN=false
@@ -56,6 +58,145 @@ if [ -f "$RADAR_DIR/.env" ]; then
 fi
 
 mkdir -p "$REPORTS"
+
+curl_status() {
+  local url="$1"
+  local timeout="${2:-10}"
+  curl -sS -L -o /dev/null --max-time "$timeout" -w "%{http_code}" "$url" 2>/dev/null || echo "000"
+}
+
+is_http_ok() {
+  [ "$1" = "200" ]
+}
+
+wait_for_http_200() {
+  local url="$1"
+  local attempts="${2:-12}"
+  local delay="${3:-5}"
+  local status="000"
+  local i
+  for i in $(seq 1 "$attempts"); do
+    status="$(curl_status "$url" 20)"
+    if [ "$status" = "200" ]; then
+      printf '%s' "$status"
+      return 0
+    fi
+    if [ "$i" -lt "$attempts" ]; then
+      sleep "$delay"
+    fi
+  done
+  printf '%s' "$status"
+  return 1
+}
+
+AUTO_DEGRADE_ARGS=()
+AUTO_DEGRADE_REASONS=()
+
+add_auto_degrade_flag() {
+  local flag="$1"
+  local reason="$2"
+  local existing
+  if [ ${#AUTO_DEGRADE_ARGS[@]} -gt 0 ]; then
+    for existing in "${AUTO_DEGRADE_ARGS[@]}"; do
+      if [ "$existing" = "$flag" ]; then
+        return 0
+      fi
+    done
+  fi
+  AUTO_DEGRADE_ARGS+=("$flag")
+  AUTO_DEGRADE_REASONS+=("$flag ← $reason")
+}
+
+prepare_scan_health_overrides() {
+  local github_status semantic_status gh_trending_status
+
+  if [ -n "${GITHUB_TOKEN:-}" ]; then
+    github_status="$(
+      curl -sS -o /dev/null --max-time 10 \
+        -H "Accept: application/vnd.github+json" \
+        -H "Authorization: token ${GITHUB_TOKEN}" \
+        -w "%{http_code}" \
+        "https://api.github.com/rate_limit" 2>/dev/null || echo "000"
+    )"
+    if [ "$github_status" != "200" ]; then
+      add_auto_degrade_flag "--no-github" "GITHUB_TOKEN 校验失败（HTTP ${github_status}）"
+    fi
+  else
+    add_auto_degrade_flag "--no-github" "未配置 GITHUB_TOKEN"
+  fi
+
+  gh_trending_status="$(curl_status "https://ghapi.huchen.dev/repositories?language=python&since=weekly" 10)"
+  if ! is_http_ok "$gh_trending_status"; then
+    add_auto_degrade_flag "--no-gh-trending" "GitHub Trending 源不可用（HTTP ${gh_trending_status}）"
+  fi
+
+  semantic_status="$(
+    if [ -n "${SEMANTIC_SCHOLAR_API_KEY:-}" ]; then
+      curl -sS -o /dev/null --max-time 10 \
+        -H "x-api-key: ${SEMANTIC_SCHOLAR_API_KEY}" \
+        -w "%{http_code}" \
+        "https://api.semanticscholar.org/graph/v1/paper/search?query=dataset&limit=1&fields=paperId" 2>/dev/null || echo "000"
+    else
+      curl -sS -o /dev/null --max-time 10 \
+        -w "%{http_code}" \
+        "https://api.semanticscholar.org/graph/v1/paper/search?query=dataset&limit=1&fields=paperId" 2>/dev/null || echo "000"
+    fi
+  )"
+  case "$semantic_status" in
+    200) ;;
+    *) add_auto_degrade_flag "--no-semantic-scholar" "Semantic Scholar 探活失败（HTTP ${semantic_status}）" ;;
+  esac
+
+  while IFS=$'\t' read -r kind value; do
+    case "$kind" in
+      x_enabled) X_ENABLED="$value" ;;
+      x_has_bearer) X_HAS_BEARER="$value" ;;
+      x_sample_account) X_SAMPLE_ACCOUNT="$value" ;;
+      x_rsshub_url) X_RSSHUB_URLS+=("$value") ;;
+    esac
+  done < <("$PYTHON_BRIEF" - "$RADAR_DIR/config.yaml" <<'PY'
+import sys
+from pathlib import Path
+import yaml
+
+config_path = Path(sys.argv[1])
+cfg = yaml.safe_load(config_path.read_text(encoding="utf-8")) if config_path.exists() else {}
+x = cfg.get("x_tracker", {}) or {}
+print("x_enabled\t%s" % ("true" if x.get("enabled", False) else "false"))
+print("x_has_bearer\t%s" % ("true" if str(x.get("bearer_token", "")).strip() else "false"))
+accounts = x.get("accounts") or []
+print("x_sample_account\t%s" % (accounts[0] if accounts else "OpenAI"))
+rsshub_urls = x.get("rsshub_urls") or []
+single = x.get("rsshub_url")
+if not rsshub_urls and single:
+    rsshub_urls = [single]
+for url in rsshub_urls:
+    print("x_rsshub_url\t%s" % str(url).rstrip("/"))
+PY
+)
+
+  if [ "${X_ENABLED:-false}" = "true" ] && [ "${X_HAS_BEARER:-false}" != "true" ] && [ ${#X_RSSHUB_URLS[@]} -gt 0 ]; then
+    local x_status x_ok=false base
+    for base in "${X_RSSHUB_URLS[@]}"; do
+      x_status="$(curl_status "${base}/twitter/user/${X_SAMPLE_ACCOUNT:-OpenAI}" 8)"
+      if is_http_ok "$x_status"; then
+        x_ok=true
+        break
+      fi
+    done
+    if [ "$x_ok" != true ]; then
+      add_auto_degrade_flag "--no-x" "RSSHub 路由不可用，且未配置 X bearer token"
+    fi
+  fi
+
+  if [ ${#AUTO_DEGRADE_REASONS[@]} -gt 0 ]; then
+    warn "扫描前健康检查发现不稳定数据源，自动降级："
+    local reason
+    for reason in "${AUTO_DEGRADE_REASONS[@]}"; do
+      echo "  - $reason"
+    done
+  fi
+}
 
 if [ "$SKIP_SCAN" = false ] && [ "$DATE" != "$TODAY" ]; then
   fail "当前扫描仅支持生成今天（$TODAY）的报告；历史日期请先准备好 reports/$DATE 后再配合 --skip-scan 使用"
@@ -140,25 +281,40 @@ EOF
 
   echo "  ✓ PR 已合并，等待 Deploy workflow..."
 
-  local run_id=""
-  local i
+  local run_id="" deploy_sha=""
+  deploy_sha="$(
+    cd "$publish_dir" && \
+    gh pr view "$pr_url" --json mergeCommit --jq '.mergeCommit.oid'
+  )" || true
+  if [ -z "$deploy_sha" ] || [ "$deploy_sha" = "null" ]; then
+    git -C "$publish_dir" fetch origin main --quiet || fail "刷新合并后 main 失败"
+    deploy_sha="$(git -C "$publish_dir" rev-parse origin/main 2>/dev/null || true)"
+  fi
+  [ -n "$deploy_sha" ] || fail "读取合并后 main HEAD 失败"
+
+  local i runs_json
   for i in $(seq 1 20); do
-    run_id="$(
+    runs_json="$(
       cd "$publish_dir" && \
       gh run list \
         --workflow Deploy \
         --branch main \
         --event push \
-        --limit 5 \
-        --json databaseId \
-        --jq '.[0].databaseId'
+        --limit 10 \
+        --json databaseId,headSha
+    )" || true
+    run_id="$(
+      printf '%s' "$runs_json" | \
+      "$PYTHON_BRIEF" -c 'import json, sys; deploy_sha=sys.argv[1]; runs=json.load(sys.stdin); print(next((str(r.get("databaseId", "")) for r in runs if r.get("headSha") == deploy_sha), ""))' "$deploy_sha"
     )" || true
     if [ -n "$run_id" ] && [ "$run_id" != "null" ]; then
+      run_id="$(printf '%s\n' "$run_id" | head -n1 | tr -d '[:space:]')"
       break
     fi
     sleep 3
   done
   [ -n "$run_id" ] && [ "$run_id" != "null" ] || fail "未找到 Deploy workflow run"
+  DEPLOY_RUN_ID="$run_id"
 
   (
     cd "$publish_dir" && \
@@ -184,6 +340,14 @@ else
   fi
   cd "$RADAR_DIR"
   SCAN_ARGS=(--days 7 --json)
+  X_ENABLED=false
+  X_HAS_BEARER=false
+  X_SAMPLE_ACCOUNT="OpenAI"
+  X_RSSHUB_URLS=()
+  prepare_scan_health_overrides
+  if [ ${#AUTO_DEGRADE_ARGS[@]} -gt 0 ]; then
+    SCAN_ARGS+=("${AUTO_DEGRADE_ARGS[@]}")
+  fi
   if [ "$WITH_RECIPE" = true ]; then
     SCAN_ARGS+=(--recipe --recipe-limit 5)
   fi
@@ -204,7 +368,31 @@ else
     if [ -f "$PROMPT_FILE" ] && [ -f "$REPORT_JSON" ]; then
       warn "扫描命令异常退出（exit=${SCAN_STATUS}），但核心报告已生成，继续后续步骤"
     else
-      fail "扫描失败（exit=${SCAN_STATUS}），且核心报告未生成"
+      warn "首轮扫描失败（exit=${SCAN_STATUS}），尝试自动降级重试"
+      add_auto_degrade_flag "--no-x" "降级重试默认关闭高故障源"
+      add_auto_degrade_flag "--no-semantic-scholar" "降级重试默认关闭高故障源"
+      add_auto_degrade_flag "--no-github" "降级重试默认关闭高故障源"
+      add_auto_degrade_flag "--no-blogs" "降级重试默认关闭高故障源"
+      add_auto_degrade_flag "--no-gh-trending" "降级重试默认关闭高故障源"
+      add_auto_degrade_flag "--no-reddit" "降级重试默认关闭高故障源"
+      add_auto_degrade_flag "--no-kaggle" "降级重试默认关闭高故障源"
+      RETRY_SCAN_ARGS=(--days 7 --json)
+      RETRY_SCAN_ARGS+=("${AUTO_DEGRADE_ARGS[@]}")
+      if [ "$WITH_RECIPE" = true ]; then
+        RETRY_SCAN_ARGS+=(--recipe --recipe-limit 5)
+      fi
+      set +e
+      "$VENV/python" src/main_intel.py "${RETRY_SCAN_ARGS[@]}" 2>&1 | tee "$REPORTS/radar_scan.retry.log"
+      SCAN_STATUS=${PIPESTATUS[0]}
+      TEE_STATUS=${PIPESTATUS[1]}
+      set -e
+      if [ "$TEE_STATUS" -ne 0 ]; then
+        warn "重试日志写入异常（tee exit=${TEE_STATUS}）"
+      fi
+      if [ "$SCAN_STATUS" -ne 0 ] && { [ ! -f "$PROMPT_FILE" ] || [ ! -f "$REPORT_JSON" ]; }; then
+        fail "扫描失败（自动降级重试后仍未生成核心报告，exit=${SCAN_STATUS}）"
+      fi
+      warn "已通过自动降级重试继续后续步骤"
     fi
   fi
 
@@ -352,18 +540,19 @@ else
   publish_via_pr "$YEAR" "$WEEK" "$TITLE"
 
   if [ "$PUBLISH_CHANGED" = true ]; then
-    STATUS=$(curl -s -o /dev/null -w "%{http_code}" "https://knowlyr.com/insights/${YEAR}-${WEEK}.html" 2>/dev/null || echo "000")
+    STATUS="$(wait_for_http_200 "https://knowlyr.com/insights/${YEAR}-${WEEK}.html" 12 5 || true)"
     if [ "$STATUS" = "200" ]; then
+      LIVE_CHECK_OK=true
       echo -e "${GREEN}✓ 部署完成！https://knowlyr.com/insights/${YEAR}-${WEEK}.html${NC}"
     else
-      warn "Deploy workflow 已完成，但线上检查返回 ${STATUS}"
+      fail "Deploy workflow(${DEPLOY_RUN_ID:-unknown}) 已完成，但线上检查在重试后仍返回 ${STATUS}"
     fi
   else
     warn "本次无源数据变更，跳过线上校验与飞书通知"
   fi
 
   # Step 6: 飞书通知
-  if [ "$PUBLISH_CHANGED" = true ]; then
+  if [ "$PUBLISH_CHANGED" = true ] && [ "$LIVE_CHECK_OK" = true ]; then
     step 6 "飞书群通知"
     if [ -f "$RADAR_DIR/notify_feishu.sh" ]; then
       bash "$RADAR_DIR/notify_feishu.sh" "$WEEK" "$TITLE" "$DATE"
