@@ -467,7 +467,9 @@ ruff format src/
 
 **测试覆盖**：36 个测试文件，999 个测试用例。
 
-**CI**：GitHub Actions，Tag push 自动发布。定时任务（`daily.yml`）支持每日自动扫描。
+**CI**：GitHub Actions 负责测试 / lint / 打包流程。定时任务（`daily.yml`）支持每日自动扫描。
+
+**正式发布**：`ai-dataset-radar` 属于 `indirect_publish` 项目。它自己的 tag 或包发布**不会**直接把用户看到的页面发到线上；真正的生产面只会在 Radar 产物进入 `knowlyr-website`，且下游官网部署成功之后生效。
 
 ---
 
