@@ -467,7 +467,9 @@ ruff format src/
 
 **Test coverage**: 36 test files, 999 test cases.
 
-**CI**: GitHub Actions with automatic publishing on tag push. Scheduled task (`daily.yml`) supports daily automated scanning.
+**CI**: GitHub Actions covers test/lint/package workflows. Scheduled task (`daily.yml`) supports daily automated scanning.
+
+**Production publishing**: `ai-dataset-radar` is an `indirect_publish` project. Its own tag or package release does **not** publish user-facing pages directly. The production surface lands only after radar output is pulled into `knowlyr-website` and the downstream website deploy workflow succeeds.
 
 ---
 
