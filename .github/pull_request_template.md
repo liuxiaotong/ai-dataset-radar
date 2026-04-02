@@ -10,5 +10,5 @@
 
 ## Checks
 - [ ] `uv run ruff check src tests mcp_server agent`
-- [ ] `uv run pytest -q --deselect tests/test_llm_client.py::TestOpenAICompatibleProvider::test_basic_call`
+- [ ] `uv run pytest -q`
 - [ ] If `README.md` changed, confirm the website rebuild side effect is intended.

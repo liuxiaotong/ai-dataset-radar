@@ -173,26 +173,20 @@ class TestOpenAICompatibleProvider:
         monkeypatch.setenv("LLM_BASE_URL", "https://api.moonshot.cn/v1")
         monkeypatch.setenv("LLM_MODEL", "moonshot-v1-128k")
 
-        mock_openai = MagicMock()
-        mock_choice = MagicMock()
-        mock_choice.message.content = "kimi insights"
-        mock_openai.OpenAI.return_value.chat.completions.create.return_value = MagicMock(
-            choices=[mock_choice]
-        )
-
-        with patch.dict("sys.modules", {"openai": mock_openai}):
+        with patch(
+            "utils.llm_client._post_openai_chat_completion",
+            return_value="kimi insights",
+        ) as mock_post:
             result = _generate_openai_compatible("test prompt")
 
-            mock_openai.OpenAI.assert_called_once_with(
-                api_key="sk-kimi", base_url="https://api.moonshot.cn/v1"
+            mock_post.assert_called_once_with(
+                base_url="https://api.moonshot.cn/v1",
+                api_key="sk-kimi",
+                model="moonshot-v1-128k",
+                system_prompt=SYSTEM_PROMPT,
+                prompt="test prompt",
+                max_tokens=MAX_TOKENS,
             )
-            create_call = mock_openai.OpenAI.return_value.chat.completions.create
-            call_kwargs = create_call.call_args.kwargs
-            assert call_kwargs["model"] == "moonshot-v1-128k"
-            assert call_kwargs["max_tokens"] == MAX_TOKENS
-            assert call_kwargs["messages"][0]["role"] == "system"
-            assert call_kwargs["messages"][0]["content"] == SYSTEM_PROMPT
-            assert call_kwargs["messages"][1]["content"] == "test prompt"
             assert result == "kimi insights"
 
     def test_no_base_url_uses_default(self, monkeypatch):

@@ -3,6 +3,8 @@ name: CI
 on:
   pull_request:
     branches: [main]
+  merge_group:
+    branches: [main]
 
 permissions:
   contents: read
@@ -56,5 +58,4 @@ jobs:
             -u SENTINEL_CODEX_API_KEY \
             -u ANTHROPIC_API_KEY \
             -u ANTHROPIC_BASE_URL \
-            uv run pytest -q \
-              --deselect tests/test_llm_client.py::TestOpenAICompatibleProvider::test_basic_call
+            uv run pytest -q
