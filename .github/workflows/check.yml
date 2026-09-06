@@ -1,0 +1,25 @@
+name: CI Check
+
+on:
+  pull_request:
+    branches: [main]
+  push:
+    branches: [main]
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Compile Python sources
+        run: python -m compileall -q src agent mcp_server analyze_insights.py
+
+      - name: Validate shell entrypoints
+        run: bash -n run_weekly.sh cron_weekly.sh notify_feishu.sh
