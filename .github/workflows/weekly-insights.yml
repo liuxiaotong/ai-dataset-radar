@@ -1,0 +1,103 @@
+name: Generate Weekly Insights
+
+on:
+  # 每周六 10:00（Asia/Shanghai，02:00 UTC）运行一次。
+  schedule:
+    - cron: "0 2 * * 6"
+  workflow_dispatch:
+    inputs:
+      with_recipe:
+        description: "Run the slower DataRecipe enrichment step"
+        required: false
+        default: false
+        type: boolean
+
+concurrency:
+  group: weekly-insights
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+jobs:
+  generate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    env:
+      # gh uses this token to create the cross-repository website PR.
+      GH_TOKEN: ${{ secrets.WEBSITE_PUBLISH_TOKEN }}
+      # The radar uses GITHUB_TOKEN for public API rate-limit headroom.
+      GITHUB_TOKEN: ${{ github.token }}
+      SENTINEL_CODEX_API_KEY: ${{ secrets.SENTINEL_CODEX_API_KEY }}
+      ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+      # The Codex-backed Sentinel account currently supports gpt-5.5 and
+      # gpt-5.4-mini for OpenAI-compatible calls (not gpt-5.4).
+      INSIGHTS_OPENAI_MODEL: gpt-5.5
+      OPENAI_MODEL: gpt-5.5
+      RADAR_DIR: ${{ github.workspace }}
+      WEBSITE_DIR: ${{ github.workspace }}/website
+      WEBSITE_REPO: liuxiaotong/knowlyr-website
+
+    steps:
+      - name: Check out radar
+        uses: actions/checkout@v5
+
+      - name: Validate automation secrets
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [[ -z "${GH_TOKEN:-}" ]]; then
+            echo "::error::WEBSITE_PUBLISH_TOKEN is not configured; cannot checkout or open the website PR."
+            exit 1
+          fi
+          if [[ -z "${SENTINEL_CODEX_API_KEY:-}" && -z "${ANTHROPIC_API_KEY:-}" ]]; then
+            echo "::error::Set SENTINEL_CODEX_API_KEY or ANTHROPIC_API_KEY for insight generation."
+            exit 1
+          fi
+          gh api "repos/${WEBSITE_REPO}" --jq '.full_name' >/dev/null
+          echo "Automation secrets and website access verified."
+
+      - name: Check out canonical website
+        uses: actions/checkout@v5
+        with:
+          repository: liuxiaotong/knowlyr-website
+          ref: main
+          path: website
+          token: ${{ secrets.WEBSITE_PUBLISH_TOKEN }}
+
+      - name: Set up Python
+        uses: actions/setup-python@v6
+        with:
+          python-version: "3.12"
+          cache: pip
+          cache-dependency-path: requirements.txt
+
+      - name: Install radar and website dependencies
+        run: |
+          echo "PYTHON_BRIEF=$RUNNER_TEMP/weekly-venv/bin/python" >> "$GITHUB_ENV"
+          echo "VENV=$RUNNER_TEMP/weekly-venv/bin" >> "$GITHUB_ENV"
+          python -m venv "$RUNNER_TEMP/weekly-venv"
+          "$RUNNER_TEMP/weekly-venv/bin/pip" install --upgrade pip
+          "$RUNNER_TEMP/weekly-venv/bin/pip" install -r requirements.txt
+          "$RUNNER_TEMP/weekly-venv/bin/pip" install jinja2 mistune bleach tinycss2 pillow "qrcode[pil]"
+          "$RUNNER_TEMP/weekly-venv/bin/python" -m playwright install --with-deps chromium
+
+      - name: Generate and open the website PR
+        run: |
+          args=(--no-auto-merge)
+          if [[ "${{ inputs.with_recipe || 'false' }}" == "true" ]]; then
+            args+=(--with-recipe)
+          fi
+          bash run_weekly.sh "${args[@]}"
+
+      - name: Upload generation evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: weekly-insights-${{ github.run_id }}
+          if-no-files-found: ignore
+          path: |
+            data/reports/**/radar_scan.log
+            data/reports/**/radar_scan.retry.log
+            data/reports/**/insights_analysis.log
+            data/reports/**/intel_report_*_insights.md

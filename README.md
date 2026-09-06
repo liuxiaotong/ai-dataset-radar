@@ -469,6 +469,12 @@ ruff format src/
 
 **CI**: GitHub Actions covers test/lint/package workflows. Scheduled task (`daily.yml`) supports daily automated scanning.
 
+### Weekly insights automation
+
+`.github/workflows/weekly-insights.yml` runs every Saturday at 02:00 UTC (10:00 Asia/Shanghai), scans the last seven days, generates the Chinese and English brief, and opens a PR in `knowlyr-website`. Production still follows review → Merge Controller → `main` → Deploy; Radar never bypasses that governance chain.
+
+Configure `WEBSITE_PUBLISH_TOKEN` (access to `liuxiaotong/knowlyr-website` with PR creation rights) and either `SENTINEL_CODEX_API_KEY` or `ANTHROPIC_API_KEY` in this repository. You can also dispatch `Generate Weekly Insights` manually from Actions and opt into the slower DataRecipe enrichment step.
+
 **Production publishing**: `ai-dataset-radar` is an `indirect_publish` project. Its own tag or package release does **not** publish user-facing pages directly. The production surface lands only after radar output is pulled into `knowlyr-website` and the downstream website deploy workflow succeeds.
 
 ---

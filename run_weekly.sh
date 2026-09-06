@@ -10,6 +10,7 @@
 #   bash run_weekly.sh --with-recipe       # 额外跑 DataRecipe（更慢，非默认）
 #   bash run_weekly.sh --skip-scan         # 跳过扫描（已有数据时）
 #   bash run_weekly.sh --skip-deploy       # 跳过部署（仅生成）
+#   bash run_weekly.sh --no-auto-merge     # 创建官网 PR，但不自动合并/部署
 # ═══════════════════════════════════════════════════════════════
 set -euo pipefail
 
@@ -26,6 +27,7 @@ DEPLOY_RUN_ID=""
 SKIP_SCAN=false
 SKIP_DEPLOY=false
 WITH_RECIPE=false
+AUTO_MERGE=true
 POSITIONAL=()
 
 for arg in "$@"; do
@@ -33,6 +35,7 @@ for arg in "$@"; do
     --skip-scan)   SKIP_SCAN=true ;;
     --skip-deploy) SKIP_DEPLOY=true ;;
     --with-recipe) WITH_RECIPE=true ;;
+    --no-auto-merge) AUTO_MERGE=false ;;
     *)             POSITIONAL+=("$arg") ;;
   esac
 done
@@ -45,6 +48,7 @@ YEAR="$(echo "$DATE" | cut -d- -f1)"
 # ── 路径（本地 macOS 默认，SG 通过环境变量覆盖）──
 RADAR_DIR="${RADAR_DIR:-$(cd "$(dirname "$0")" && pwd)}"
 WEBSITE_DIR="${WEBSITE_DIR:-$HOME/knowlyr-website}"
+WEBSITE_REPO="${WEBSITE_REPO:-liuxiaotong/knowlyr-website}"
 VENV="${VENV:-$RADAR_DIR/.venv/bin}"
 PYTHON_BRIEF="${PYTHON_BRIEF:-/opt/homebrew/bin/python3}"
 CLAUDE_BIN="${CLAUDE_BIN:-claude}"
@@ -213,6 +217,21 @@ publish_via_pr() {
   local publish_dir
   publish_dir="$(mktemp -d "${TMPDIR:-/tmp}/knowlyr-weekly.${year}-${week}.XXXXXX")"
 
+  # GitHub Actions may be re-run while the previous week's PR is still open.
+  # Reuse the existing PR instead of creating duplicate branches and releases.
+  local existing_pr
+  existing_pr="$([ -n "${GH_TOKEN:-}" ] && gh pr list \
+    --repo "$WEBSITE_REPO" \
+    --state open \
+    --limit 100 \
+    --json url,title | \
+    "$PYTHON_BRIEF" -c 'import json,sys; prefix=sys.argv[1]; rows=json.load(sys.stdin); print(next((r["url"] for r in rows if r.get("title", "").startswith(prefix)), ""))' \
+    "前沿洞察 ${week}：" 2>/dev/null || true)"
+  if [ -n "$existing_pr" ]; then
+    echo "  ✓ 已存在同周刊 PR，跳过重复创建: $existing_pr"
+    return 0
+  fi
+
   local files=(
     "insights/.contexts/${year}-${week}.json"
     "insights/.issues.json"
@@ -220,6 +239,7 @@ publish_via_pr() {
     "assets/imgs/qr/${year}-${week}.png"
     "data/i18n/en/contexts/${year}-${week}.json"
     "data/i18n/en/issues.json"
+    "data/i18n/en/.hashes.json"
   )
 
   cleanup_publish_dir() {
@@ -247,6 +267,8 @@ publish_via_pr() {
   fi
 
   PUBLISH_CHANGED=true
+  git -C "$publish_dir" config user.name "${GIT_AUTHOR_NAME:-github-actions[bot]}"
+  git -C "$publish_dir" config user.email "${GIT_AUTHOR_EMAIL:-41898282+github-actions[bot]@users.noreply.github.com}"
   git -C "$publish_dir" commit -m "前沿洞察 ${week}：${title}" >/dev/null \
     || fail "创建发布提交失败"
   git -C "$publish_dir" push -u origin "$publish_branch" >/dev/null \
@@ -273,6 +295,11 @@ EOF
       --body "$pr_body"
   )" || fail "创建 PR 失败"
   echo "  PR: $pr_url"
+
+  if [ "$AUTO_MERGE" != true ]; then
+    echo "  ✓ PR 已创建，按治理要求等待 review / Merge Controller；跳过自动合并和部署"
+    return 0
+  fi
 
   (
     cd "$publish_dir" && \
@@ -354,8 +381,9 @@ else
 
   set +e
   "$VENV/python" src/main_intel.py "${SCAN_ARGS[@]}" 2>&1 | tee "$REPORTS/radar_scan.log"
-  SCAN_STATUS=${PIPESTATUS[0]}
-  TEE_STATUS=${PIPESTATUS[1]}
+  PIPE_STATUS=("${PIPESTATUS[@]}")
+  SCAN_STATUS=${PIPE_STATUS[0]}
+  TEE_STATUS=${PIPE_STATUS[1]}
   set -e
 
   if [ "$TEE_STATUS" -ne 0 ]; then
@@ -383,8 +411,9 @@ else
       fi
       set +e
       "$VENV/python" src/main_intel.py "${RETRY_SCAN_ARGS[@]}" 2>&1 | tee "$REPORTS/radar_scan.retry.log"
-      SCAN_STATUS=${PIPESTATUS[0]}
-      TEE_STATUS=${PIPESTATUS[1]}
+      PIPE_STATUS=("${PIPESTATUS[@]}")
+      SCAN_STATUS=${PIPE_STATUS[0]}
+      TEE_STATUS=${PIPE_STATUS[1]}
       set -e
       if [ "$TEE_STATUS" -ne 0 ]; then
         warn "重试日志写入异常（tee exit=${TEE_STATUS}）"
@@ -511,11 +540,16 @@ step 4.5 "翻译英文版"
 
 cd "$WEBSITE_DIR"
 "$PYTHON_BRIEF" scripts/translate.py --file "${YEAR}-${WEEK}.json" 2>&1 || {
-  warn "英文 context 翻译失败"
+  fail "英文 context 翻译失败，已停止创建不完整 PR"
 }
 "$PYTHON_BRIEF" scripts/translate.py --file .issues.json 2>&1 || {
-  warn "英文 issues 翻译失败"
+  fail "英文 issues 翻译失败，已停止创建不完整 PR"
 }
+
+[ -f "data/i18n/en/contexts/${YEAR}-${WEEK}.json" ] \
+  || fail "英文 context 文件未生成: data/i18n/en/contexts/${YEAR}-${WEEK}.json"
+[ -f "data/i18n/en/issues.json" ] \
+  || fail "英文 issues 文件未生成: data/i18n/en/issues.json"
 
 # 翻译发生在 generate_brief 之后，需再刷新一遍英文详情页与首页入口
 step 4.6 "刷新英文详情页与英文首页入口"
@@ -539,7 +573,9 @@ else
   PUBLISH_CHANGED=false
   publish_via_pr "$YEAR" "$WEEK" "$TITLE"
 
-  if [ "$PUBLISH_CHANGED" = true ]; then
+  if [ "$AUTO_MERGE" != true ]; then
+    warn "PR 已创建，等待官网 review / Merge Controller；本次不做线上校验或飞书通知"
+  elif [ "$PUBLISH_CHANGED" = true ]; then
     STATUS="$(wait_for_http_200 "https://knowlyr.com/insights/${YEAR}-${WEEK}.html" 12 5 || true)"
     if [ "$STATUS" = "200" ]; then
       LIVE_CHECK_OK=true
@@ -564,7 +600,11 @@ fi
 
 echo ""
 echo "═══════════════════════════════════════════════════"
-echo -e "  ${GREEN}✅ 全流程完成！${NC}"
+if [ "$AUTO_MERGE" = true ] && [ "$SKIP_DEPLOY" = false ]; then
+  echo -e "  ${GREEN}✅ 全流程完成！${NC}"
+else
+  echo -e "  ${GREEN}✅ 内容生成完成，等待官网 PR 治理流程${NC}"
+fi
 echo "  日期: $DATE  周号: $WEEK"
 echo "  标题: $TITLE"
 echo "  链接: https://knowlyr.com/insights/${YEAR}-${WEEK}.html"

@@ -469,6 +469,12 @@ ruff format src/
 
 **CI**：GitHub Actions 负责测试 / lint / 打包流程。定时任务（`daily.yml`）支持每日自动扫描。
 
+### 情报周刊自动化
+
+`.github/workflows/weekly-insights.yml` 每周六北京时间 10:00（02:00 UTC）运行一次，扫描最近 7 天数据，生成中英文周刊并向 `knowlyr-website` 创建 PR。官网仍按 review → Merge Controller → `main` → Deploy 的治理链路发布，不会由 Radar 直接绕过审核上线。
+
+工作流需要在本仓库配置 `WEBSITE_PUBLISH_TOKEN`（可访问 `liuxiaotong/knowlyr-website` 并创建 PR）和 `SENTINEL_CODEX_API_KEY` 或 `ANTHROPIC_API_KEY`。也可以在 Actions 页面手动运行 `Generate Weekly Insights`，按需开启较慢的 DataRecipe enrichment。
+
 **正式发布**：`ai-dataset-radar` 属于 `indirect_publish` 项目。它自己的 tag 或包发布**不会**直接把用户看到的页面发到线上；真正的生产面只会在 Radar 产物进入 `knowlyr-website`，且下游官网部署成功之后生效。
 
 ---
