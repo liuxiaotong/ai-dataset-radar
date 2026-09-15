@@ -55,6 +55,7 @@ CLAUDE_BIN="${CLAUDE_BIN:-claude}"
 
 REPORTS="$RADAR_DIR/data/reports/$DATE"
 TODAY="$(date +%Y-%m-%d)"
+REPORT_JSON="$REPORTS/intel_report_${DATE}.json"
 
 # ── 加载 .env ──
 if [ -f "$RADAR_DIR/.env" ]; then
@@ -391,7 +392,6 @@ else
   fi
 
   PROMPT_FILE="$REPORTS/intel_report_${DATE}_insights_prompt.md"
-  REPORT_JSON="$REPORTS/intel_report_${DATE}.json"
   if [ "$SCAN_STATUS" -ne 0 ]; then
     if [ -f "$PROMPT_FILE" ] && [ -f "$REPORT_JSON" ]; then
       warn "扫描命令异常退出（exit=${SCAN_STATUS}），但核心报告已生成，继续后续步骤"
@@ -427,6 +427,36 @@ else
 
   [ -d "$REPORTS" ] || fail "扫描完成但数据目录不存在: $REPORTS"
   echo -e "${GREEN}✓ 扫描完成${NC}"
+fi
+
+# ══════════════════════════════════════════════════════
+# Step 1.5: 校验周刊日期窗口，阻止重复/重叠发刊
+# ══════════════════════════════════════════════════════
+step 1.5 "校验周刊日期窗口"
+[ -f "$REPORT_JSON" ] || fail "缺少报告 JSON，无法校验日期窗口: $REPORT_JSON"
+ISSUES_REGISTRY="$WEBSITE_DIR/insights/.issues.json"
+if [ -f "$ISSUES_REGISTRY" ]; then
+  WINDOW_CHECK_OUTPUT="$(PYTHONPATH="$RADAR_DIR/src:$RADAR_DIR${PYTHONPATH:+:$PYTHONPATH}" "$PYTHON_BRIEF" - "$REPORT_JSON" "$ISSUES_REGISTRY" <<'PY'
+import json
+import sys
+from pathlib import Path
+
+from weekly_window import find_overlaps, window_from_report
+
+report_path, issues_path = map(Path, sys.argv[1:3])
+report = json.loads(report_path.read_text(encoding="utf-8"))
+issues = json.loads(issues_path.read_text(encoding="utf-8"))
+candidate = window_from_report(report)
+conflicts = find_overlaps(candidate, issues if isinstance(issues, list) else [])
+if conflicts:
+    print(json.dumps({"candidate": candidate.as_dict(), "conflicts": conflicts}, ensure_ascii=False))
+    raise SystemExit(2)
+print(json.dumps({"candidate": candidate.as_dict(), "conflicts": []}, ensure_ascii=False))
+PY
+  )" || fail "报告日期窗口与已有周刊重叠，已阻止发布: $WINDOW_CHECK_OUTPUT"
+  echo "  窗口: $WINDOW_CHECK_OUTPUT"
+else
+  warn "官网期刊注册表不存在，跳过窗口去重: $ISSUES_REGISTRY"
 fi
 
 # ══════════════════════════════════════════════════════
