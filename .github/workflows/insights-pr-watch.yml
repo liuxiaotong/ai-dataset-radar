@@ -1,0 +1,46 @@
+name: Watch Stale Insights PRs
+
+# Frontier Insights ("前沿洞察") weekly PRs on knowlyr-website sometimes sit
+# unreviewed (missing the required linrui-review status, failing CI, merge
+# conflicts, or a change request). When that happens, run_weekly.sh's next
+# run just reuses the existing PR and silently skips creating a new one, so
+# nobody finds out for a week. This workflow scans for stale open PRs daily
+# and privately pings Kai on Feishu (never a group) so he can unblock them.
+on:
+  schedule:
+    - cron: "0 2 * * *"
+  workflow_dispatch: {}
+
+permissions:
+  contents: read
+
+jobs:
+  watch:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    env:
+      GH_TOKEN: ${{ secrets.WEBSITE_PUBLISH_TOKEN }}
+      WEBSITE_REPO: liuxiaotong/knowlyr-website
+      FEISHU_APP_ID: ${{ secrets.FEISHU_APP_ID }}
+      FEISHU_APP_SECRET: ${{ secrets.FEISHU_APP_SECRET }}
+      FEISHU_KAI_RECEIVE_ID: ${{ secrets.FEISHU_KAI_RECEIVE_ID }}
+      FEISHU_KAI_RECEIVE_ID_TYPE: ${{ secrets.FEISHU_KAI_RECEIVE_ID_TYPE }}
+    steps:
+      - name: Check out radar
+        uses: actions/checkout@v5
+
+      - name: Set up Python
+        uses: actions/setup-python@v6
+        with:
+          python-version: "3.12"
+
+      - name: Scan for stale insights PRs and notify Kai (private DM only)
+        run: |
+          set +e
+          python3 scripts/insights_pr_watch_cli.py --repo "$WEBSITE_REPO" watch --min-hours 24
+          rc=$?
+          set -e
+          if [ "$rc" -ne 0 ]; then
+            echo "::warning::insights-pr-watch: notification step exited with $rc (see logs above); not failing the workflow."
+          fi
+          exit 0

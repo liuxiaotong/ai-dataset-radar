@@ -230,6 +230,17 @@ publish_via_pr() {
     "前沿洞察 ${week}：" 2>/dev/null || true)"
   if [ -n "$existing_pr" ]; then
     echo "  ✓ 已存在同周刊 PR，跳过重复创建: $existing_pr"
+    # 上一期 PR 还没合，这一期又没有新 PR——Kai 光看这条 echo 是不会知道的。
+    # 私聊提醒他（不发群），发送失败也不能让 run_weekly.sh 挂掉。
+    if [ -f "$RADAR_DIR/scripts/insights_pr_watch_cli.py" ]; then
+      "$PYTHON_BRIEF" "$RADAR_DIR/scripts/insights_pr_watch_cli.py" \
+        --repo "$WEBSITE_REPO" \
+        --sender "$RADAR_DIR/scripts/notify_feishu_card.sh" \
+        dup --pr-url "$existing_pr" --date "$DATE" \
+        || warn "情报周刊 PR 挂起提醒（飞书私聊）发送失败，不影响主流程"
+    else
+      warn "scripts/insights_pr_watch_cli.py 不存在，跳过 PR 挂起提醒"
+    fi
     return 0
   fi
 
