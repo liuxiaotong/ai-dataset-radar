@@ -1,0 +1,4 @@
+# Gitleaks uses its upstream default rules.
+# Keep exceptions narrow and evidence-based; do not add blanket path or regex allowlists.
+[extend]
+useDefault = true
