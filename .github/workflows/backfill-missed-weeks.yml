@@ -1,0 +1,102 @@
+name: Backfill Missed Insight Weeks
+
+# One-shot runner for the three missed Saturday windows. It is not part of
+# the Saturday schedule. Pushing this file on cursor/backfill-missed-weeks-bff3
+# starts the job; the file is not on main.
+on:
+  push:
+    branches: [cursor/backfill-missed-weeks-bff3]
+    paths: [".github/workflows/backfill-missed-weeks.yml"]
+
+permissions:
+  contents: read
+
+jobs:
+  backfill:
+    runs-on: ubuntu-latest
+    timeout-minutes: 150
+    env:
+      GH_TOKEN: ${{ secrets.WEBSITE_PUBLISH_TOKEN }}
+      GITHUB_TOKEN: ${{ github.token }}
+      SENTINEL_CODEX_API_KEY: ${{ secrets.SENTINEL_CODEX_API_KEY }}
+      ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+      INSIGHTS_OPENAI_MODEL: gpt-6.1-sol
+      OPENAI_MODEL: gpt-6.1-sol
+      RADAR_DIR: ${{ github.workspace }}
+      WEBSITE_DIR: ${{ github.workspace }}/website
+      WEBSITE_REPO: liuxiaotong/knowlyr-website
+
+    steps:
+      - name: Check out radar
+        uses: actions/checkout@v5
+
+      - name: Validate automation secrets
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [[ -z "${GH_TOKEN:-}" ]]; then
+            echo "::error::WEBSITE_PUBLISH_TOKEN is not configured; cannot open the website PR."
+            exit 1
+          fi
+          if [[ -z "${SENTINEL_CODEX_API_KEY:-}" && -z "${ANTHROPIC_API_KEY:-}" ]]; then
+            echo "::error::Set SENTINEL_CODEX_API_KEY or ANTHROPIC_API_KEY for insight generation."
+            exit 1
+          fi
+          gh api "repos/${WEBSITE_REPO}" --jq '.full_name' >/dev/null
+          echo "Automation secrets and website access verified."
+
+      - name: Check out canonical website
+        uses: actions/checkout@v5
+        with:
+          repository: liuxiaotong/knowlyr-website
+          ref: main
+          path: website
+          token: ${{ secrets.WEBSITE_PUBLISH_TOKEN }}
+
+      - name: Set up Python
+        uses: actions/setup-python@v6
+        with:
+          python-version: "3.12"
+          cache: pip
+          cache-dependency-path: requirements.txt
+
+      - name: Install radar and website dependencies
+        run: |
+          echo "PYTHON_BRIEF=$RUNNER_TEMP/weekly-venv/bin/python" >> "$GITHUB_ENV"
+          echo "VENV=$RUNNER_TEMP/weekly-venv/bin" >> "$GITHUB_ENV"
+          python -m venv "$RUNNER_TEMP/weekly-venv"
+          "$RUNNER_TEMP/weekly-venv/bin/pip" install --upgrade pip
+          "$RUNNER_TEMP/weekly-venv/bin/pip" install -r requirements.txt
+          "$RUNNER_TEMP/weekly-venv/bin/pip" install jinja2 mistune bleach tinycss2 pillow "qrcode[pil]"
+          "$RUNNER_TEMP/weekly-venv/bin/python" -m playwright install --with-deps chromium
+
+      - name: Backfill 10-10, 10-17, and 10-24 in order
+        run: |
+          set -euo pipefail
+          run_one() {
+            local start="$1" end="$2" offset="$3"
+            echo "=== Backfill ${start} .. ${end} (week offset ${offset}) ==="
+            git -C "$WEBSITE_DIR" fetch origin main --quiet
+            git -C "$WEBSITE_DIR" reset --hard origin/main
+            git -C "$WEBSITE_DIR" clean -fd
+            bash run_weekly.sh \
+              --no-auto-merge \
+              --window-start="${start}" \
+              --window-end="${end}" \
+              --week-offset="${offset}"
+          }
+          run_one 2026-10-10 2026-10-17 0
+          run_one 2026-10-17 2026-10-24 1
+          run_one 2026-10-24 2026-10-31 2
+
+      - name: Upload generation evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: backfill-missed-weeks-${{ github.run_id }}
+          if-no-files-found: ignore
+          path: |
+            data/reports/**/window_gaps.md
+            data/reports/**/radar_scan.log
+            data/reports/**/insights_analysis.log
+            data/reports/**/intel_report_*_insights.md
