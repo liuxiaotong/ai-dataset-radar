@@ -216,6 +216,17 @@ def main():
 
     # ── 3. 构建 user message ──
     user_parts = []
+    report_json = reports_dir / f"intel_report_{args.date}.json"
+    if report_json.exists():
+        try:
+            period = json.loads(report_json.read_text(encoding="utf-8")).get("period") or {}
+        except (OSError, json.JSONDecodeError):
+            period = {}
+        if period.get("backfill") and period.get("start") and period.get("end"):
+            user_parts.append(
+                f"## 扫描窗口\n\n{period['start']} 至 {period['end']}（左闭右开）。"
+                "这是按历史窗口补扫的数据，不是运行当天的实时周刊。\n\n"
+            )
     user_parts.append(f"## 扫描数据（{args.date}）\n\n")
     user_parts.append(prompt_file.read_text())
 

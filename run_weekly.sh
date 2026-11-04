@@ -11,11 +11,11 @@
 #   bash run_weekly.sh --skip-scan         # 跳过扫描（已有数据时）
 #   bash run_weekly.sh --skip-deploy       # 跳过部署（仅生成）
 #   bash run_weekly.sh --no-auto-merge     # 创建官网 PR，但不自动合并/部署
+#   bash run_weekly.sh --window-start=2026-10-10 --window-end=2026-10-17 --week-offset=0 --no-auto-merge
 #
 # 洞察模型默认 gpt-6.1-sol。INSIGHTS_OPENAI_MODEL / OPENAI_MODEL 若已设置则沿用。
-# 位置参数日期只选择 data/reports/<DATE>/。src/main_intel.py 没有截止日期参数：
-# --days 7 的窗口结束于运行时刻，报告写到 data/reports/<今天>/。
-# 因此 bash run_weekly.sh 2026-10-17 不会补生成 10-10..10-17 那一期。
+# --window-start / --window-end 是左闭右开的日历窗口。报告写入 data/reports/<end>/。
+# 不带窗口时，位置参数日期必须是今天；扫描窗口结束于运行时刻。
 # ═══════════════════════════════════════════════════════════════
 set -euo pipefail
 
@@ -33,6 +33,9 @@ SKIP_SCAN=false
 SKIP_DEPLOY=false
 WITH_RECIPE=false
 AUTO_MERGE=true
+WINDOW_START=""
+WINDOW_END=""
+WEEK_OFFSET=0
 POSITIONAL=()
 
 for arg in "$@"; do
@@ -41,6 +44,9 @@ for arg in "$@"; do
     --skip-deploy) SKIP_DEPLOY=true ;;
     --with-recipe) WITH_RECIPE=true ;;
     --no-auto-merge) AUTO_MERGE=false ;;
+    --window-start=*) WINDOW_START="${arg#*=}" ;;
+    --window-end=*) WINDOW_END="${arg#*=}" ;;
+    --week-offset=*) WEEK_OFFSET="${arg#*=}" ;;
     *)             POSITIONAL+=("$arg") ;;
   esac
 done
@@ -48,6 +54,12 @@ done
 DATE="${POSITIONAL[0]:-$(date +%Y-%m-%d)}"
 WEEK="${POSITIONAL[1]:-auto}"
 TITLE="${POSITIONAL[2]:-}"
+if [ -n "$WINDOW_START" ] || [ -n "$WINDOW_END" ]; then
+  if [ -z "$WINDOW_START" ] || [ -z "$WINDOW_END" ]; then
+    fail "--window-start 和 --window-end 必须同时给出，格式 YYYY-MM-DD"
+  fi
+  DATE="$WINDOW_END"
+fi
 YEAR="$(echo "$DATE" | cut -d- -f1)"
 
 # ── 路径（本地 macOS 默认，SG 通过环境变量覆盖）──
@@ -213,8 +225,28 @@ PY
   fi
 }
 
-if [ "$SKIP_SCAN" = false ] && [ "$DATE" != "$TODAY" ]; then
-  fail "当前扫描仅支持生成今天（$TODAY）的报告；历史日期请先准备好 reports/$DATE 后再配合 --skip-scan 使用"
+if [ "$SKIP_SCAN" = false ] && [ "$DATE" != "$TODAY" ] && [ -z "$WINDOW_END" ]; then
+  fail "当前扫描仅支持生成今天（$TODAY）的报告；历史区间请使用 --window-start=YYYY-MM-DD --window-end=YYYY-MM-DD"
+fi
+if [ -n "$WINDOW_START" ]; then
+  PY_CHECK="$PYTHON_BRIEF"
+  if [ ! -x "$PY_CHECK" ]; then
+    PY_CHECK="python3"
+  fi
+  WINDOW_START="$WINDOW_START" WINDOW_END="$WINDOW_END" "$PY_CHECK" - <<'PY'
+import os
+import sys
+from datetime import date
+try:
+    start = date.fromisoformat(os.environ["WINDOW_START"])
+    end = date.fromisoformat(os.environ["WINDOW_END"])
+except ValueError as exc:
+    print(f"窗口日期无效: {exc}", file=sys.stderr)
+    raise SystemExit(1)
+if end <= start:
+    print("窗口结束日必须晚于开始日", file=sys.stderr)
+    raise SystemExit(1)
+PY
 fi
 
 publish_via_pr() {
@@ -291,13 +323,37 @@ publish_via_pr() {
   PUBLISH_CHANGED=true
   git -C "$publish_dir" config user.name "${GIT_AUTHOR_NAME:-github-actions[bot]}"
   git -C "$publish_dir" config user.email "${GIT_AUTHOR_EMAIL:-41898282+github-actions[bot]@users.noreply.github.com}"
-  git -C "$publish_dir" commit -m "前沿洞察 ${week}：${title}" >/dev/null \
-    || fail "创建发布提交失败"
+  if [ -n "$WINDOW_START" ]; then
+    git -C "$publish_dir" commit \
+      -m "前沿洞察 ${week}：${title}" \
+      -m "Backfilled retroactively for ${WINDOW_START} through ${WINDOW_END}." >/dev/null \
+      || fail "创建发布提交失败"
+  else
+    git -C "$publish_dir" commit -m "前沿洞察 ${week}：${title}" >/dev/null \
+      || fail "创建发布提交失败"
+  fi
   git -C "$publish_dir" push -u origin "$publish_branch" >/dev/null \
     || fail "推送发布分支失败"
 
-  local pr_body
-  pr_body=$(cat <<EOF
+  local pr_body gaps_note=""
+  if [ -n "$WINDOW_START" ] && [ -f "$REPORTS/window_gaps.md" ]; then
+    gaps_note="$(cat "$REPORTS/window_gaps.md")"
+  fi
+  if [ -n "$WINDOW_START" ]; then
+    pr_body=$(cat <<EOF
+## Summary
+- Backfilled retroactively. This PR was not produced by the live Saturday run.
+- Window: ${WINDOW_START} inclusive through ${WINDOW_END} exclusive. Report folder: ${DATE}.
+
+## Incomplete sources
+${gaps_note:-See docs/historical-window.md.}
+
+## Verification
+- bash run_weekly.sh --window-start=${WINDOW_START} --window-end=${WINDOW_END} ${week} --skip-scan --no-auto-merge
+EOF
+)
+  else
+    pr_body=$(cat <<EOF
 ## Summary
 - publish Frontier Insights ${week} through ${DATE} in zh/en
 - add source contexts, issue registries, and OG/QR assets
@@ -306,6 +362,7 @@ publish_via_pr() {
 - bash run_weekly.sh ${DATE} ${week} --skip-deploy
 EOF
 )
+  fi
 
   local pr_url
   pr_url="$(
@@ -388,7 +445,11 @@ else
     step 1 "Radar 扫描（默认跳过 DataRecipe，优先保证发刊链路）"
   fi
   cd "$RADAR_DIR"
-  SCAN_ARGS=(--days 7 --json)
+  if [ -n "$WINDOW_START" ]; then
+    SCAN_ARGS=(--window-start "$WINDOW_START" --window-end "$WINDOW_END" --json)
+  else
+    SCAN_ARGS=(--days 7 --json)
+  fi
   X_ENABLED=false
   X_HAS_BEARER=false
   X_SAMPLE_ACCOUNT="OpenAI"
@@ -425,7 +486,11 @@ else
       add_auto_degrade_flag "--no-gh-trending" "降级重试默认关闭高故障源"
       add_auto_degrade_flag "--no-reddit" "降级重试默认关闭高故障源"
       add_auto_degrade_flag "--no-kaggle" "降级重试默认关闭高故障源"
-      RETRY_SCAN_ARGS=(--days 7 --json)
+      if [ -n "$WINDOW_START" ]; then
+        RETRY_SCAN_ARGS=(--window-start "$WINDOW_START" --window-end "$WINDOW_END" --json)
+      else
+        RETRY_SCAN_ARGS=(--days 7 --json)
+      fi
       RETRY_SCAN_ARGS+=("${AUTO_DEGRADE_ARGS[@]}")
       if [ "$WITH_RECIPE" = true ]; then
         RETRY_SCAN_ARGS+=(--recipe --recipe-limit 5)
@@ -508,18 +573,19 @@ fi
 step 3 "计算周号 + 提取标题"
 
 if [ "$WEEK" = "auto" ]; then
-  WEEK_NUM=$(WEBSITE_DIR="$WEBSITE_DIR" DATE="$DATE" "$PYTHON_BRIEF" -c "
+  WEEK_NUM=$(WEBSITE_DIR="$WEBSITE_DIR" DATE="$DATE" WEEK_OFFSET="$WEEK_OFFSET" "$PYTHON_BRIEF" -c '
 import json, pathlib, os
-issues_path = pathlib.Path(os.environ['WEBSITE_DIR']) / 'insights/.issues.json'
+offset = int(os.environ.get("WEEK_OFFSET", "0") or "0")
+issues_path = pathlib.Path(os.environ["WEBSITE_DIR"]) / "insights/.issues.json"
 if issues_path.exists():
     issues = json.loads(issues_path.read_text())
-    max_w = max(int(i['week'][1:]) for i in issues) if issues else 0
-    print(max_w + 1)
+    max_w = max(int(i["week"][1:]) for i in issues) if issues else 0
+    print(max_w + 1 + offset)
 else:
     from datetime import date
-    d = date.fromisoformat(os.environ['DATE'])
-    print(d.isocalendar()[1])
-" 2>/dev/null) || {
+    d = date.fromisoformat(os.environ["DATE"])
+    print(d.isocalendar()[1] + offset)
+' 2>/dev/null) || {
     warn "周号计算失败，使用 ISO 周号"
     WEEK_NUM=$(date +%V)
   }

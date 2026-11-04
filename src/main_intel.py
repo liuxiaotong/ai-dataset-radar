@@ -38,6 +38,7 @@ from trackers.reddit_tracker import RedditTracker
 from trackers.hn_tracker import HNTracker
 from trackers.github_trending_tracker import GitHubTrendingTracker
 from trackers.producthunt_tracker import ProductHuntTracker
+from scan_window import ScanWindow, render_window_gaps, restrict_to_window
 from analyzers.data_type_classifier import DataTypeClassifier, DataType
 from analyzers.paper_filter import PaperFilter
 from analyzers.competitor_matrix import CompetitorMatrix
@@ -1434,6 +1435,20 @@ def _update_watermarks(watermarks, all_data: dict) -> None:
         watermarks.set("huggingface_general", ts)
 
 
+def _window_from_args(args):
+    """Return a historical ScanWindow, or None for a live scan."""
+    start = getattr(args, "window_start", None)
+    end = getattr(args, "window_end", None)
+    if not start and not end:
+        return None
+    if not start or not end:
+        raise SystemExit("--window-start and --window-end must be set together (YYYY-MM-DD)")
+    try:
+        return ScanWindow.parse(start, end)
+    except ValueError as exc:
+        raise SystemExit(str(exc)) from exc
+
+
 async def async_main(args):
     """Async main logic for the intelligence scan.
 
@@ -1567,18 +1582,29 @@ async def async_main(args):
 
         output_dir = Path(config.get("report", {}).get("output_dir", "data"))
         watermarks = WatermarkStore(output_dir / "watermarks.json")
-        full_scan = getattr(args, "full_scan", False)
+        window = _window_from_args(args)
+        full_scan = getattr(args, "full_scan", False) or window is not None
         incremental = (
             not full_scan
             and watermarks.get("labs") is not None
         )
 
         def _days(source: str) -> int:
+            if window is not None:
+                return window.lookback_days()
             if not incremental:
                 return args.days
             return _effective_days(watermarks, source, args.days)
 
-        if incremental:
+        if window is not None:
+            logger.info(
+                "历史窗口 %s .. %s（补扫 %d 天，查询回看 %d 天，不更新水位线）",
+                window.start.isoformat(),
+                window.end.isoformat(),
+                window.days,
+                window.lookback_days(),
+            )
+        elif incremental:
             logger.info("增量扫描模式（基于上次水位线）")
         else:
             logger.info("全量扫描模式（%d 天窗口）", args.days)
@@ -1612,15 +1638,26 @@ async def async_main(args):
                     http_client=http_client,
                 )
 
-        github_org_watermarks = _load_org_watermarks(watermarks.get("github_orgs"))
-        labs_org_watermarks = _load_org_watermarks(watermarks.get("labs_orgs"))
-        vendor_org_watermarks = _load_org_watermarks(watermarks.get("vendors_orgs"))
-        blog_source_watermarks = _load_org_watermarks(watermarks.get("blog_sources"))
-        x_account_watermarks = _load_org_watermarks(watermarks.get("x_accounts"))
-        reddit_source_watermarks = _load_org_watermarks(watermarks.get("reddit_sources"))
-        hn_source_watermarks = _load_org_watermarks(watermarks.get("hn_sources"))
-        gh_trending_watermarks = _load_org_watermarks(watermarks.get("gh_trending_sources"))
-        ph_source_watermarks = _load_org_watermarks(watermarks.get("producthunt_sources"))
+        if window is not None:
+            github_org_watermarks = {}
+            labs_org_watermarks = {}
+            vendor_org_watermarks = {}
+            blog_source_watermarks = {}
+            x_account_watermarks = {}
+            reddit_source_watermarks = {}
+            hn_source_watermarks = {}
+            gh_trending_watermarks = {}
+            ph_source_watermarks = {}
+        else:
+            github_org_watermarks = _load_org_watermarks(watermarks.get("github_orgs"))
+            labs_org_watermarks = _load_org_watermarks(watermarks.get("labs_orgs"))
+            vendor_org_watermarks = _load_org_watermarks(watermarks.get("vendors_orgs"))
+            blog_source_watermarks = _load_org_watermarks(watermarks.get("blog_sources"))
+            x_account_watermarks = _load_org_watermarks(watermarks.get("x_accounts"))
+            reddit_source_watermarks = _load_org_watermarks(watermarks.get("reddit_sources"))
+            hn_source_watermarks = _load_org_watermarks(watermarks.get("hn_sources"))
+            gh_trending_watermarks = _load_org_watermarks(watermarks.get("gh_trending_sources"))
+            ph_source_watermarks = _load_org_watermarks(watermarks.get("producthunt_sources"))
 
         # Calculate total progress steps
         _n = 0
@@ -1690,9 +1727,10 @@ async def async_main(args):
 
         if hn_tracker:
             logger.info(_progress("Hacker News 追踪..."))
-            tasks["hn"] = hn_tracker.fetch_all(
-                days=_days("hn"), source_watermarks=hn_source_watermarks
-            )
+            hn_kwargs = {"days": _days("hn"), "source_watermarks": hn_source_watermarks}
+            if window is not None:
+                hn_kwargs["until"] = datetime.combine(window.end, datetime.min.time())
+            tasks["hn"] = hn_tracker.fetch_all(**hn_kwargs)
 
         if kaggle_scraper:
             logger.info(_progress("Kaggle 数据集..."))
@@ -1700,7 +1738,11 @@ async def async_main(args):
 
         if ss_scraper:
             logger.info(_progress("Semantic Scholar 论文..."))
-            tasks["semantic_scholar"] = ss_scraper.fetch(days=_days("semantic_scholar"))
+            ss_kwargs = {"days": _days("semantic_scholar")}
+            if window is not None:
+                ss_kwargs["start_date"] = window.start.isoformat()
+                ss_kwargs["end_date"] = window.end.isoformat()
+            tasks["semantic_scholar"] = ss_scraper.fetch(**ss_kwargs)
 
         if gh_trending_tracker:
             logger.info(_progress("GitHub Trending..."))
@@ -1719,7 +1761,11 @@ async def async_main(args):
                 logger.info(_progress("论文抓取 (arXiv)..."))
             else:
                 logger.info(_progress("论文抓取 (arXiv + HF Papers)..."))
-            tasks["arxiv"] = arxiv_scraper.fetch()
+            arxiv_kwargs = {}
+            if window is not None:
+                arxiv_kwargs["submitted_from"] = window.start.isoformat()
+                arxiv_kwargs["submitted_until"] = window.end.isoformat()
+            tasks["arxiv"] = arxiv_scraper.fetch(**arxiv_kwargs)
 
         if hf_papers_scraper:
             if not arxiv_scraper:
@@ -1727,7 +1773,7 @@ async def async_main(args):
             tasks["hf_papers"] = hf_papers_scraper.fetch()
 
         if hf_general_enabled:
-            hf_general_watermark = watermarks.get("huggingface_general")
+            hf_general_watermark = None if window is not None else watermarks.get("huggingface_general")
             general_limit = hf_cfg.get("general_limit", hf_cfg.get("limit", 100))
             general_max_pages = hf_cfg.get("general_max_pages", 5)
 
@@ -1816,6 +1862,36 @@ async def async_main(args):
             if papers:
                 logger.info("  ✓ 论文: %d 篇", len(papers))
 
+        if window is not None:
+            restricted = restrict_to_window(
+                window,
+                lab_activity=lab_activity,
+                vendor_activity=vendor_activity,
+                github_activity=github_activity,
+                blog_activity=blog_activity,
+                x_activity=x_activity,
+                reddit_activity=reddit_activity,
+                hn_activity=hn_activity,
+                kaggle_datasets=kaggle_datasets,
+                semantic_scholar_papers=semantic_scholar_papers,
+                gh_trending=gh_trending,
+                producthunt=producthunt,
+                papers=papers,
+            )
+            lab_activity = restricted["lab_activity"]
+            vendor_activity = restricted["vendor_activity"]
+            github_activity = restricted["github_activity"]
+            blog_activity = restricted["blog_activity"]
+            x_activity = restricted["x_activity"]
+            reddit_activity = restricted["reddit_activity"]
+            hn_activity = restricted["hn_activity"]
+            kaggle_datasets = restricted["kaggle_datasets"]
+            semantic_scholar_papers = restricted["semantic_scholar_papers"]
+            gh_trending = restricted["gh_trending"]
+            producthunt = restricted["producthunt"]
+            papers = restricted["papers"]
+            logger.info("  ✓ 已按历史窗口过滤条目")
+
         # 4. Collect all datasets for classification
         all_datasets = []
 
@@ -1894,34 +1970,38 @@ async def async_main(args):
                 logger.warning("  ⚠ %s", a)
             logger.warning("=" * 60)
 
-        # 8. Trend analysis (before report so trends appear in output)
+        # 8. Trend analysis (before report so trends appear in output).
+        # A past window must not record those rows as today's growth.
         trend_data = {}
         try:
-            db_path = output_dir / "radar.db"
-            db = RadarDatabase(str(db_path))
-            trend_analyzer = TrendAnalyzer(db, config)
+            if window is not None:
+                logger.info("历史窗口跳过趋势库写入")
+            else:
+                db_path = output_dir / "radar.db"
+                db = RadarDatabase(str(db_path))
+                trend_analyzer = TrendAnalyzer(db, config)
 
-            if all_datasets:
-                trend_analyzer.record_daily_stats(all_datasets)
-                trend_analyzer.calculate_trends(
-                    dataset_ids=trend_analyzer.last_recorded_ids
-                )
+                if all_datasets:
+                    trend_analyzer.record_daily_stats(all_datasets)
+                    trend_analyzer.calculate_trends(
+                        dataset_ids=trend_analyzer.last_recorded_ids
+                    )
 
-                # Inject growth rates into each dataset
-                for ds in all_datasets:
-                    ds_id = ds.get("id", "")
-                    if ds_id:
-                        ds_trend = trend_analyzer.get_dataset_trend(ds_id)
-                        if ds_trend:
-                            ds["growth_7d"] = ds_trend.get("growth_7d")
-                            ds["growth_30d"] = ds_trend.get("growth_30d")
+                    # Inject growth rates into each dataset
+                    for ds in all_datasets:
+                        ds_id = ds.get("id", "")
+                        if ds_id:
+                            ds_trend = trend_analyzer.get_dataset_trend(ds_id)
+                            if ds_trend:
+                                ds["growth_7d"] = ds_trend.get("growth_7d")
+                                ds["growth_30d"] = ds_trend.get("growth_30d")
 
-                trend_data = {
-                    "top_growing_7d": trend_analyzer.get_top_growing_datasets(days=7, limit=10),
-                    "rising_7d": trend_analyzer.get_rising_datasets(days=7, limit=10),
-                }
+                    trend_data = {
+                        "top_growing_7d": trend_analyzer.get_top_growing_datasets(days=7, limit=10),
+                        "rising_7d": trend_analyzer.get_rising_datasets(days=7, limit=10),
+                    }
 
-            db.close()
+                db.close()
         except Exception as e:
             logger.warning("Trend analysis skipped: %s", e)
 
@@ -1959,7 +2039,7 @@ async def async_main(args):
             "scan_mode": "incremental" if incremental else "full",
             "scan_started_at": _scan_started_at.isoformat(),
             "scan_duration_seconds": round(_scan_elapsed, 1),
-            "period": {
+            "period": window.as_period() if window is not None else {
                 "days": args.days,
                 "start": None,
                 "end": datetime.now().isoformat(),
@@ -1985,10 +2065,15 @@ async def async_main(args):
             "org_graph": org_graph,
         }
 
-        # Determine output directory — reports grouped by date
-        date_str = datetime.now().strftime("%Y-%m-%d")
+        # Determine output directory — reports grouped by date.
+        # A historical window is stored under its exclusive end date.
+        date_str = window.end.isoformat() if window is not None else datetime.now().strftime("%Y-%m-%d")
         reports_dir = output_dir / "reports" / date_str
         reports_dir.mkdir(parents=True, exist_ok=True)
+        if window is not None:
+            gaps_path = reports_dir / "window_gaps.md"
+            gaps_path.write_text(render_window_gaps(window), encoding="utf-8")
+            logger.info("窗口缺口说明: %s", gaps_path)
 
         # Initialize dual formatter
         formatter = DualOutputFormatter(output_dir=str(reports_dir))
@@ -2089,6 +2174,12 @@ async def async_main(args):
                 gh_trending=gh_trending,
                 producthunt=producthunt,
             )
+            if window is not None:
+                insights_content = (
+                    f"扫描窗口（左闭右开）：{window.start.isoformat()} 至 {window.end.isoformat()}。"
+                    "这是一次按历史窗口补扫的数据，不是运行当天的实时周刊。\n\n"
+                    + insights_content
+                )
 
             # Save insights prompt to file (always — for Claude Code environment)
             insights_prompt_path = reports_dir / f"intel_report_{date_str}_insights_prompt.md"
@@ -2195,6 +2286,16 @@ def main():
         type=int,
         default=7,
         help="Look back period in days (default: 7)",
+    )
+    parser.add_argument(
+        "--window-start",
+        default=None,
+        help="Inclusive calendar start YYYY-MM-DD for a historical window",
+    )
+    parser.add_argument(
+        "--window-end",
+        default=None,
+        help="Exclusive calendar end YYYY-MM-DD; reports are written to data/reports/<end>/",
     )
     parser.add_argument(
         "--output",

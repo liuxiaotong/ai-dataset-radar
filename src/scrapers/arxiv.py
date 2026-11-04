@@ -11,6 +11,8 @@ import urllib.parse
 from datetime import datetime
 from typing import Optional
 
+from scan_window import arxiv_submitted_clause, parse_iso_date
+
 from .base import BaseScraper
 from .registry import register_scraper
 
@@ -76,8 +78,12 @@ class ArxivScraper(BaseScraper):
         """
         return await self.fetch()
 
-    async def fetch(self) -> list[dict]:
-        """Fetch latest RLHF/annotation related papers from arXiv.
+    async def fetch(self, submitted_from: str | None = None, submitted_until: str | None = None) -> list[dict]:
+        """Fetch RLHF/annotation related papers from arXiv.
+
+        Args:
+            submitted_from: Inclusive YYYY-MM-DD when scanning a past window.
+            submitted_until: Exclusive YYYY-MM-DD when scanning a past window.
 
         Returns:
             List of paper information dictionaries.
@@ -86,6 +92,9 @@ class ArxivScraper(BaseScraper):
         cat_query = " OR ".join([f"cat:{cat}" for cat in self.categories])
         terms_query = " OR ".join([f"ti:{term} OR abs:{term}" for term in self.SEARCH_TERMS])
         query = f"({cat_query}) AND ({terms_query})"
+        if submitted_from and submitted_until:
+            clause = arxiv_submitted_clause(parse_iso_date(submitted_from), parse_iso_date(submitted_until))
+            query = f"{query} AND {clause}"
 
         params = {
             "search_query": query,
