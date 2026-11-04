@@ -30,10 +30,10 @@ jobs:
       GITHUB_TOKEN: ${{ github.token }}
       SENTINEL_CODEX_API_KEY: ${{ secrets.SENTINEL_CODEX_API_KEY }}
       ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
-      # The Codex-backed Sentinel account currently supports gpt-5.5 and
-      # gpt-5.4-mini for OpenAI-compatible calls (not gpt-5.4).
-      INSIGHTS_OPENAI_MODEL: gpt-5.5
-      OPENAI_MODEL: gpt-5.5
+      # Upstream Codex (ChatGPT account) rejects gpt-5.5/gpt-5.4 with
+      # model_not_found since late Oct 2026; gpt-6.1-sol is accepted.
+      INSIGHTS_OPENAI_MODEL: gpt-6.1-sol
+      OPENAI_MODEL: gpt-6.1-sol
       RADAR_DIR: ${{ github.workspace }}
       WEBSITE_DIR: ${{ github.workspace }}/website
       WEBSITE_REPO: liuxiaotong/knowlyr-website
