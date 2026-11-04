@@ -189,20 +189,38 @@ def detect_api_config(tier: str = "strong"):
 _OVERLOAD_STATUSES = {429, 502, 503, 504}
 
 
+def _is_gateway_overload(exc: BaseException) -> bool:
+    status = getattr(getattr(exc, "response", None), "status_code", None)
+    text = str(exc).lower()
+    return status in _OVERLOAD_STATUSES or any(
+        token in text for token in ("overloaded", "bad gateway", "502", "503", "504", "429")
+    )
+
+
 def _insight_retry_wait(exc: BaseException, attempt: int, max_attempts: int) -> float | None:
     """Seconds to wait before another insight call, or None when retries are exhausted."""
     if attempt >= max_attempts - 1:
         return None
-    status = getattr(getattr(exc, "response", None), "status_code", None)
-    text = str(exc).lower()
-    overloaded = status in _OVERLOAD_STATUSES or any(
-        token in text for token in ("overloaded", "bad gateway", "502", "503", "504", "429")
-    )
-    if overloaded:
+    if _is_gateway_overload(exc):
         return float(20 * (attempt + 1))
     if attempt == 0:
         return 0.0
     return None
+
+
+def _anthropic_fallback_config():
+    """Anthropic route with the Codex key hidden, so a Codex 502 can fall through."""
+    hidden = {}
+    for name in ("INSIGHTS_OPENAI_API_KEY", "SENTINEL_CODEX_API_KEY"):
+        if os.environ.get(name):
+            hidden[name] = os.environ.pop(name)
+    try:
+        cfg = detect_api_config()
+    finally:
+        os.environ.update(hidden)
+    if not cfg or cfg.get("provider") == "openai_compatible" or not cfg.get("api_key"):
+        return None
+    return cfg
 
 
 def main():
@@ -276,7 +294,9 @@ def main():
 
     print(f"  → 正在分析（{args.model}，预计 1-3 分钟）...", flush=True)
     max_attempts = 4
-    for attempt in range(max_attempts):
+    attempt = 0
+    used_anthropic_fallback = False
+    while attempt < max_attempts:
         try:
             if config.get("provider") == "openai_compatible":
                 result = _openai_chat_completion(
@@ -310,6 +330,24 @@ def main():
         except Exception as e:
             wait = _insight_retry_wait(e, attempt, max_attempts)
             if wait is None:
+                fallback = None
+                if (
+                    config.get("provider") == "openai_compatible"
+                    and not used_anthropic_fallback
+                    and _is_gateway_overload(e)
+                ):
+                    fallback = _anthropic_fallback_config()
+                if fallback:
+                    used_anthropic_fallback = True
+                    config = fallback
+                    args.model = fallback.get("model") or default_model
+                    print(
+                        f"  ⚠ Codex 网关持续失败，改走 {fallback['source']} / {args.model}",
+                        file=sys.stderr,
+                        flush=True,
+                    )
+                    attempt = 0
+                    continue
                 raise
             if wait:
                 print(
@@ -320,6 +358,7 @@ def main():
                 time.sleep(wait)
             else:
                 print(f"  ⚠ 第一次调用失败（{e}），重试中...", flush=True)
+            attempt += 1
             continue
 
     # ── 5. 写入文件 ──
