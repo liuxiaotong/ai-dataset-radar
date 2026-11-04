@@ -8,12 +8,16 @@ Covers the two judgement questions the Feishu card is built from:
 All fixtures are fake PR JSON shaped like `gh pr view --json ...` output;
 no network access.
 """
+import subprocess
+import sys
 from datetime import datetime, timezone
+from pathlib import Path
 
 import pytest
 
 from insights_pr_watch import (
     build_card,
+    build_run_failure_card,
     determine_blockers,
     format_created_beijing,
     hours_open,
@@ -240,6 +244,33 @@ def test_build_card_requires_at_least_one_pr():
         build_card([], {})
 
 
+def test_build_run_failure_card_points_at_the_actions_run():
+    run_url = "https://github.com/liuxiaotong/ai-dataset-radar/actions/runs/41158067179"
+    card = build_run_failure_card(
+        run_url=run_url,
+        run_id="41158067179",
+        workflow_name="Generate Weekly Insights",
+    )
+    assert card["header"]["title"]["content"] == "情报周刊生成失败"
+    assert card["header"]["template"] == "red"
+    div = next(e for e in card["elements"] if e["tag"] == "div")
+    content = div["text"]["content"]
+    assert "Generate Weekly Insights" in content
+    assert "#41158067179" in content
+    assert "`" not in content
+    assert "\n- " not in content
+    action = next(e for e in card["elements"] if e["tag"] == "action")
+    assert action["actions"][0]["url"] == run_url
+    assert action["actions"][0]["text"]["content"] == "打开失败日志"
+
+
+def test_build_run_failure_card_omits_button_without_url():
+    card = build_run_failure_card(run_url="", run_id="")
+    assert all(e["tag"] != "action" for e in card["elements"])
+    div = next(e for e in card["elements"] if e["tag"] == "div")
+    assert "本次运行" in div["text"]["content"]
+
+
 def test_build_card_content_has_no_backticks_or_dash_bullets():
     # Feishu's lark_md renderer showed literal "`" and "- " to Kai instead of
     # rendering them, so the card must avoid both: use plain text and a
@@ -255,3 +286,31 @@ def test_build_card_content_has_no_backticks_or_dash_bullets():
     # And the time is human Beijing time, not a raw UTC ISO stamp.
     assert "UTC" not in content
     assert "09-19 10:17" in content
+
+
+def test_failure_cli_dry_run_prints_card_and_does_not_send():
+    root = Path(__file__).resolve().parents[1]
+    proc = subprocess.run(
+        [
+            sys.executable,
+            "scripts/insights_pr_watch_cli.py",
+            "--dry-run",
+            "failure",
+            "--run-url",
+            "https://github.com/liuxiaotong/ai-dataset-radar/actions/runs/41158067179",
+            "--run-id",
+            "41158067179",
+            "--workflow-name",
+            "Generate Weekly Insights",
+        ],
+        cwd=root,
+        check=False,
+        capture_output=True,
+        text=True,
+    )
+    assert proc.returncode == 0, proc.stderr
+    assert "情报周刊生成失败" in proc.stdout
+    assert "41158067179" in proc.stdout
+    assert "未发送" in proc.stdout
+    assert "Authorization" not in proc.stdout
+    assert "kly-proxy" not in proc.stdout

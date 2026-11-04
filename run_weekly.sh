@@ -11,6 +11,11 @@
 #   bash run_weekly.sh --skip-scan         # 跳过扫描（已有数据时）
 #   bash run_weekly.sh --skip-deploy       # 跳过部署（仅生成）
 #   bash run_weekly.sh --no-auto-merge     # 创建官网 PR，但不自动合并/部署
+#
+# 洞察模型默认 gpt-6.1-sol。INSIGHTS_OPENAI_MODEL / OPENAI_MODEL 若已设置则沿用。
+# 位置参数日期只选择 data/reports/<DATE>/。src/main_intel.py 没有截止日期参数：
+# --days 7 的窗口结束于运行时刻，报告写到 data/reports/<今天>/。
+# 因此 bash run_weekly.sh 2026-10-17 不会补生成 10-10..10-17 那一期。
 # ═══════════════════════════════════════════════════════════════
 set -euo pipefail
 
@@ -61,6 +66,11 @@ REPORT_JSON="$REPORTS/intel_report_${DATE}.json"
 if [ -f "$RADAR_DIR/.env" ]; then
   set -a; source "$RADAR_DIR/.env"; set +a
 fi
+
+# Sentinel Codex（ChatGPT 账号）拒绝 gpt-5.5。显式环境变量优先于这个默认值。
+: "${INSIGHTS_OPENAI_MODEL:=gpt-6.1-sol}"
+: "${OPENAI_MODEL:=gpt-6.1-sol}"
+export INSIGHTS_OPENAI_MODEL OPENAI_MODEL
 
 mkdir -p "$REPORTS"
 

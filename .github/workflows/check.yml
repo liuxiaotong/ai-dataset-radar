@@ -19,7 +19,7 @@ jobs:
           python-version: "3.12"
 
       - name: Compile Python sources
-        run: python -m compileall -q src agent mcp_server analyze_insights.py
+        run: python -m compileall -q src agent mcp_server analyze_insights.py scripts/insights_pr_watch_cli.py
 
       - name: Validate shell entrypoints
         run: bash -n run_weekly.sh cron_weekly.sh notify_feishu.sh

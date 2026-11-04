@@ -13,6 +13,9 @@ Two modes:
           new content that was skipped. Used from run_weekly.sh's
           publish_via_pr() dedup branch.
 
+  failure Notifies Kai that a weekly-insights run failed before it could
+          open a website PR. Used by .github/workflows/weekly-insights.yml.
+
 Sending is delegated to scripts/notify_feishu_card.sh so that all
 tenant_access_token / HTTP concerns stay in one place. A send failure never
 raises here in `dup` mode's caller (run_weekly.sh) beyond a non-fatal exit
@@ -34,6 +37,7 @@ sys.path.insert(0, str(REPO_ROOT / "src"))
 from insights_pr_watch import (  # noqa: E402
     REQUIRED_CONTEXT,
     build_card,
+    build_run_failure_card,
     determine_blockers,
     is_stale,
 )
@@ -115,6 +119,18 @@ def cmd_watch(args: argparse.Namespace) -> int:
     return rc
 
 
+def cmd_failure(args: argparse.Namespace) -> int:
+    card = build_run_failure_card(
+        run_url=args.run_url,
+        run_id=args.run_id,
+        workflow_name=args.workflow_name,
+    )
+    rc = send_card(card, args.sender, dry_run=args.dry_run)
+    if rc != 0 and not args.dry_run:
+        print(f"::warning::weekly-insights failure notification failed (exit={rc})", file=sys.stderr)
+    return rc
+
+
 def cmd_dup(args: argparse.Namespace) -> int:
     if args.pr_url:
         number = pr_number_from_url(args.pr_url)
@@ -152,6 +168,12 @@ def build_parser() -> argparse.ArgumentParser:
     group.add_argument("--pr-number", type=int)
     dup.add_argument("--date", required=True, help="Today's date (YYYY-MM-DD), for the dup note")
     dup.set_defaults(func=cmd_dup)
+
+    failure = sub.add_parser("failure", help="DM Kai that weekly insights generation failed")
+    failure.add_argument("--run-url", required=True, help="Actions run URL")
+    failure.add_argument("--run-id", default="", help="GitHub Actions run id")
+    failure.add_argument("--workflow-name", default="Generate Weekly Insights")
+    failure.set_defaults(func=cmd_failure)
 
     return parser
 

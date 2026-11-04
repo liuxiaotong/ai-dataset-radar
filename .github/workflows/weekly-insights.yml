@@ -101,3 +101,27 @@ jobs:
             data/reports/**/radar_scan.retry.log
             data/reports/**/insights_analysis.log
             data/reports/**/intel_report_*_insights.md
+
+      # insights-pr-watch only looks at open website PRs. A run that dies
+      # during generation never opens one, so reuse the same private Feishu
+      # DM (scripts/notify_feishu_card.sh and the FEISHU_* secrets).
+      - name: Notify Kai that weekly insights failed
+        if: failure()
+        env:
+          FEISHU_APP_ID: ${{ secrets.FEISHU_APP_ID }}
+          FEISHU_APP_SECRET: ${{ secrets.FEISHU_APP_SECRET }}
+          FEISHU_KAI_RECEIVE_ID: ${{ secrets.FEISHU_KAI_RECEIVE_ID }}
+          FEISHU_KAI_RECEIVE_ID_TYPE: ${{ secrets.FEISHU_KAI_RECEIVE_ID_TYPE }}
+        run: |
+          set +e
+          python3 scripts/insights_pr_watch_cli.py \
+            failure \
+            --run-url "${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}" \
+            --run-id "${{ github.run_id }}" \
+            --workflow-name "${{ github.workflow }}"
+          rc=$?
+          set -e
+          if [ "$rc" -ne 0 ]; then
+            echo "::warning::weekly-insights failure notification exited with $rc (see logs above)."
+          fi
+          exit 0

@@ -1,6 +1,9 @@
 """Detect stale "前沿洞察" (Frontier Insights) PRs on knowlyr-website and
 build a Feishu interactive card that reports why each one is stuck.
 
+Also builds the private-DM card used when the weekly insights workflow
+itself fails before any website PR exists.
+
 Pure judgement logic (hours-open + blocker detection + card building) lives
 here so it can be unit tested with fake PR JSON fixtures, without touching
 the network. Network/CLI I/O (gh api, gh pr list, sending to Feishu) lives
@@ -211,3 +214,51 @@ def build_card(
         "elements": elements,
     }
     return card
+
+
+def build_run_failure_card(
+    *,
+    run_url: str,
+    run_id: str = "",
+    workflow_name: str = "Generate Weekly Insights",
+) -> Dict[str, Any]:
+    """Build the Feishu DM card for a weekly-insights run that failed.
+
+    The stale-PR watch only sees open website PRs, so a generation failure
+    never shows up there. This card uses the same private-DM shape as
+    `build_card` and is sent through scripts/notify_feishu_card.sh.
+    """
+    run_label = f"#{run_id}" if run_id else "本次运行"
+    content = "\n".join(
+        [
+            f"**{workflow_name}** 失败了，本周不会有新的官网 PR。",
+            f"运行：{run_label}",
+            "· 生成失败时官网仓库上不会出现可巡检的 PR",
+            "· 只盯未合并 PR 的提醒因此发现不了这次失败",
+        ]
+    )
+    elements: List[Dict[str, Any]] = [
+        {"tag": "div", "text": {"tag": "lark_md", "content": content}},
+    ]
+    if run_url:
+        elements.append(
+            {
+                "tag": "action",
+                "actions": [
+                    {
+                        "tag": "button",
+                        "text": {"tag": "plain_text", "content": "打开失败日志"},
+                        "type": "primary",
+                        "url": run_url,
+                    }
+                ],
+            }
+        )
+    return {
+        "config": {"wide_screen_mode": True},
+        "header": {
+            "title": {"tag": "plain_text", "content": "情报周刊生成失败"},
+            "template": "red",
+        },
+        "elements": elements,
+    }

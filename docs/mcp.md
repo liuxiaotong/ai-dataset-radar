@@ -64,4 +64,5 @@
 
 - `Tool invocation timed out` → 增大 `MCP_TIMEOUT` 或减小 `--days`。
 - `No insights model configured` → `.env` 中未设置 `INSIGHTS_MODEL` 或 `ANTHROPIC_API_KEY`。
+- 周刊 Codex 路由默认模型是 `gpt-6.1-sol`（`INSIGHTS_OPENAI_MODEL`，其次 `OPENAI_MODEL`）。`gpt-5.5` 会被 Sentinel 以 `model_not_found` 拒绝。
 - `Permission denied writing data/reports` → 确保在项目根目录运行或设置 `RADAR_OUTPUT_DIR`。
