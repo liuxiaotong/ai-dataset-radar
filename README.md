@@ -471,7 +471,7 @@ ruff format src/
 
 ### Weekly insights automation
 
-`.github/workflows/weekly-insights.yml` runs every Saturday at 02:00 UTC (10:00 Asia/Shanghai), scans the last seven days, generates the Chinese and English brief, and opens a PR in `knowlyr-website`. Production still follows review → Merge Controller → `main` → Deploy; Radar never bypasses that governance chain.
+`.github/workflows/weekly-insights.yml` runs every Saturday at 02:00 UTC (10:00 Asia/Shanghai), scans the last seven days, generates the Chinese and English brief, and opens a PR in `knowlyr-website`. Insight text uses Sentinel's Codex route with `gpt-6.1-sol` (`INSIGHTS_OPENAI_MODEL`, then `OPENAI_MODEL`, then the default in `analyze_insights.py`). A failed run sends Kai a private Feishu DM with the same app secrets as `.github/workflows/insights-pr-watch.yml`. A date passed to `run_weekly.sh` only selects `data/reports/<date>/` for the later steps. The scanner has no end-date flag: `--days 7` always ends at the current time and writes today's directory, so an older date does not backfill that week. Production still follows review → Merge Controller → `main` → Deploy; Radar never bypasses that governance chain.
 
 Configure `WEBSITE_PUBLISH_TOKEN` (access to `liuxiaotong/knowlyr-website` with PR creation rights) and either `SENTINEL_CODEX_API_KEY` or `ANTHROPIC_API_KEY` in this repository. You can also dispatch `Generate Weekly Insights` manually from Actions and opt into the slower DataRecipe enrichment step.
 

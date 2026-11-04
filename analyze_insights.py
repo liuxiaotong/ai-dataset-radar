@@ -32,7 +32,9 @@ except ImportError:
 
 DEFAULT_SENTINEL_BASE_URL = "https://sentinel.knowlyr.com"
 DEFAULT_SENTINEL_OPENAI_BASE_URL = f"{DEFAULT_SENTINEL_BASE_URL}/v1"
-DEFAULT_CODEX_MODEL = "gpt-5.4"
+# Used only when INSIGHTS_OPENAI_MODEL / OPENAI_MODEL are unset.
+# The Codex ChatGPT account rejects both gpt-5.5 and gpt-5.4.
+DEFAULT_CODEX_MODEL = "gpt-6.1-sol"
 
 
 def _first_env(*names: str) -> str:
