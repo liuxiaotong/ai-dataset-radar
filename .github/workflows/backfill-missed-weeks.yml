@@ -4,6 +4,7 @@ name: Backfill Missed Insight Weeks
 # the Saturday schedule. Pushing this file on cursor/backfill-missed-weeks-bff3
 # starts the job; the file is not on main.
 # Rerun: report files for a past window must use the window end date.
+# Rerun: retry Sentinel 502/503 overload instead of failing the week immediately.
 on:
   push:
     branches: [cursor/backfill-missed-weeks-bff3]

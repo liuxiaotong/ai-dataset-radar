@@ -13,6 +13,7 @@ import argparse
 import json
 import os
 import sys
+import time
 from pathlib import Path
 
 # 加载 .env
@@ -185,6 +186,25 @@ def detect_api_config(tier: str = "strong"):
     return None
 
 
+_OVERLOAD_STATUSES = {429, 502, 503, 504}
+
+
+def _insight_retry_wait(exc: BaseException, attempt: int, max_attempts: int) -> float | None:
+    """Seconds to wait before another insight call, or None when retries are exhausted."""
+    if attempt >= max_attempts - 1:
+        return None
+    status = getattr(getattr(exc, "response", None), "status_code", None)
+    text = str(exc).lower()
+    overloaded = status in _OVERLOAD_STATUSES or any(
+        token in text for token in ("overloaded", "bad gateway", "502", "503", "504", "429")
+    )
+    if overloaded:
+        return float(20 * (attempt + 1))
+    if attempt == 0:
+        return 0.0
+    return None
+
+
 def main():
     parser = argparse.ArgumentParser(description="前沿洞察分析")
     parser.add_argument("--date", required=True, help="报告日期 YYYY-MM-DD")
@@ -254,8 +274,9 @@ def main():
     print(f"  → Model: {args.model}")
     print(f"  → Input: {len(user_message):,} chars")
 
-    print(f"  → 正在分析（{args.model}，预计 1-3 分钟）...")
-    for attempt in range(2):
+    print(f"  → 正在分析（{args.model}，预计 1-3 分钟）...", flush=True)
+    max_attempts = 4
+    for attempt in range(max_attempts):
         try:
             if config.get("provider") == "openai_compatible":
                 result = _openai_chat_completion(
@@ -287,10 +308,19 @@ def main():
                 result = message.content[0].text
             break
         except Exception as e:
-            if attempt == 0:
-                print(f"  ⚠ 第一次调用失败（{e}），重试中...")
-                continue
-            raise
+            wait = _insight_retry_wait(e, attempt, max_attempts)
+            if wait is None:
+                raise
+            if wait:
+                print(
+                    f"  ⚠ 接口过载或网关错误，{wait:.0f}s 后重试 ({attempt + 1}/{max_attempts - 1})...",
+                    file=sys.stderr,
+                    flush=True,
+                )
+                time.sleep(wait)
+            else:
+                print(f"  ⚠ 第一次调用失败（{e}），重试中...", flush=True)
+            continue
 
     # ── 5. 写入文件 ──
     output_file.write_text(result)
