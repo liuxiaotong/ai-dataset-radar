@@ -64,7 +64,65 @@ def _normalize_openai_content(content) -> str:
     return str(content or "")
 
 
-def _openai_chat_completion(base_url: str, api_key: str, model: str, system_prompt: str, user_message: str, max_tokens: int) -> str:
+def _append_stream_text(parts: list, content) -> None:
+    if content is None or content == "":
+        return
+    if isinstance(content, str):
+        parts.append(content)
+    else:
+        parts.append(_normalize_openai_content(content))
+
+
+def _consume_chat_sse(lines) -> str:
+    """Assemble assistant text from an OpenAI-compatible SSE stream."""
+    parts: list[str] = []
+    saw_choice = False
+    for line in lines:
+        text = (line or "").strip()
+        if not text or text.startswith(":"):
+            continue
+        if not text.startswith("data:"):
+            continue
+        data = text[5:].strip()
+        if data == "[DONE]":
+            break
+        try:
+            event = json.loads(data)
+        except json.JSONDecodeError:
+            continue
+        if not isinstance(event, dict):
+            continue
+        error = event.get("error")
+        if error:
+            detail = json.dumps(error, ensure_ascii=False)[:500]
+            print(f"  ⚠ stream error: {detail}", file=sys.stderr)
+            raise RuntimeError(f"OpenAI-compatible stream error: {detail}")
+        choices = event.get("choices") or []
+        if not choices or not isinstance(choices[0], dict):
+            continue
+        saw_choice = True
+        choice = choices[0]
+        delta = choice.get("delta") if isinstance(choice.get("delta"), dict) else {}
+        message = choice.get("message") if isinstance(choice.get("message"), dict) else {}
+        if delta.get("content") not in (None, ""):
+            _append_stream_text(parts, delta.get("content"))
+        elif message.get("content") not in (None, ""):
+            _append_stream_text(parts, message.get("content"))
+    if not parts:
+        if not saw_choice:
+            raise RuntimeError("OpenAI-compatible stream returned no choices")
+        raise RuntimeError("OpenAI-compatible stream returned no content")
+    return "".join(parts)
+
+
+def _openai_chat_completion(
+    base_url: str,
+    api_key: str,
+    model: str,
+    system_prompt: str,
+    user_message: str,
+    max_tokens: int,
+) -> str:
     import httpx
 
     payload = {
@@ -74,27 +132,22 @@ def _openai_chat_completion(base_url: str, api_key: str, model: str, system_prom
             {"role": "user", "content": user_message},
         ],
         "max_completion_tokens": max_tokens,
+        # Sentinel's non-stream path times out at 60s. Streaming stays under that cap.
+        "stream": True,
     }
-
-    response = httpx.post(
-        f"{base_url.rstrip('/')}/chat/completions",
-        headers={
-            "Authorization": f"Bearer {api_key}",
-            "Content-Type": "application/json",
-        },
-        json=payload,
-        timeout=300.0,
-    )
-    if response.status_code >= 400:
-        # Surface the gateway/upstream error reason (body only, no request headers).
-        print(f"  ⚠ HTTP {response.status_code} body: {response.text[:500]}", file=sys.stderr)
-    response.raise_for_status()
-    data = response.json()
-    choices = data.get("choices") or []
-    if not choices:
-        raise RuntimeError(f"OpenAI-compatible response missing choices: {json.dumps(data)[:500]}")
-    message = choices[0].get("message") or {}
-    return _normalize_openai_content(message.get("content"))
+    url = f"{base_url.rstrip('/')}/chat/completions"
+    headers = {
+        "Authorization": f"Bearer {api_key}",
+        "Content-Type": "application/json",
+    }
+    with httpx.stream("POST", url, headers=headers, json=payload, timeout=300.0) as response:
+        if response.status_code >= 400:
+            # Body only. Do not log request headers or the bearer token.
+            raw = response.read()
+            body = raw.decode("utf-8", errors="replace")
+            print(f"  ⚠ HTTP {response.status_code} body: {body[:500]}", file=sys.stderr)
+            response.raise_for_status()
+        return _consume_chat_sse(response.iter_lines())
 
 
 def detect_api_config(tier: str = "strong"):
