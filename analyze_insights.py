@@ -82,6 +82,9 @@ def _openai_chat_completion(base_url: str, api_key: str, model: str, system_prom
         json=payload,
         timeout=300.0,
     )
+    if response.status_code >= 400:
+        # Surface the gateway/upstream error reason (body only, no request headers).
+        print(f"  ⚠ HTTP {response.status_code} body: {response.text[:500]}", file=sys.stderr)
     response.raise_for_status()
     data = response.json()
     choices = data.get("choices") or []
