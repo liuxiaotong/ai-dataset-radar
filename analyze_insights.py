@@ -202,7 +202,9 @@ def _insight_retry_wait(exc: BaseException, attempt: int, max_attempts: int) -> 
     if attempt >= max_attempts - 1:
         return None
     if _is_gateway_overload(exc):
-        return float(20 * (attempt + 1))
+        # 30s, 60s, 120s, 240s, then 300s. The Codex route has been returning
+        # 502 for several minutes at a time.
+        return float(min(300, 30 * (2 ** attempt)))
     if attempt == 0:
         return 0.0
     return None
@@ -293,7 +295,7 @@ def main():
     print(f"  → Input: {len(user_message):,} chars")
 
     print(f"  → 正在分析（{args.model}，预计 1-3 分钟）...", flush=True)
-    max_attempts = 4
+    max_attempts = 6
     attempt = 0
     used_anthropic_fallback = False
     while attempt < max_attempts:

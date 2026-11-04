@@ -96,9 +96,10 @@ def test_insight_call_backs_off_on_gateway_overload():
             super().__init__("Server error '502 Bad Gateway'")
             self.response = type("Resp", (), {"status_code": 502})()
 
-    assert analyze_insights._insight_retry_wait(Overloaded(), 0, 4) == 20
-    assert analyze_insights._insight_retry_wait(Overloaded(), 2, 4) == 60
-    assert analyze_insights._insight_retry_wait(Overloaded(), 3, 4) is None
+    assert analyze_insights._insight_retry_wait(Overloaded(), 0, 6) == 30
+    assert analyze_insights._insight_retry_wait(Overloaded(), 1, 6) == 60
+    assert analyze_insights._insight_retry_wait(Overloaded(), 2, 6) == 120
+    assert analyze_insights._insight_retry_wait(Overloaded(), 5, 6) is None
     assert analyze_insights._insight_retry_wait(RuntimeError("parse error"), 0, 4) == 0
     assert analyze_insights._insight_retry_wait(RuntimeError("parse error"), 1, 4) is None
 
