@@ -70,7 +70,7 @@ class HNTracker:
         if self._http is None:
             self._http = AsyncHTTPClient()
 
-    async def _search_stories(self, query: str, days: int = 7) -> list[dict]:
+    async def _search_stories(self, query: str, days: int = 7, until: datetime | None = None) -> list[dict]:
         """Search HN stories via Algolia API.
 
         Args:
@@ -84,12 +84,17 @@ class HNTracker:
 
         cutoff = datetime.now(timezone.utc).replace(tzinfo=None) - timedelta(days=days)
         cutoff_ts = int(cutoff.replace(tzinfo=timezone.utc).timestamp())
+        numeric_filters = f"created_at_i>{cutoff_ts}"
+        if until is not None:
+            until_naive = until.replace(tzinfo=None) if until.tzinfo else until
+            until_ts = int(until_naive.replace(tzinfo=timezone.utc).timestamp())
+            numeric_filters += f",created_at_i<{until_ts}"
 
         url = f"{self.ALGOLIA_BASE}/search_by_date"
         params = {
             "query": query,
             "tags": "story",
-            "numericFilters": f"created_at_i>{cutoff_ts}",
+            "numericFilters": numeric_filters,
             "hitsPerPage": 50,
         }
 
@@ -158,6 +163,7 @@ class HNTracker:
         self,
         days: int = 7,
         source_watermarks: dict[str, str] | None = None,
+        until: datetime | None = None,
     ) -> dict:
         """Search HN for all configured keywords concurrently.
 
@@ -189,7 +195,7 @@ class HNTracker:
 
         async def _bounded(query):
             async with sem:
-                return await self._search_stories(query, days)
+                return await self._search_stories(query, days, until=until)
 
         raw_results = await asyncio.gather(
             *[_bounded(q) for q in self.search_keywords], return_exceptions=True

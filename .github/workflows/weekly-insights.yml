@@ -11,6 +11,21 @@ on:
         required: false
         default: false
         type: boolean
+      window_start:
+        description: "Backfill window start YYYY-MM-DD (inclusive). Leave empty for a live scan."
+        required: false
+        default: ""
+        type: string
+      window_end:
+        description: "Backfill window end YYYY-MM-DD (exclusive). Reports go to data/reports/<end>/"
+        required: false
+        default: ""
+        type: string
+      week_offset:
+        description: "Add this to the auto week number so sequential backfills do not reuse one open PR"
+        required: false
+        default: "0"
+        type: string
 
 concurrency:
   group: weekly-insights
@@ -87,6 +102,12 @@ jobs:
           args=(--no-auto-merge)
           if [[ "${{ inputs.with_recipe || 'false' }}" == "true" ]]; then
             args+=(--with-recipe)
+          fi
+          if [[ -n "${{ inputs.window_start }}" && -n "${{ inputs.window_end }}" ]]; then
+            args+=(--window-start="${{ inputs.window_start }}" --window-end="${{ inputs.window_end }}")
+          fi
+          if [[ -n "${{ inputs.week_offset }}" ]]; then
+            args+=(--week-offset="${{ inputs.week_offset }}")
           fi
           bash run_weekly.sh "${args[@]}"
 

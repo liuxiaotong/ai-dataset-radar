@@ -471,7 +471,7 @@ ruff format src/
 
 ### 情报周刊自动化
 
-`.github/workflows/weekly-insights.yml` 每周六北京时间 10:00（02:00 UTC）运行一次，扫描最近 7 天数据，生成中英文周刊并向 `knowlyr-website` 创建 PR。洞察正文走 Sentinel 的 Codex 路由，模型为 `gpt-6.1-sol`（先读 `INSIGHTS_OPENAI_MODEL`，再读 `OPENAI_MODEL`，最后用 `analyze_insights.py` 里的默认值）。运行失败时用与 `.github/workflows/insights-pr-watch.yml` 相同的飞书应用密钥给 Kai 发私聊。`run_weekly.sh` 的日期参数只选择 `data/reports/<日期>/`。扫描脚本没有截止日期参数，`--days 7` 的窗口始终结束于运行时刻并写到当天目录，所以传入旧日期不能补发那一期。官网仍按 review → Merge Controller → `main` → Deploy 的治理链路发布，不会由 Radar 直接绕过审核上线。
+`.github/workflows/weekly-insights.yml` 每周六北京时间 10:00（02:00 UTC）运行一次，扫描最近 7 天数据，生成中英文周刊并向 `knowlyr-website` 创建 PR。洞察正文走 Sentinel 的 Codex 路由，模型为 `gpt-6.1-sol`（先读 `INSIGHTS_OPENAI_MODEL`，再读 `OPENAI_MODEL`，最后用 `analyze_insights.py` 里的默认值）。运行失败时用与 `.github/workflows/insights-pr-watch.yml` 相同的飞书应用密钥给 Kai 发私聊。实时运行仍扫描结束于当下的 7 天。补扫过去一周使用 `--window-start` 和 `--window-end`（左闭右开），报告写入 `data/reports/<结束日>/`。不能按历史区间查询的数据源写在 [docs/historical-window.md](docs/historical-window.md)。周刊重叠检查会拒绝与 `insights/.issues.json` 里已有期次有任何一天相交的窗口。官网仍按 review → Merge Controller → `main` → Deploy 的治理链路发布，不会由 Radar 直接绕过审核上线。
 
 工作流需要在本仓库配置 `WEBSITE_PUBLISH_TOKEN`（可访问 `liuxiaotong/knowlyr-website` 并创建 PR）和 `SENTINEL_CODEX_API_KEY` 或 `ANTHROPIC_API_KEY`。也可以在 Actions 页面手动运行 `Generate Weekly Insights`，按需开启较慢的 DataRecipe enrichment。
 

@@ -106,11 +106,17 @@ class DualOutputFormatter:
         trend_data = data.get("trend_data", {})
         hf_general = data.get("huggingface_general", [])
 
-        # Calculate period with proper start date
+        # A backfill stores an explicit half-open calendar window. Live scans
+        # still close the window at the current time.
         period = data.get("period", {})
         days = period.get("days", 7)
-        end_time = datetime.now()
-        start_time = end_time - timedelta(days=days)
+        backfill = bool(period.get("backfill")) and period.get("start") and period.get("end")
+        if backfill:
+            start_time = datetime.fromisoformat(str(period["start"])[:10])
+            end_time = datetime.fromisoformat(str(period["end"])[:10])
+        else:
+            end_time = datetime.now()
+            start_time = end_time - timedelta(days=days)
 
         # Count GitHub repos and orgs
         github_stats = self._count_github_stats(github_activity)
@@ -144,6 +150,7 @@ class DualOutputFormatter:
                 "days": days,
                 "start": start_time.isoformat(),
                 "end": end_time.isoformat(),
+                **({"backfill": True} if backfill else {}),
             },
             "summary": {
                 "total_datasets": total_datasets,

@@ -9,6 +9,8 @@ import os
 from datetime import datetime, timedelta, timezone
 from typing import Optional
 
+from scan_window import parse_iso_date, semantic_scholar_range
+
 from .base import BaseScraper
 from .registry import register_scraper
 
@@ -55,11 +57,13 @@ class SemanticScholarScraper(BaseScraper):
     async def scrape(self, config: dict = None) -> list[dict]:
         return await self.fetch()
 
-    async def fetch(self, days: int = 30) -> list[dict]:
+    async def fetch(self, days: int = 30, start_date: str | None = None, end_date: str | None = None) -> list[dict]:
         """Fetch papers matching configured keywords.
 
         Args:
-            days: Look back period in days.
+            days: Look back period in days when start_date is omitted.
+            start_date: Inclusive YYYY-MM-DD for a past window.
+            end_date: Exclusive YYYY-MM-DD for a past window.
 
         Returns:
             List of paper info dicts.
@@ -67,9 +71,14 @@ class SemanticScholarScraper(BaseScraper):
         if not self.enabled:
             return []
 
-        start_date = (
-            datetime.now(timezone.utc).replace(tzinfo=None) - timedelta(days=days)
-        ).strftime("%Y-%m-%d")
+        if not start_date:
+            start_date = (
+                datetime.now(timezone.utc).replace(tzinfo=None) - timedelta(days=days)
+            ).strftime("%Y-%m-%d")
+        if end_date:
+            pub_range = semantic_scholar_range(parse_iso_date(start_date), parse_iso_date(end_date))
+        else:
+            pub_range = f"{start_date}:"
 
         seen_ids = set()
         results = []
@@ -82,7 +91,7 @@ class SemanticScholarScraper(BaseScraper):
                         "query": keyword,
                         "limit": min(self.limit, 50),
                         "fields": self.FIELDS,
-                        "publicationDateOrYear": f"{start_date}:",
+                        "publicationDateOrYear": pub_range,
                     },
                     headers=self._headers,
                     max_retries=2,
