@@ -82,6 +82,27 @@ def test_restrict_keeps_only_in_window_items():
     assert len(filtered["blog_activity"][0]["articles"]) == 1
 
 
+def test_insight_call_backs_off_on_gateway_overload():
+    import sys
+    from pathlib import Path
+
+    root = Path(__file__).resolve().parents[1]
+    if str(root) not in sys.path:
+        sys.path.insert(0, str(root))
+    import analyze_insights
+
+    class Overloaded(Exception):
+        def __init__(self):
+            super().__init__("Server error '502 Bad Gateway'")
+            self.response = type("Resp", (), {"status_code": 502})()
+
+    assert analyze_insights._insight_retry_wait(Overloaded(), 0, 4) == 20
+    assert analyze_insights._insight_retry_wait(Overloaded(), 2, 4) == 60
+    assert analyze_insights._insight_retry_wait(Overloaded(), 3, 4) is None
+    assert analyze_insights._insight_retry_wait(RuntimeError("parse error"), 0, 4) == 0
+    assert analyze_insights._insight_retry_wait(RuntimeError("parse error"), 1, 4) is None
+
+
 def test_backfill_report_filename_uses_window_end(tmp_path):
     formatter = DualOutputFormatter(output_dir=str(tmp_path))
     md_path, json_path = formatter.save_reports(
