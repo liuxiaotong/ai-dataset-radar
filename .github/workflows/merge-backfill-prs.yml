@@ -1,0 +1,90 @@
+name: Merge backfill website PRs
+
+# One-shot. Not on the Saturday schedule. Uses WEBSITE_PUBLISH_TOKEN because
+# this agent token cannot see the private knowlyr-website repo.
+on:
+  push:
+    branches: [cursor/merge-backfill-prs-bff3]
+    paths: [".github/workflows/merge-backfill-prs.yml"]
+
+permissions:
+  contents: read
+
+jobs:
+  merge:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    env:
+      GH_TOKEN: ${{ secrets.WEBSITE_PUBLISH_TOKEN }}
+      WEBSITE_REPO: liuxiaotong/knowlyr-website
+    steps:
+      - name: Check out radar
+        uses: actions/checkout@v5
+
+      - name: Check out website
+        uses: actions/checkout@v5
+        with:
+          repository: liuxiaotong/knowlyr-website
+          ref: main
+          fetch-depth: 0
+          path: website
+          token: ${{ secrets.WEBSITE_PUBLISH_TOKEN }}
+
+      - name: Rebase-merge 173 then 174 onto main
+        working-directory: website
+        run: |
+          set -euo pipefail
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+
+          resolve_conflicts() {
+            python3 "${GITHUB_WORKSPACE}/scripts/website_backfill_merge.py" resolve
+          }
+
+          update_pr() {
+            local num="$1"
+            local meta state head
+            meta="$(gh pr view "$num" --repo "$WEBSITE_REPO" --json state,headRefName --jq '.state + " " + .headRefName')"
+            echo "PR $num -> $meta"
+            state="${meta%% *}"
+            head="${meta#* }"
+            if [ "$state" = "MERGED" ]; then
+              echo "PR $num already merged"
+              return 0
+            fi
+            git fetch origin "$head" main
+            git checkout -B "update-pr-$num" "origin/$head"
+            if git merge origin/main -m "Merge main into backfill PR #$num"; then
+              echo "PR $num merged main cleanly"
+            else
+              resolve_conflicts
+              git commit -m "Merge main into backfill PR #$num"
+            fi
+            git push origin "HEAD:$head"
+            local i
+            for i in 1 2 3 4 5 6 7 8 9 10; do
+              if gh pr merge "$num" --repo "$WEBSITE_REPO" --squash --admin; then
+                echo "squash-merged PR $num"
+                return 0
+              fi
+              echo "waiting to squash-merge PR $num (attempt $i)"
+              sleep 6
+            done
+            echo "failed to squash-merge PR $num" >&2
+            return 1
+          }
+
+          update_pr 173
+          git fetch origin main
+          update_pr 174
+
+      - name: Verify weeks and the Saturday window
+        working-directory: website
+        run: |
+          set -euo pipefail
+          git fetch origin main
+          git checkout --detach origin/main
+          PYTHONPATH="${GITHUB_WORKSPACE}/src" python3 "${GITHUB_WORKSPACE}/scripts/website_backfill_merge.py" verify
+          echo "MERGE_173 $(gh pr view 173 --repo "$WEBSITE_REPO" --json mergeCommit,state --jq '.state + " " + .mergeCommit.oid')"
+          echo "MERGE_174 $(gh pr view 174 --repo "$WEBSITE_REPO" --json mergeCommit,state --jq '.state + " " + .mergeCommit.oid')"
+          echo "MERGE_172 $(gh pr view 172 --repo "$WEBSITE_REPO" --json mergeCommit,state --jq '.state + " " + .mergeCommit.oid')"
