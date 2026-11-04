@@ -3,6 +3,7 @@ name: Backfill Missed Insight Weeks
 # One-shot runner for the three missed Saturday windows. It is not part of
 # the Saturday schedule. Pushing this file on cursor/backfill-missed-weeks-bff3
 # starts the job; the file is not on main.
+# Rerun: report files for a past window must use the window end date.
 on:
   push:
     branches: [cursor/backfill-missed-weeks-bff3]

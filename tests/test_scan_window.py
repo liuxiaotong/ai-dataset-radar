@@ -2,6 +2,7 @@
 
 from datetime import date
 
+from output_formatter import DualOutputFormatter
 from scan_window import (
     INCOMPLETE_SOURCES,
     ScanWindow,
@@ -79,6 +80,32 @@ def test_restrict_keeps_only_in_window_items():
     assert filtered["producthunt"]["products"] == []
     assert len(filtered["papers"]) == 1
     assert len(filtered["blog_activity"][0]["articles"]) == 1
+
+
+def test_backfill_report_filename_uses_window_end(tmp_path):
+    formatter = DualOutputFormatter(output_dir=str(tmp_path))
+    md_path, json_path = formatter.save_reports(
+        "# week",
+        {
+            "period": {
+                "days": 7,
+                "start": "2026-10-10",
+                "end": "2026-10-17",
+                "backfill": True,
+            },
+            "datasets": [],
+            "papers": [],
+            "blog_posts": [],
+            "x_activity": {},
+            "labs_activity": {},
+            "vendor_activity": {},
+            "datasets_by_type": {},
+            "trend_data": {},
+            "github_activity": [],
+        },
+    )
+    assert md_path.endswith("intel_report_2026-10-17.md")
+    assert json_path.endswith("intel_report_2026-10-17.json")
 
 
 def test_gap_note_names_incomplete_sources_and_historical_queries():

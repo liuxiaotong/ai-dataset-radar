@@ -69,7 +69,11 @@ class DualOutputFormatter:
         Returns:
             Tuple of (markdown_path, json_path).
         """
-        date_str = datetime.now().strftime("%Y-%m-%d")
+        period = data.get("period") or {}
+        if period.get("backfill") and period.get("end"):
+            date_str = str(period["end"])[:10]
+        else:
+            date_str = datetime.now().strftime("%Y-%m-%d")
         base_name = f"{filename_prefix}_{date_str}"
 
         # Save Markdown
