@@ -5,6 +5,7 @@ name: Backfill Missed Insight Weeks
 # starts the job; the file is not on main.
 # Rerun: report files for a past window must use the window end date.
 # Rerun: wait longer between Codex 502s. No separate Anthropic key is configured.
+# Rerun with streamed chat completions from main.
 on:
   push:
     branches: [cursor/backfill-missed-weeks-bff3]

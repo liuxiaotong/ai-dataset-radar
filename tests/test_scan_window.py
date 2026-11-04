@@ -96,44 +96,11 @@ def test_insight_call_backs_off_on_gateway_overload():
             super().__init__("Server error '502 Bad Gateway'")
             self.response = type("Resp", (), {"status_code": 502})()
 
-    assert analyze_insights._insight_retry_wait(Overloaded(), 0, 6) == 30
-    assert analyze_insights._insight_retry_wait(Overloaded(), 1, 6) == 60
-    assert analyze_insights._insight_retry_wait(Overloaded(), 2, 6) == 120
-    assert analyze_insights._insight_retry_wait(Overloaded(), 5, 6) is None
+    assert analyze_insights._insight_retry_wait(Overloaded(), 0, 4) == 20
+    assert analyze_insights._insight_retry_wait(Overloaded(), 2, 4) == 60
+    assert analyze_insights._insight_retry_wait(Overloaded(), 3, 4) is None
     assert analyze_insights._insight_retry_wait(RuntimeError("parse error"), 0, 4) == 0
     assert analyze_insights._insight_retry_wait(RuntimeError("parse error"), 1, 4) is None
-
-
-def test_anthropic_fallback_hides_codex_key(monkeypatch):
-    import os
-    import sys
-    from pathlib import Path
-
-    root = Path(__file__).resolve().parents[1]
-    if str(root) not in sys.path:
-        sys.path.insert(0, str(root))
-    import analyze_insights
-
-    for name in (
-        "INSIGHTS_OPENAI_API_KEY",
-        "SENTINEL_CODEX_API_KEY",
-        "ANTHROPIC_API_KEY",
-        "INSIGHTS_MODEL",
-        "INSIGHTS_API_KEY",
-        "INSIGHTS_BASE_URL",
-        "OPENAI_MODEL",
-        "INSIGHTS_OPENAI_MODEL",
-    ):
-        monkeypatch.delenv(name, raising=False)
-    monkeypatch.setenv("SENTINEL_CODEX_API_KEY", "kly-proxy-test")
-    monkeypatch.setenv("ANTHROPIC_API_KEY", "sk-ant-test")
-    monkeypatch.setattr(analyze_insights, "HAS_CREW", False)
-
-    cfg = analyze_insights._anthropic_fallback_config()
-
-    assert cfg["provider"] == "anthropic"
-    assert cfg["api_key"] == "sk-ant-test"
-    assert os.environ["SENTINEL_CODEX_API_KEY"] == "kly-proxy-test"
 
 
 def test_backfill_report_filename_uses_window_end(tmp_path):

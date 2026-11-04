@@ -64,7 +64,65 @@ def _normalize_openai_content(content) -> str:
     return str(content or "")
 
 
-def _openai_chat_completion(base_url: str, api_key: str, model: str, system_prompt: str, user_message: str, max_tokens: int) -> str:
+def _append_stream_text(parts: list, content) -> None:
+    if content is None or content == "":
+        return
+    if isinstance(content, str):
+        parts.append(content)
+    else:
+        parts.append(_normalize_openai_content(content))
+
+
+def _consume_chat_sse(lines) -> str:
+    """Assemble assistant text from an OpenAI-compatible SSE stream."""
+    parts: list[str] = []
+    saw_choice = False
+    for line in lines:
+        text = (line or "").strip()
+        if not text or text.startswith(":"):
+            continue
+        if not text.startswith("data:"):
+            continue
+        data = text[5:].strip()
+        if data == "[DONE]":
+            break
+        try:
+            event = json.loads(data)
+        except json.JSONDecodeError:
+            continue
+        if not isinstance(event, dict):
+            continue
+        error = event.get("error")
+        if error:
+            detail = json.dumps(error, ensure_ascii=False)[:500]
+            print(f"  ⚠ stream error: {detail}", file=sys.stderr)
+            raise RuntimeError(f"OpenAI-compatible stream error: {detail}")
+        choices = event.get("choices") or []
+        if not choices or not isinstance(choices[0], dict):
+            continue
+        saw_choice = True
+        choice = choices[0]
+        delta = choice.get("delta") if isinstance(choice.get("delta"), dict) else {}
+        message = choice.get("message") if isinstance(choice.get("message"), dict) else {}
+        if delta.get("content") not in (None, ""):
+            _append_stream_text(parts, delta.get("content"))
+        elif message.get("content") not in (None, ""):
+            _append_stream_text(parts, message.get("content"))
+    if not parts:
+        if not saw_choice:
+            raise RuntimeError("OpenAI-compatible stream returned no choices")
+        raise RuntimeError("OpenAI-compatible stream returned no content")
+    return "".join(parts)
+
+
+def _openai_chat_completion(
+    base_url: str,
+    api_key: str,
+    model: str,
+    system_prompt: str,
+    user_message: str,
+    max_tokens: int,
+) -> str:
     import httpx
 
     payload = {
@@ -74,27 +132,22 @@ def _openai_chat_completion(base_url: str, api_key: str, model: str, system_prom
             {"role": "user", "content": user_message},
         ],
         "max_completion_tokens": max_tokens,
+        # Sentinel's non-stream path times out at 60s. Streaming stays under that cap.
+        "stream": True,
     }
-
-    response = httpx.post(
-        f"{base_url.rstrip('/')}/chat/completions",
-        headers={
-            "Authorization": f"Bearer {api_key}",
-            "Content-Type": "application/json",
-        },
-        json=payload,
-        timeout=300.0,
-    )
-    if response.status_code >= 400:
-        # Surface the gateway/upstream error reason (body only, no request headers).
-        print(f"  ⚠ HTTP {response.status_code} body: {response.text[:500]}", file=sys.stderr)
-    response.raise_for_status()
-    data = response.json()
-    choices = data.get("choices") or []
-    if not choices:
-        raise RuntimeError(f"OpenAI-compatible response missing choices: {json.dumps(data)[:500]}")
-    message = choices[0].get("message") or {}
-    return _normalize_openai_content(message.get("content"))
+    url = f"{base_url.rstrip('/')}/chat/completions"
+    headers = {
+        "Authorization": f"Bearer {api_key}",
+        "Content-Type": "application/json",
+    }
+    with httpx.stream("POST", url, headers=headers, json=payload, timeout=300.0) as response:
+        if response.status_code >= 400:
+            # Body only. Do not log request headers or the bearer token.
+            raw = response.read()
+            body = raw.decode("utf-8", errors="replace")
+            print(f"  ⚠ HTTP {response.status_code} body: {body[:500]}", file=sys.stderr)
+            response.raise_for_status()
+        return _consume_chat_sse(response.iter_lines())
 
 
 def detect_api_config(tier: str = "strong"):
@@ -189,40 +242,20 @@ def detect_api_config(tier: str = "strong"):
 _OVERLOAD_STATUSES = {429, 502, 503, 504}
 
 
-def _is_gateway_overload(exc: BaseException) -> bool:
-    status = getattr(getattr(exc, "response", None), "status_code", None)
-    text = str(exc).lower()
-    return status in _OVERLOAD_STATUSES or any(
-        token in text for token in ("overloaded", "bad gateway", "502", "503", "504", "429")
-    )
-
-
 def _insight_retry_wait(exc: BaseException, attempt: int, max_attempts: int) -> float | None:
     """Seconds to wait before another insight call, or None when retries are exhausted."""
     if attempt >= max_attempts - 1:
         return None
-    if _is_gateway_overload(exc):
-        # 30s, 60s, 120s, 240s, then 300s. The Codex route has been returning
-        # 502 for several minutes at a time.
-        return float(min(300, 30 * (2 ** attempt)))
+    status = getattr(getattr(exc, "response", None), "status_code", None)
+    text = str(exc).lower()
+    overloaded = status in _OVERLOAD_STATUSES or any(
+        token in text for token in ("overloaded", "bad gateway", "502", "503", "504", "429")
+    )
+    if overloaded:
+        return float(20 * (attempt + 1))
     if attempt == 0:
         return 0.0
     return None
-
-
-def _anthropic_fallback_config():
-    """Anthropic route with the Codex key hidden, so a Codex 502 can fall through."""
-    hidden = {}
-    for name in ("INSIGHTS_OPENAI_API_KEY", "SENTINEL_CODEX_API_KEY"):
-        if os.environ.get(name):
-            hidden[name] = os.environ.pop(name)
-    try:
-        cfg = detect_api_config()
-    finally:
-        os.environ.update(hidden)
-    if not cfg or cfg.get("provider") == "openai_compatible" or not cfg.get("api_key"):
-        return None
-    return cfg
 
 
 def main():
@@ -295,10 +328,8 @@ def main():
     print(f"  → Input: {len(user_message):,} chars")
 
     print(f"  → 正在分析（{args.model}，预计 1-3 分钟）...", flush=True)
-    max_attempts = 6
-    attempt = 0
-    used_anthropic_fallback = False
-    while attempt < max_attempts:
+    max_attempts = 4
+    for attempt in range(max_attempts):
         try:
             if config.get("provider") == "openai_compatible":
                 result = _openai_chat_completion(
@@ -332,24 +363,6 @@ def main():
         except Exception as e:
             wait = _insight_retry_wait(e, attempt, max_attempts)
             if wait is None:
-                fallback = None
-                if (
-                    config.get("provider") == "openai_compatible"
-                    and not used_anthropic_fallback
-                    and _is_gateway_overload(e)
-                ):
-                    fallback = _anthropic_fallback_config()
-                if fallback:
-                    used_anthropic_fallback = True
-                    config = fallback
-                    args.model = fallback.get("model") or default_model
-                    print(
-                        f"  ⚠ Codex 网关持续失败，改走 {fallback['source']} / {args.model}",
-                        file=sys.stderr,
-                        flush=True,
-                    )
-                    attempt = 0
-                    continue
                 raise
             if wait:
                 print(
@@ -360,7 +373,6 @@ def main():
                 time.sleep(wait)
             else:
                 print(f"  ⚠ 第一次调用失败（{e}），重试中...", flush=True)
-            attempt += 1
             continue
 
     # ── 5. 写入文件 ──
