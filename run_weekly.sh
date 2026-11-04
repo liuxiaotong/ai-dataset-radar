@@ -332,8 +332,19 @@ publish_via_pr() {
     git -C "$publish_dir" commit -m "前沿洞察 ${week}：${title}" >/dev/null \
       || fail "创建发布提交失败"
   fi
-  git -C "$publish_dir" push -u origin "$publish_branch" >/dev/null \
-    || fail "推送发布分支失败"
+  local push_try
+  local push_ok=false
+  for push_try in 1 2 3 4; do
+    if git -C "$publish_dir" push -u origin "$publish_branch"; then
+      push_ok=true
+      break
+    fi
+    if [ "$push_try" -lt 4 ]; then
+      warn "推送发布分支失败，$((push_try * 8))s 后重试 (${push_try}/3)"
+      sleep $((push_try * 8))
+    fi
+  done
+  [ "$push_ok" = true ] || fail "推送发布分支失败"
 
   local pr_body gaps_note=""
   if [ -n "$WINDOW_START" ] && [ -f "$REPORTS/window_gaps.md" ]; then
