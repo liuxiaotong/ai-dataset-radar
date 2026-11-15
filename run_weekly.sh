@@ -6,7 +6,7 @@
 #   bash run_weekly.sh                     # 全自动（日期=今天，周号自增，标题自动）
 #   bash run_weekly.sh 2026-03-04          # 指定日期
 #   bash run_weekly.sh 2026-03-04 W15      # 指定日期+周号
-#   bash run_weekly.sh 2026-03-04 W15 "标题A｜标题B"  # 全手动
+#   bash run_weekly.sh 2026-03-04 W15 "本期最重要的独有发现"  # 全手动
 #   bash run_weekly.sh --with-recipe       # 额外跑 DataRecipe（更慢，非默认）
 #   bash run_weekly.sh --skip-scan         # 跳过扫描（已有数据时）
 #   bash run_weekly.sh --skip-deploy       # 跳过部署（仅生成）
@@ -596,32 +596,18 @@ else
 fi
 
 if [ -z "$TITLE" ]; then
-  # 从 insights.md 提取候选标题（取第一个）
-  TITLE=$(INSIGHTS_FILE="$INSIGHTS_FILE" "$PYTHON_BRIEF" -c "
-import os, pathlib, re
-text = pathlib.Path(os.environ['INSIGHTS_FILE']).read_text()
-m = re.search(r'^## 候选标题\\s*\\n([\\s\\S]*?)(?=^##\\s|\\Z)', text, re.MULTILINE)
-if m:
-    for line in m.group(1).splitlines():
-        line = line.strip()
-        if re.match(r'^\\d+[.、) ]+', line):
-            print(re.sub(r'^\\d+[.、) ]+', '', line).strip())
-            break
-" 2>/dev/null | xargs || true)
-
-  if [ -z "$TITLE" ]; then
-    # 回退：从第一条发现的标题生成
-    TITLE=$(INSIGHTS_FILE="$INSIGHTS_FILE" WEEK="$WEEK" "$PYTHON_BRIEF" -c "
-import re, pathlib, os
-text = pathlib.Path(os.environ['INSIGHTS_FILE']).read_text()
-m = re.search(r'####\s+1\.1\s+(.+?)(?:\s*\[P)', text)
-if m:
-    t = m.group(1).strip()
-    print(t[:20] + '｜AI 数据行业周度洞察')
-else:
-    print('AI 数据行业前沿洞察｜' + os.environ['WEEK'] + ' 周报')
-")
-  fi
+  # 取第一条没有落入「事件｜人类判断」槽位的候选；否则用 1.1 发现本身。
+  TITLE=$(
+    PYTHONPATH="$RADAR_DIR/src${PYTHONPATH:+:$PYTHONPATH}" \
+    INSIGHTS_FILE="$INSIGHTS_FILE" \
+    "$PYTHON_BRIEF" -c "
+import os
+from pathlib import Path
+from insight_titles import select_issue_title
+text = Path(os.environ['INSIGHTS_FILE']).read_text(encoding='utf-8')
+print(select_issue_title(text))
+"
+  )
   echo "  标题: ${TITLE}（自动提取）"
 else
   echo "  标题: ${TITLE}（手动指定）"
